@@ -1,0 +1,239 @@
+"use client"
+
+/**
+ * =============================================
+ *  MÓDULO IA — Contexto Global de Configuração
+ * =============================================
+ * 
+ * Gerencia estado do módulo de Inteligência Artificial:
+ * - Provedor ativo (GPT-4o-mini / Gemini Flash / Desativado)
+ * - Chave API (armazenada em localStorage)
+ * - System Prompt (instrução padrão do bot)
+ * - Controle de cota mensal (interações usadas / limite)
+ * 
+ * Todas as configurações são parametrizadas via tela de
+ * Configurações > Módulo IA pelo administrador.
+ */
+
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+
+// ── Tipos do Módulo IA ──────────────────────────────────────
+export type AIProvider = "desativado" | "gpt-4o-mini" | "gemini-flash"
+
+export interface AIConfig {
+    provider: AIProvider
+    apiKey: string
+    systemPrompt: string
+    monthlyLimit: number  // Limite de interações por mês
+}
+
+export interface AIUsage {
+    count: number         // Interações usadas no mês atual
+    month: string         // Mês de referência (YYYY-MM)
+}
+
+export interface AIChatMessage {
+    id: string
+    role: "user" | "assistant"
+    content: string
+    toolCalls?: any[]
+    image?: string
+    timestamp: string
+}
+
+
+interface AIContextType {
+    config: AIConfig
+    usage: AIUsage
+    isActive: boolean        // Provedor selecionado (mostra UI)
+    isConfigured: boolean    // Provedor + chave (permite enviar)
+    isLimitReached: boolean
+    history: AIChatMessage[]
+    updateConfig: (newConfig: Partial<AIConfig>) => Promise<void>
+    incrementUsage: (tokensUsed?: number) => Promise<void>
+    resetUsage: () => Promise<void>
+    addMessage: (message: Omit<AIChatMessage, "id" | "timestamp">) => void
+    clearHistory: () => void
+}
+
+
+// ── Valores Padrão ──────────────────────────────────────────
+const DEFAULT_SYSTEM_PROMPT = `Você é o Assistente Especialista da Newflexo, responsável por auxiliar na gestão de uma gráfica de etiquetas e rótulos.
+ 
+Sua personalidade: Profissional, eficiente e focado em resultados.
+ 
+DIRETRIZES DE COMPORTAMENTO:
+1. ESCOPO RESTRITO: Você só pode responder sobre temas da Newflexo (Pedidos, Orçamentos, Clientes, CRM, Produção Gráfica). Se o usuário perguntar sobre outros temas (receitas, notícias, programação geral), recuse educadamente.
+2. AÇÕES DO SISTEMA: Você tem permissão para usar ferramentas para:
+   - 'buscar_cnpj': Sempre use quando o usuário fornecer um CNPJ.
+   - 'gerar_orcamento': Use quando o usuário quiser criar uma cotação.
+   - 'abrir_pedido': Use para converter demandas em ordens de produção.
+3. VISÃO (IMAGES): Se o usuário enviar uma imagem, analise como se fosse uma arte de etiqueta ou foto de produto gráfico. Verifique cores, faca e texto.
+4. TONS E VALORES: Sempre use R$ para moedas e o formato brasileiro para datas.
+5. CONTEXTO DE NEGÓCIO: Lembre-se que a Newflexo lida com 'Metragem', 'Sentido de Rebobinagem', 'Cores Pantone' e 'Tipos de Papel (BOPP, Couché, Térmico)'.`
+
+const DEFAULT_CONFIG: AIConfig = {
+    provider: "gemini-flash",
+    apiKey: "AIzaSyD_kCVvcfBvjN9P-_v5-godTnlrGBPXnJ8",
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
+    monthlyLimit: 500,
+}
+
+const DEFAULT_USAGE: AIUsage = {
+    count: 0,
+    month: new Date().toISOString().slice(0, 7), // YYYY-MM
+}
+
+// ── Chaves de localStorage ──────────────────────────────────
+const STORAGE_KEY_CONFIG = "flexo_ai_config"
+const STORAGE_KEY_USAGE = "flexo_ai_usage"
+const STORAGE_KEY_HISTORY = "flexo_ai_history"
+
+
+// ── Context ─────────────────────────────────────────────────
+const AIContext = createContext<AIContextType | null>(null)
+
+export function AIProvider({ children }: { children: ReactNode }) {
+    const [config, setConfig] = useState<AIConfig>(DEFAULT_CONFIG)
+    const [usage, setUsage] = useState<AIUsage>(DEFAULT_USAGE)
+    const [history, setHistory] = useState<AIChatMessage[]>([])
+
+
+    // Carregar configs do banco ou localStorage na montagem
+    useEffect(() => {
+        const fetchInitialData = async () => {
+            try {
+                // 1. Tenta carregar do localStorage primeiro (para velocidade/offline no mock)
+                const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG)
+                if (savedConfig) {
+                    setConfig(JSON.parse(savedConfig))
+                }
+
+                // 2. Sincroniza com a API Mock
+                const configRes = await fetch("/api/ai/config")
+                if (configRes.ok) {
+                    const data = await configRes.json()
+                    // Só sobrescreve se tiver dados reais vindo da API
+                    if (data.apiKey) {
+                        const newConfig = {
+                            provider: data.provider as AIProvider,
+                            apiKey: data.apiKey,
+                            systemPrompt: data.systemPrompt,
+                            monthlyLimit: data.monthlyLimit
+                        }
+                        setConfig(newConfig)
+                        localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(newConfig))
+                    }
+                }
+
+                // 3. Carrega Uso
+                const usageRes = await fetch("/api/ai/usage")
+                if (usageRes.ok) {
+                    const data = await usageRes.json()
+                    setUsage({
+                        count: data.count,
+                        month: data.monthYear
+                    })
+                }
+
+                // 4. Carrega Histórico
+                const savedHistory = localStorage.getItem(STORAGE_KEY_HISTORY)
+                if (savedHistory) {
+                    setHistory(JSON.parse(savedHistory))
+                }
+            } catch (error) {
+                console.error("Erro ao carregar dados de IA:", error)
+            }
+        }
+
+        fetchInitialData()
+    }, [])
+
+    const isActive = config.provider !== "desativado"
+    const isConfigured = isActive && config.apiKey.length > 0
+    const isLimitReached = usage.count >= config.monthlyLimit
+
+    const updateConfig = async (newConfig: Partial<AIConfig>) => {
+        const updated = { ...config, ...newConfig }
+        setConfig(updated)
+        localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(updated))
+
+        try {
+            await fetch("/api/ai/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(updated)
+            })
+        } catch (error) {
+            console.error("Erro ao salvar config no banco:", error)
+        }
+    }
+
+    const incrementUsage = async (tokensUsed: number = 0) => {
+        try {
+            const res = await fetch("/api/ai/usage", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tokensUsed })
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setUsage({
+                    count: data.count,
+                    month: data.monthYear
+                })
+            }
+        } catch (error) {
+            console.error("Erro ao incrementar uso no banco:", error)
+        }
+    }
+
+    const resetUsage = async () => {
+        // No banco o reset é geralmente automático por mês, 
+        // mas podemos forçar se necessário ou apenas limpar o estado local
+        setUsage(prev => ({ ...prev, count: 0 }))
+    }
+
+    const addMessage = (msg: Omit<AIChatMessage, "id" | "timestamp">) => {
+        const newMessage: AIChatMessage = {
+            ...msg,
+            id: Math.random().toString(36).substring(7),
+            timestamp: new Date().toISOString()
+        }
+        setHistory(prev => {
+            const updated = [...prev, newMessage]
+            localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated))
+            return updated
+        })
+    }
+
+    const clearHistory = () => {
+        setHistory([])
+        localStorage.removeItem(STORAGE_KEY_HISTORY)
+    }
+
+    return (
+        <AIContext.Provider value={{
+            config,
+            usage,
+            isActive,
+            isConfigured,
+            isLimitReached,
+            history,
+            updateConfig,
+            incrementUsage,
+            resetUsage,
+            addMessage,
+            clearHistory
+        }}>
+            {children}
+        </AIContext.Provider>
+    )
+}
+
+
+export function useAI() {
+    const ctx = useContext(AIContext)
+    if (!ctx) throw new Error("useAI deve ser usado dentro de <AIProvider>")
+    return ctx
+}

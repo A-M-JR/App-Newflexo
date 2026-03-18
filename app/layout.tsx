@@ -1,0 +1,71 @@
+import type { Metadata, Viewport } from 'next'
+import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
+import { AuthProvider } from '@/lib/auth-context'
+import { AIProvider } from '@/lib/ai-context'
+import { AIChatPanel } from '@/components/ai-chat-panel'
+import './globals.css'
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" })
+
+export const metadata: Metadata = {
+  title: 'Newflexo - Gestao de Pedidos',
+  description: 'Sistema de gestao de pedidos para grafica de rotulos e etiquetas Newflexo.',
+  icons: {
+    icon: '/icon-32x32.png',
+    apple: '/logo_quadrada.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#1a365d',
+  width: 'device-width',
+  initialScale: 1,
+}
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode
+}>) {
+  return (
+    <html lang="pt-BR" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var savedColor = localStorage.getItem('flexo_theme_sidebar');
+                  if (savedColor) {
+                    if (savedColor.startsWith('#')) {
+                      document.documentElement.style.setProperty('--sidebar', savedColor);
+                      document.documentElement.style.setProperty('--sidebar-border', savedColor + '40');
+                    } else {
+                      document.documentElement.style.setProperty('--sidebar', 'transparent');
+                      // Para gradientes, adicionamos um estilo global temporário até o AppShell assumir
+                      var style = document.createElement('style');
+                      style.innerHTML = '[data-sidebar="sidebar-inner"] { background: ' + savedColor + ' !important; }';
+                      document.head.appendChild(style);
+                    }
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`} suppressHydrationWarning>
+        <AuthProvider>
+          <AIProvider>
+            {children}
+            {/* Módulo IA — Chat flutuante acessível de qualquer tela */}
+            <AIChatPanel />
+          </AIProvider>
+        </AuthProvider>
+        <Analytics />
+      </body>
+    </html>
+  )
+}
