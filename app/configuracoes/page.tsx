@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,19 +10,29 @@ import { Palette, Building2, Save, Search, Loader2, Bot, Eye, EyeOff, Sparkles, 
 import { useAuth } from "@/lib/auth-context"
 import { useAI, type AIProvider } from "@/lib/ai-context"
 import { empresaDefault } from "@/lib/mock-data"
+import { getEmpresa, updateEmpresa } from "@/lib/actions/config"
 import Link from "next/link"
 import { AIDashboard } from "./dashboard-ia"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 
-export default function ConfiguracoesPage() {
+function ConfiguracoesForm() {
     const { isAdmin, isLoading } = useAuth()
     const [empresa, setEmpresa] = useState(empresaDefault)
     const [isSaving, setIsSaving] = useState(false)
     const [isLoadingCnpj, setIsLoadingCnpj] = useState(false)
     const [isLoadingCep, setIsLoadingCep] = useState(false)
     const [showApiKey, setShowApiKey] = useState(false)
+
+    // Carregar dados iniciais do banco
+    useEffect(() => {
+        const load = async () => {
+            const data = await getEmpresa()
+            if (data) setEmpresa(data)
+        }
+        load()
+    }, [])
 
     // ── Módulo IA ──────────────────────────────────────
     const { config: aiConfig, usage: aiUsage, updateConfig: updateAIConfig, resetUsage: resetAIUsage } = useAI()
@@ -43,6 +53,20 @@ export default function ConfiguracoesPage() {
             .replace(/\D/g, "")
             .replace(/^(\d{5})(\d)/, "$1-$2")
             .slice(0, 9)
+    }
+
+    const formatPhone = (value: string) => {
+        const numbers = value.replace(/\D/g, "");
+        if (numbers.length <= 10) {
+            return numbers
+                .replace(/^(\d{2})(\d)/, "($1) $2")
+                .replace(/(\d{4})(\d)/, "$1-$2")
+                .slice(0, 14);
+        }
+        return numbers
+            .replace(/^(\d{2})(\d)/, "($1) $2")
+            .replace(/(\d{5})(\d)/, "$1-$2")
+            .slice(0, 15);
     }
 
     // Buscas em API
@@ -113,31 +137,33 @@ export default function ConfiguracoesPage() {
 
     if (!isAdmin) {
         return (
-            <AppShell>
-                <div className="flex flex-col items-center justify-center py-20 gap-4 animate-in fade-in duration-200">
-                    <div className="bg-destructive/10 p-4 rounded-full">
-                        <Palette className="size-10 text-destructive" />
-                    </div>
-                    <div className="text-center space-y-1">
-                        <h2 className="text-xl font-bold text-foreground">Acesso Restrito</h2>
-                        <p className="text-muted-foreground">Configurações globais do sistema são restritas a administradores.</p>
-                    </div>
-                    <Link href="/">
-                        <Button variant="outline" size="sm" className="mt-2">
-                            <ArrowLeft className="size-4 mr-2" />
-                            Voltar ao Início
-                        </Button>
-                    </Link>
+            <div className="flex flex-col items-center justify-center py-20 gap-4 animate-in fade-in duration-200">
+                <div className="bg-destructive/10 p-4 rounded-full">
+                    <Palette className="size-10 text-destructive" />
                 </div>
-            </AppShell>
+                <div className="text-center space-y-1">
+                    <h2 className="text-xl font-bold text-foreground">Acesso Restrito</h2>
+                    <p className="text-muted-foreground">Configurações globais do sistema são restritas a administradores.</p>
+                </div>
+                <Link href="/">
+                    <Button variant="outline" size="sm" className="mt-2">
+                        <ArrowLeft className="size-4 mr-2" />
+                        Voltar ao Início
+                    </Button>
+                </Link>
+            </div>
         )
     }
 
     const sidebarEl = document.querySelector('[data-sidebar="sidebar-inner"]') as HTMLElement | null
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setIsSaving(true)
-        setTimeout(() => {
+        try {
+            // 1. Salva no Banco de Dados
+            await updateEmpresa(empresa)
+
+            // 2. Aplica cores localmente
             if (empresa.corSidebar) {
                 localStorage.setItem('flexo_theme_sidebar', empresa.corSidebar)
 
@@ -154,14 +180,17 @@ export default function ConfiguracoesPage() {
                 }
             }
             toast.success("Configurações da empresa salvas com sucesso!", {
-                description: "O layout e dados institucionais foram atualizados."
+                description: "O layout e dados institucionais foram atualizados no banco de dados."
             })
+        } catch (error) {
+            console.error("Erro ao salvar configurações:", error)
+            toast.error("Falha ao salvar no banco de dados.")
+        } finally {
             setIsSaving(false)
-        }, 600)
+        }
     }
 
     return (
-        <AppShell>
             <div className="flex flex-col gap-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="flex items-center gap-3">
                     <div className="p-3 bg-primary/10 rounded-xl">
@@ -232,8 +261,13 @@ export default function ConfiguracoesPage() {
                                 <Input
                                     id="inscricaoEstadual"
                                     value={empresa.inscricaoEstadual || ""}
-                                    onChange={(e) => setEmpresa({ ...empresa, inscricaoEstadual: e.target.value })}
+                                    onChange={(e) => {
+                                        // Remove letras para deixar só números, pontos e traços, que são comuns em I.E.
+                                        const value = e.target.value.replace(/[^\d.-]/g, '');
+                                        setEmpresa({ ...empresa, inscricaoEstadual: value });
+                                    }}
                                     className="bg-muted/50 focus-visible:bg-background"
+                                    placeholder="Apenas números, pontos e traços"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -241,8 +275,9 @@ export default function ConfiguracoesPage() {
                                 <Input
                                     id="telefone"
                                     value={empresa.telefone}
-                                    onChange={(e) => setEmpresa({ ...empresa, telefone: e.target.value })}
+                                    onChange={(e) => setEmpresa({ ...empresa, telefone: formatPhone(e.target.value) })}
                                     className="bg-muted/50 focus-visible:bg-background"
+                                    placeholder="(00) 00000-0000"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -546,6 +581,13 @@ export default function ConfiguracoesPage() {
                     </Button>
                 </div>
             </div>
+    )
+}
+
+export default function ConfiguracoesPage() {
+    return (
+        <AppShell>
+            <ConfiguracoesForm />
         </AppShell>
     )
 }

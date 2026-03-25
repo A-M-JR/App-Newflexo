@@ -3,17 +3,17 @@
 export type UserRole = "admin" | "vendedor"
 
 export interface User {
-  id: string
+  id: number
   nome: string
   email: string
   role: UserRole
-  vendedorId?: string
+  vendedorId?: number
   criadoEm: string
   ativo?: boolean
 }
 
 export interface Vendedor {
-  id: string
+  id: number
   nome: string
   email: string
   telefone: string
@@ -24,7 +24,7 @@ export interface Vendedor {
 }
 
 export interface Cliente {
-  id: string
+  id: number
   razaoSocial: string
   endereco: string
   telefone: string
@@ -35,11 +35,11 @@ export interface Cliente {
   estado: string
   observacoes?: string
   criadoEm: string
-  ultimaCompra?: string // Adicionado
+  ultimaCompra?: string
 }
 
 export interface Etiqueta {
-  id: string
+  id: number
   nome: string
   codigo: string
   material: string
@@ -50,7 +50,7 @@ export interface Etiqueta {
   tipoTubete: string
   quantidadePorRolo: number
   observacoesTecnicas?: string
-  clientesIds?: string[] // Relacionamento M:N (Etiquetas Exclusivas)
+  clientesIds?: number[]
   pasta?: string
   metragem?: number
   coresDescricao?: string
@@ -61,9 +61,9 @@ export interface Etiqueta {
 export type StatusOrcamento = "rascunho" | "enviado" | "aprovado" | "recusado"
 
 export interface ItemOrcamento {
-  id: string
-  orcamentoId: string
-  etiquetaId?: string
+  id: number
+  orcamentoId: number
+  etiquetaId?: number
   descricao: string
   quantidade: number
   unidade: string
@@ -72,11 +72,11 @@ export interface ItemOrcamento {
 }
 
 export interface Orcamento {
-  id: string
+  id: number
   numero: string
-  clienteId: string
+  clienteId: number
   cliente?: Cliente
-  vendedorId: string
+  vendedorId: number
   itens: ItemOrcamento[]
   status: StatusOrcamento
   observacoes?: string
@@ -91,9 +91,9 @@ export interface Orcamento {
 export type StatusPedido = "em_analise" | "em_producao" | "separacao" | "faturado" | "entregue" | "cancelado"
 
 export interface ItemPedido {
-  id: string
-  pedidoId: string
-  etiquetaId?: string
+  id: number
+  pedidoId: number
+  etiquetaId?: number
   descricao: string
   quantidade: number
   unidade: string
@@ -102,13 +102,13 @@ export interface ItemPedido {
 }
 
 export interface Pedido {
-  id: string
+  id: number
   numero: string
-  orcamentoId: string
+  orcamentoId: number
   orcamento?: Orcamento
-  clienteId: string
+  clienteId: number
   cliente?: Cliente
-  vendedorId: string
+  vendedorId: number
   itens: ItemPedido[]
   status: StatusPedido
   sentidoSaidaRolo: string
@@ -132,7 +132,7 @@ export interface Pedido {
 }
 
 export interface Empresa {
-  id: string
+  id: number
   razaoSocial: string
   nomeFantasia: string
   cnpj: string
@@ -146,15 +146,14 @@ export interface Empresa {
     complemento?: string
     bairro: string
     cidade: string
-    estado: string // UF
+    estado: string
   }
   corSidebar?: string
 }
 
-// ── Tipos do Módulo IA (Fase 3) ──────────────────────────────
-
 export interface AIChatMessage {
-  id: string
+  id: number
+  userId: number
   role: "user" | "assistant"
   content: string
   toolCalls?: any[]
@@ -163,13 +162,14 @@ export interface AIChatMessage {
 }
 
 export interface AIUsage {
+  id: number
   count: number
   monthYear: string
   tokensUsed: number
 }
 
 export interface AIConfig {
-  id?: string
+  id?: number
   provider: "desativado" | "gpt-4o-mini" | "gemini-flash"
   apiKey: string
   systemPrompt: string
@@ -177,7 +177,7 @@ export interface AIConfig {
 }
 
 export interface ProducaoStatus {
-  id: string
+  id: number
   nome: string
   cor: string
   ordem: number

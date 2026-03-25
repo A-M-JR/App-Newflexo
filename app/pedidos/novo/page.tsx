@@ -12,16 +12,31 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Suspense, useState, useEffect } from "react"
-import { orcamentos, clientes, formatCurrency, getVendedorById } from "@/lib/mock-data"
+import { formatCurrency } from "@/lib/mock-data"
+import { getOrcamentoById } from "@/lib/actions/orcamentos"
+import { savePedido } from "@/lib/actions/pedidos"
 
 function NovoPedidoForm() {
     const searchParams = useSearchParams()
     const router = useRouter()
     const orcamentoId = searchParams.get("orcamentoId")
 
-    const [orcamento, setOrcamento] = useState(orcamentos.find((o) => o.id === orcamentoId))
-    const [cliente, setCliente] = useState(orcamento ? clientes.find((c) => c.id === orcamento.clienteId) : null)
-    const vendedor = orcamento ? getVendedorById(orcamento.vendedorId) : null
+    const [orcamento, setOrcamento] = useState<any>(null)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        if (orcamentoId) {
+            getOrcamentoById(Number(orcamentoId)).then((data) => {
+                setOrcamento(data)
+                setLoading(false)
+            }).catch(() => setLoading(false))
+        } else {
+            setLoading(false)
+        }
+    }, [orcamentoId])
+
+    const cliente = orcamento?.cliente
+    const vendedor = orcamento?.vendedor
 
     // Formulário State
     const [sentidoSaidaRolo, setSentidoSaidaRolo] = useState("Ext 0º")
@@ -38,13 +53,17 @@ function NovoPedidoForm() {
     const [obsPcp, setObsPcp] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
+    if (loading) {
+        return <div className="p-20 text-center animate-pulse text-muted-foreground">Carregando dados do orçamento base...</div>
+    }
+
     if (!orcamento || !cliente) {
         return (
             <div className="flex flex-col items-center justify-center py-20 animate-in fade-in zoom-in duration-500">
                 <div className="bg-muted/50 p-6 rounded-full mb-4">
                     <Ticket className="size-10 text-muted-foreground" />
                 </div>
-                <p className="text-muted-foreground text-lg mb-4">Orçamento base não encontrado.</p>
+                <p className="text-muted-foreground text-lg mb-4">Orçamento base não encontrado ou não informado.</p>
                 <Link href="/orcamentos">
                     <Button variant="outline">Voltar para Orçamentos</Button>
                 </Link>
@@ -52,17 +71,46 @@ function NovoPedidoForm() {
         )
     }
 
-    const handleEfetivar = (e: React.FormEvent) => {
+    const handleEfetivar = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsSubmitting(true)
 
-        // Simulação de delay de requisição/salvamento
-        setTimeout(() => {
+        try {
+            const pedidoData = {
+                orcamentoId: orcamento.id,
+                clienteId: orcamento.clienteId,
+                vendedorId: orcamento.vendedorId,
+                sentidoSaidaRolo,
+                tipoTubete,
+                gapEntreEtiquetas,
+                numeroPistas,
+                prazoEntrega,
+                formaPagamento,
+                nomeVendedor: vendedor?.nome,
+                nomeComprador: comprador,
+                frete,
+                observacoesGerais: obsGerais + (obsPcp ? `\n\n[PCP]: ${obsPcp}` : ""),
+                totalGeral: orcamento.totalGeral,
+            }
+            
+            const reqItens = orcamento.itens.map((i: any) => ({
+                descricao: i.descricao,
+                quantidade: i.quantidade,
+                unidade: i.unidade,
+                precoUnitario: i.precoUnitario,
+                total: i.total
+            }))
+
+            const resp = await savePedido(pedidoData, reqItens)
             toast.success("Pedido criado com sucesso!", {
-                description: `Orçamento ${orcamento.numero} foi efetivado. Número: PED-${Math.floor(Math.random() * 10000)}`
+                description: `Orçamento ${orcamento.numero} foi efetivado. Número: ${resp.numero}`
             })
             router.push("/pedidos")
-        }, 1000)
+        } catch (error) {
+            console.error(error)
+            toast.error("Erro ao criar pedido no banco.")
+            setIsSubmitting(false)
+        }
     }
 
     return (

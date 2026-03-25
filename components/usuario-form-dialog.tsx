@@ -1,8 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { User } from "@/lib/types"
-import { vendedores } from "@/lib/mock-data"
+import { User, Vendedor } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
@@ -13,16 +12,17 @@ import { toast } from "sonner"
 
 interface UsuarioFormDialogProps {
   usuario: User | null
+  vendedores: Vendedor[]
   onSave: (usuario: User) => void
   onClose: () => void
 }
 
-export function UsuarioFormDialog({ usuario, onSave, onClose }: UsuarioFormDialogProps) {
+export function UsuarioFormDialog({ usuario, vendedores, onSave, onClose }: UsuarioFormDialogProps) {
   const [nome, setNome] = useState(usuario?.nome || "")
   const [email, setEmail] = useState(usuario?.email || "")
   const [senha, setSenha] = useState("")
   const [role, setRole] = useState<"admin" | "vendedor">(usuario?.role || "vendedor")
-  const [vendedorId, setVendedorId] = useState(usuario?.vendedorId || "")
+  const [vendedorId, setVendedorId] = useState<number | "">(usuario?.vendedorId || "")
   const [ativo, setAtivo] = useState(usuario?.ativo !== false)
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -43,11 +43,11 @@ export function UsuarioFormDialog({ usuario, onSave, onClose }: UsuarioFormDialo
     }
 
     const newUsuario: User = {
-      id: usuario?.id || `usr-${Date.now()}`,
+      id: usuario?.id || Date.now(),
       nome,
       email,
       role,
-      vendedorId: role === "vendedor" ? vendedorId : undefined,
+      vendedorId: role === "vendedor" ? Number(vendedorId) : undefined,
       criadoEm: usuario?.criadoEm || new Date().toISOString().split("T")[0],
       ativo,
     }
@@ -123,13 +123,13 @@ export function UsuarioFormDialog({ usuario, onSave, onClose }: UsuarioFormDialo
             {role === "vendedor" && (
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="vendedor">Vínculo com Vendedor <span className="text-destructive">*</span></Label>
-                <Select value={vendedorId} onValueChange={setVendedorId} required>
+                <Select value={vendedorId?.toString()} onValueChange={(val) => setVendedorId(Number(val))} required>
                   <SelectTrigger id="vendedor" className="bg-muted/50">
                     <SelectValue placeholder="Selecione o perfil de comissão/vendas correspondente" />
                   </SelectTrigger>
                   <SelectContent>
                     {vendedores.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
+                      <SelectItem key={v.id} value={v.id.toString()}>
                         {v.nome} - {v.regiao}
                       </SelectItem>
                     ))}

@@ -22,7 +22,7 @@ export function PDFQuotation({ orcamento, cliente, vendedor }: PDFQuotationProps
           </div>
           <div className="text-right">
             <h2 className="text-2xl font-bold text-gray-700">ORÇAMENTO</h2>
-            <p className="text-lg font-semibold text-blue-900">#{orcamento.id.toUpperCase()}</p>
+            <p className="text-lg font-semibold text-blue-900">#{orcamento.id}</p>
           </div>
         </div>
 

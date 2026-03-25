@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button"
 import { useAI } from "@/lib/ai-context"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { getAIContextSummary } from "@/lib/ai-data-context"
 
 interface ChatMessage {
     role: "user" | "assistant"
@@ -126,7 +125,7 @@ export function AIChatPanel() {
                     messages: contextMessages,
                     provider: config.provider,
                     apiKey: config.apiKey,
-                    systemPrompt: config.systemPrompt + getAIContextSummary(), // Injeta resumo proativo
+                    systemPrompt: config.systemPrompt, // Context is now injected server-side
                     includeTools: true,
                     image: selectedImage,
                 }),

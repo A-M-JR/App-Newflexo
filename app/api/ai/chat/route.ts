@@ -19,6 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { getAIContextSummary } from "@/lib/ai-data-context"
 
 interface ChatMessage {
     role: "user" | "assistant" | "system"
@@ -157,11 +158,15 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        // Monta o prompt combinando configuração básica com contexto live
+        const contextSummary = await getAIContextSummary()
+        const fullSystemPrompt = systemPrompt + contextSummary
+
         // Roteamento por provedor
         if (provider === "gpt-4o-mini") {
-            return await handleOpenAI(messages, apiKey, systemPrompt, body.includeTools, body.image)
+            return await handleOpenAI(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
         } else if (provider === "gemini-flash") {
-            return await handleGemini(messages, apiKey, systemPrompt, body.includeTools, body.image)
+            return await handleGemini(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
         }
 
         return NextResponse.json({ error: "Provedor de IA não reconhecido." }, { status: 400 })

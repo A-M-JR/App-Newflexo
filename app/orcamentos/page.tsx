@@ -14,8 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Search, Plus, Eye, TrendingUp, AlertCircle, Clock, CheckCircle2, ChevronDown, Filter } from "lucide-react"
-import { orcamentos, clientes, formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
-import { useState, useMemo } from "react"
+import { formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
+import { getOrcamentos } from "@/lib/actions/orcamentos"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 
@@ -25,19 +26,29 @@ export default function OrcamentosPage() {
   const [fValorOrder, setFValorOrder] = useState("")
   const [fDataOrder, setFDataOrder] = useState("")
 
+  const [orcamentos, setOrcamentos] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getOrcamentos().then(data => {
+      setOrcamentos(data)
+      setLoading(false)
+    })
+  }, [])
+
   const { isVendedor, vendedor } = useAuth()
 
   // Filter by current user if vendedor, show all if admin
   const userOrcamentos = useMemo(() => {
     return isVendedor && vendedor ? orcamentos.filter((o) => o.vendedorId === vendedor.id) : orcamentos
-  }, [isVendedor, vendedor])
+  }, [isVendedor, vendedor, orcamentos])
 
   const filtered = useMemo(() => {
     let result = userOrcamentos.filter((o) => {
-      const cliente = clientes.find((c) => c.id === o.clienteId)
+      const cliente = o.cliente
       const term = search.toLowerCase()
       const matchSearch = o.numero.toLowerCase().includes(term) ||
-        cliente?.razaoSocial.toLowerCase().includes(term)
+        (cliente?.razaoSocial || "").toLowerCase().includes(term)
 
       const matchStatus = fStatus ? o.status === fStatus : true
 
@@ -244,8 +255,15 @@ export default function OrcamentosPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground animate-pulse bg-card">
+                        Carregando orçamentos...
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {filtered.map((orc) => {
-                    const cliente = clientes.find((c) => c.id === orc.clienteId)
+                    const cliente = orc.cliente
                     return (
                       <TableRow key={orc.id} className="hover:bg-muted/10 transition-colors border-border/30 group bg-card">
                         <TableCell>
@@ -281,9 +299,9 @@ export default function OrcamentosPage() {
                       </TableRow>
                     )
                   })}
-                  {filtered.length === 0 && (
+                  {(!loading && filtered.length === 0) && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground bg-card">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground bg-card">
                         Nenhum orcamento encontrado.
                       </TableCell>
                     </TableRow>

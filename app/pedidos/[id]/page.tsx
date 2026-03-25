@@ -16,15 +16,13 @@ import {
 } from "@/components/ui/table"
 import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus } from "lucide-react"
 import {
-  pedidos,
-  clientes,
   formatCurrency,
   formatStatus,
   getStatusColor,
-  getVendedorById,
 } from "@/lib/mock-data"
+import { getPedidoById, updatePedidoStatus } from "@/lib/actions/pedidos"
 import Link from "next/link"
-import { use, useState } from "react"
+import { use, useState, useEffect } from "react"
 import { PDFDownloadButton } from "@/components/pdf-download-button"
 import { PDFProductionOrderButton } from "@/components/pdf-production-order-button"
 import { toast } from "sonner"
@@ -36,7 +34,29 @@ export default function PedidoDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
-  const pedido = pedidos.find((p) => p.id === id)
+  
+  const [pedido, setPedido] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [currentStatus, setCurrentStatus] = useState<Pedido['status']>('em_analise')
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+
+  useEffect(() => {
+    getPedidoById(Number(id)).then(data => {
+      setPedido(data)
+      if (data) setCurrentStatus(data.status as Pedido['status'])
+      setLoading(false)
+    })
+  }, [id])
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex flex-col items-center justify-center py-20">
+          <p className="text-muted-foreground animate-pulse">Carregando detalhes do pedido...</p>
+        </div>
+      </AppShell>
+    )
+  }
 
   if (!pedido) {
     return (
@@ -51,11 +71,8 @@ export default function PedidoDetailPage({
     )
   }
 
-  const cliente = clientes.find((c) => c.id === pedido.clienteId)
-  const vendedor = getVendedorById(pedido.vendedorId)
-
-  // Local state for interactive status advancement
-  const [currentStatus, setCurrentStatus] = useState<Pedido['status']>(pedido.status)
+  const cliente = pedido.cliente
+  const vendedor = pedido.vendedor
 
   // Status mapping for the visual steps
   const steps = [
@@ -86,13 +103,22 @@ export default function PedidoDetailPage({
 
   const currentStepIndex = getStepIndex(currentStatus)
 
-  const handleAdvanceStatus = () => {
+  const handleAdvanceStatus = async () => {
     const nextStep = steps[currentStepIndex].nextId;
     if (nextStep) {
-      setCurrentStatus(nextStep as Pedido['status']);
-      toast.success("Status Atualizado!", {
-        description: `O pedido agora está na fase: ${steps[currentStepIndex + 1].label}`
-      })
+      setIsUpdatingStatus(true)
+      try {
+        await updatePedidoStatus(pedido.id, nextStep)
+        setCurrentStatus(nextStep as Pedido['status']);
+        toast.success("Status Atualizado!", {
+          description: `O pedido agora está na fase: ${steps[currentStepIndex + 1].label}`
+        })
+      } catch (err) {
+        console.error(err)
+        toast.error("Erro ao atualizar o status.")
+      } finally {
+        setIsUpdatingStatus(false)
+      }
     }
   }
 
@@ -175,9 +201,10 @@ export default function PedidoDetailPage({
                       <Button
                         size="sm"
                         onClick={handleAdvanceStatus}
+                        disabled={isUpdatingStatus}
                         className="mt-2 h-7 text-[10px] uppercase font-bold tracking-wider rounded-full px-4 shadow-md hover:scale-105 transition-transform"
                       >
-                        {step.nextLabel} <ArrowRight className="size-3 ml-1" />
+                        {isUpdatingStatus ? "Atualizando..." : step.nextLabel} <ArrowRight className="size-3 ml-1" />
                       </Button>
                     )}
                   </div>
@@ -267,7 +294,7 @@ export default function PedidoDetailPage({
                 <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Vendedor Responsável</h4>
                 <div className="text-sm font-medium text-foreground flex items-center gap-2">
                   <div className="size-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                    {vendedor?.nome.charAt(0) || "V"}
+                    {vendedor?.nome?.charAt(0) || "V"}
                   </div>
                   {vendedor?.nome || "Vendedor não identificado"}
                 </div>
@@ -322,7 +349,7 @@ export default function PedidoDetailPage({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pedido.itens.map((item) => (
+                  {pedido.itens.map((item: any) => (
                     <TableRow key={item.id}>
                       <TableCell className="text-foreground">
                         {item.quantidade.toLocaleString("pt-BR")}

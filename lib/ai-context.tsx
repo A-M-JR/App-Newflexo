@@ -16,6 +16,7 @@
  */
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { getAIConfig, updateAIConfig, getAIUsage, incrementAIUsage } from "./actions/config"
 
 // ── Tipos do Módulo IA ──────────────────────────────────────
 export type AIProvider = "desativado" | "gpt-4o-mini" | "gemini-flash"
@@ -109,30 +110,19 @@ export function AIProvider({ children }: { children: ReactNode }) {
                     setConfig(JSON.parse(savedConfig))
                 }
 
-                // 2. Sincroniza com a API Mock
-                const configRes = await fetch("/api/ai/config")
-                if (configRes.ok) {
-                    const data = await configRes.json()
-                    // Só sobrescreve se tiver dados reais vindo da API
-                    if (data.apiKey) {
-                        const newConfig = {
-                            provider: data.provider as AIProvider,
-                            apiKey: data.apiKey,
-                            systemPrompt: data.systemPrompt,
-                            monthlyLimit: data.monthlyLimit
-                        }
-                        setConfig(newConfig)
-                        localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(newConfig))
-                    }
+                // 2. Busca do Banco de Dados
+                const dbConfig = await getAIConfig()
+                if (dbConfig) {
+                    setConfig(dbConfig)
+                    localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(dbConfig))
                 }
 
                 // 3. Carrega Uso
-                const usageRes = await fetch("/api/ai/usage")
-                if (usageRes.ok) {
-                    const data = await usageRes.json()
+                const dbUsage = await getAIUsage()
+                if (dbUsage) {
                     setUsage({
-                        count: data.count,
-                        month: data.monthYear
+                        count: dbUsage.count,
+                        month: dbUsage.monthYear
                     })
                 }
 
@@ -159,11 +149,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(updated))
 
         try {
-            await fetch("/api/ai/config", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(updated)
-            })
+            await updateAIConfig(newConfig)
         } catch (error) {
             console.error("Erro ao salvar config no banco:", error)
         }
@@ -171,18 +157,11 @@ export function AIProvider({ children }: { children: ReactNode }) {
 
     const incrementUsage = async (tokensUsed: number = 0) => {
         try {
-            const res = await fetch("/api/ai/usage", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tokensUsed })
+            const dbUsage = await incrementAIUsage(tokensUsed)
+            setUsage({
+                count: dbUsage.count,
+                month: dbUsage.monthYear
             })
-            if (res.ok) {
-                const data = await res.json()
-                setUsage({
-                    count: data.count,
-                    month: data.monthYear
-                })
-            }
         } catch (error) {
             console.error("Erro ao incrementar uso no banco:", error)
         }

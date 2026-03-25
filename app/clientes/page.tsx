@@ -14,13 +14,23 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Search, Plus, Eye, Users, Clock, AlertTriangle, Building2 } from "lucide-react"
-import { clientes, getOrcamentosByCliente, getPedidosByCliente } from "@/lib/mock-data"
-import { useState, useMemo } from "react"
+import { getClientes } from "@/lib/actions/clientes"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 
 export default function ClientesPage() {
   const [search, setSearch] = useState("")
   const [fRetencao, setFRetencao] = useState<"todos" | "30d" | "60d">("todos")
+
+  const [clientes, setClientes] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getClientes().then(data => {
+      setClientes(data)
+      setLoading(false)
+    })
+  }, [])
 
   const KPIs = useMemo(() => {
     let total = clientes.length;
@@ -30,11 +40,11 @@ export default function ClientesPage() {
     const hoje = new Date();
 
     clientes.forEach((c) => {
-      const pedidosDoCliente = getPedidosByCliente(c.id);
+      const pedidosDoCliente = c.pedidos || [];
       let ultimaData: Date | null = null;
 
       if (pedidosDoCliente.length > 0) {
-        const datas = pedidosDoCliente.map(p => new Date(p.criadoEm).getTime());
+        const datas = pedidosDoCliente.map((p: any) => new Date(p.criadoEm).getTime());
         ultimaData = new Date(Math.max(...datas));
       }
 
@@ -53,7 +63,7 @@ export default function ClientesPage() {
     });
 
     return { total, semCompra30, semCompra60 };
-  }, []);
+  }, [clientes]);
 
   const filtered = useMemo(() => {
     const hoje = new Date();
@@ -66,10 +76,10 @@ export default function ClientesPage() {
       if (!matchSearch) return false;
       if (fRetencao === "todos") return true;
 
-      const pedidosDoCliente = getPedidosByCliente(c.id);
+      const pedidosDoCliente = c.pedidos || [];
       let ultimaData: Date | null = null;
       if (pedidosDoCliente.length > 0) {
-        const datas = pedidosDoCliente.map((p) => new Date(p.criadoEm).getTime());
+        const datas = pedidosDoCliente.map((p: any) => new Date(p.criadoEm).getTime());
         ultimaData = new Date(Math.max(...datas));
       }
 
@@ -86,7 +96,7 @@ export default function ClientesPage() {
 
       return true;
     });
-  }, [search, fRetencao]);
+  }, [search, fRetencao, clientes]);
 
   return (
     <AppShell>
@@ -192,9 +202,16 @@ export default function ClientesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground animate-pulse">
+                        Carregando base de clientes...
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {filtered.map((cliente) => {
-                    const numOrcamentos = getOrcamentosByCliente(cliente.id).length
-                    const numPedidos = getPedidosByCliente(cliente.id).length
+                    const numOrcamentos = cliente.orcamentos?.length || 0
+                    const numPedidos = cliente.pedidos?.length || 0
                     return (
                       <TableRow key={cliente.id} className="group hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium text-foreground max-w-[200px] truncate">
@@ -230,7 +247,7 @@ export default function ClientesPage() {
                       </TableRow>
                     )
                   })}
-                  {filtered.length === 0 && (
+                  {!loading && filtered.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Nenhum cliente encontrado.

@@ -30,7 +30,7 @@ export default function QuotationPDFPage({ params }: PDFPageProps) {
     try {
       await exportPdfFromElement(
         'pdf-content',
-        `Orcamento_${orcamento?.id?.toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`
+        `Orcamento_${orcamento?.id}_${new Date().toISOString().split('T')[0]}.pdf`
       );
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);

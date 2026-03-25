@@ -16,63 +16,121 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send } from "lucide-react"
 import {
-  orcamentos,
-  clientes,
-  pedidos,
   formatCurrency,
   formatStatus,
   getStatusColor,
-  getVendedorById,
 } from "@/lib/mock-data"
+import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus } from "@/lib/actions/orcamentos"
 import Link from "next/link"
 import { toast } from "sonner"
 import { use, useState, useEffect } from "react"
 import { PDFDownloadQuotationButton } from "@/components/pdf-download-quotation-button"
 
-export default function OrcamentoDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = use(params)
-  const orcamento = orcamentos.find((o) => o.id === id)
-
-  if (!orcamento) {
-    return (
-      <AppShell>
-        <div className="flex flex-col items-center justify-center py-20">
-          <p className="text-muted-foreground">Orcamento nao encontrado.</p>
-          <Link href="/orcamentos">
-            <Button variant="outline" className="mt-4">Voltar</Button>
-          </Link>
-        </div>
-      </AppShell>
-    )
-  }
-
-  const cliente = clientes.find((c) => c.id === orcamento.clienteId)
-  const pedidoExistente = pedidos.find((p) => p.orcamentoId === orcamento.id)
-  const vendedor = getVendedorById(orcamento.vendedorId)
+function OrcamentoDetailContent({ id }: { id: string }) {
+  const [orcamento, setOrcamento] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   // Modos de Edição
   const [isEditing, setIsEditing] = useState(false)
 
   // Estado Local para Edição
-  const [status, setStatus] = useState<string>(orcamento.status)
-  const [observacoes, setObservacoes] = useState(orcamento.observacoes || "")
-  const [itens, setItens] = useState(orcamento.itens.map(i => ({ ...i, observacao: "" })))
+  const [status, setStatus] = useState<string>("rascunho")
+  const [observacoes, setObservacoes] = useState("")
+  const [itens, setItens] = useState<any[]>([])
+  
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
-  // Totalizador dinâmico na edição
-  const totalGeral = itens.reduce((sum, item) => sum + item.quantidade * item.precoUnitario, 0)
+  // Status mapping for the visual steps
+  const steps = [
+    { id: 'rascunho', label: 'Em Edição', icon: Edit, nextId: 'enviado', nextLabel: 'Enviar Proposta' },
+    { id: 'enviado', label: 'Enviado p/ Cliente', icon: Send, nextId: 'aprovado', nextLabel: 'Aceitar Termos' },
+    { id: 'aprovado', label: 'Aprovado / Fechado', icon: CheckCircle2, nextId: null, nextLabel: null },
+  ]
+
+  const getStepIndex = (st: string) => {
+    switch (st) {
+      case 'rascunho': return 0
+      case 'enviado': return 1
+      case 'aprovado':
+      case 'recusado':
+      case 'rejeitado': return 2
+      default: return 0
+    }
+  }
+
+  const currentStepIndex = getStepIndex(status)
+
+  const handleAdvanceStatus = async () => {
+    const nextStep = steps[currentStepIndex].nextId;
+    if (nextStep) {
+      setIsUpdatingStatus(true)
+      try {
+        await updateOrcamentoStatus(orcamento.id, nextStep)
+        setStatus(nextStep);
+        toast.success("Status Atualizado!", {
+          description: `O orçamento avançou para: ${steps[currentStepIndex + 1].label}`
+        })
+      } catch (err) {
+        console.error(err)
+        toast.error("Erro ao avançar status.")
+      } finally {
+        setIsUpdatingStatus(false)
+      }
+    }
+  }
+
+  const handleRejectStatus = async () => {
+    setIsUpdatingStatus(true)
+    try {
+      await updateOrcamentoStatus(orcamento.id, 'recusado')
+      setStatus('recusado')
+      toast.success("Orçamento sinalizado como recusado.")
+    } catch {
+      toast.error("Erro ao alterar o status do orçamento.")
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
 
   useEffect(() => {
-    // Sincroniza se trocar de orçamento
-    setStatus(orcamento.status)
-    setObservacoes(orcamento.observacoes || "")
-    setItens(orcamento.itens.map(i => ({ ...i, observacao: "" })))
-  }, [orcamento])
+    getOrcamentoById(Number(id)).then(data => {
+      if (data) {
+        setOrcamento(data)
+        setStatus(data.status)
+        setObservacoes(data.observacoes || "")
+        setItens(data.itens.map((i: any) => ({ ...i, observacao: "" })))
+      }
+      setLoading(false)
+    })
+  }, [id])
+
+  if (loading) {
+    return <div className="flex justify-center py-20 animate-pulse text-muted-foreground">Carregando orçamento...</div>
+  }
+
+  if (!orcamento) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-muted-foreground">Orcamento nao encontrado.</p>
+        <Link href="/orcamentos">
+          <Button variant="outline" className="mt-4">Voltar</Button>
+        </Link>
+      </div>
+    )
+  }
+
+  const cliente = orcamento.cliente
+  const pedidoExistente = orcamento.pedidos?.[0]
+  const vendedor = orcamento.vendedor
+
+  // Totalizador dinâmico na edição
+  const totalGeral = itens.reduce((sum, item) => {
+    const qtd = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade
+    const preco = typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',','.')) || 0 : item.precoUnitario
+    return sum + qtd * preco
+  }, 0)
 
   function handleConverterPedido() {
     if (pedidoExistente) {
@@ -86,18 +144,33 @@ export default function OrcamentoDetailPage({
     }
   }
 
-  function handleSalvarEdicao() {
-    setIsEditing(false)
-    toast.success("Orçamento atualizado!", {
-      description: "As alterações foram salvas com sucesso no banco de dados."
-    })
+  async function handleSalvarEdicao() {
+    try {
+      await saveOrcamento({
+        id: orcamento.id,
+        clienteId: orcamento.clienteId,
+        vendedorId: orcamento.vendedorId,
+        numero: orcamento.numero,
+        totalGeral,
+        observacoes,
+        statusStr: status
+      }, itens)
+      
+      setIsEditing(false)
+      toast.success("Orçamento atualizado!", {
+        description: "As alterações foram salvas com sucesso no banco de dados."
+      })
+    } catch (err) {
+      console.error(err)
+      toast.error("Erro ao salvar alterações no banco.")
+    }
   }
 
-  function atualizarItem(id: string, field: keyof typeof itens[0], value: string | number) {
+  function atualizarItem(id: number, field: keyof typeof itens[0], value: string | number) {
     setItens(itens.map(item => item.id === id ? { ...item, [field]: value } : item))
   }
 
-  function removerItem(id: string) {
+  function removerItem(id: number) {
     if (itens.length === 1) {
       toast.error("O orçamento deve ter pelo menos 1 item.")
       return
@@ -106,7 +179,6 @@ export default function OrcamentoDetailPage({
   }
 
   return (
-    <AppShell>
       <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-4 rounded-xl border border-border/50 shadow-sm relative overflow-hidden">
@@ -127,23 +199,9 @@ export default function OrcamentoDetailPage({
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
                   Proposta #{orcamento.numero}
                 </h1>
-                {!isEditing ? (
-                  <Badge variant="secondary" className={`${getStatusColor(status)} shadow-sm px-3 py-1 text-xs uppercase tracking-wider`}>
-                    {formatStatus(status)}
-                  </Badge>
-                ) : (
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger className="h-8 w-[140px] text-xs font-bold border-primary bg-primary/10 text-primary">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="rascunho">Rascunho</SelectItem>
-                      <SelectItem value="enviado">Vigente (Enviado)</SelectItem>
-                      <SelectItem value="aprovado">Aprovado</SelectItem>
-                      <SelectItem value="recusado">Recusado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
+                <Badge variant="secondary" className={`${getStatusColor(status)} shadow-sm px-3 py-1 text-xs uppercase tracking-wider`}>
+                  {formatStatus(status)}
+                </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-1 font-mono">
                 Criado em {orcamento.criadoEm} | Editado em {orcamento.atualizadoEm}
@@ -186,6 +244,70 @@ export default function OrcamentoDetailPage({
                 </Button>
               </Link>
             )}
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border/50 shadow-sm p-6 mt-2 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Funil Comercial</h3>
+              {status === 'enviado' && !isEditing && !pedidoExistente && (
+                <Button size="sm" variant="destructive" onClick={handleRejectStatus} disabled={isUpdatingStatus} className="h-7 text-xs px-4">
+                  Sinalizar como Perdido ou Recusado
+                </Button>
+              )}
+            </div>
+
+            <div className="relative flex justify-between px-2 sm:px-8">
+              {/* Connecting line */}
+              <div className="absolute top-5 left-[12%] right-[12%] h-[2px] bg-muted/50 -z-10 hidden sm:block" />
+              <div
+                className="absolute top-5 left-[12%] h-[2px] bg-primary -z-10 transition-all duration-500 ease-in-out hidden sm:block"
+                style={{ width: `${(currentStepIndex / (steps.length - 1)) * 76}%` }}
+              />
+
+              {steps.map((step, index) => {
+                const Icon = step.icon
+                const isActive = index === currentStepIndex
+                const isCompleted = index < currentStepIndex
+                const isRejected = isActive && (status === 'recusado' || status === 'rejeitado')
+
+                return (
+                  <div key={step.id} className="flex flex-col items-center gap-3 w-1/3 text-center">
+                    <div className={`
+                      size-10 rounded-full flex items-center justify-center border-2 bg-background transition-colors duration-300
+                      ${isCompleted ? 'border-primary text-primary' : ''}
+                      ${isActive && !isRejected ? 'border-primary ring-4 ring-primary/20 text-primary shadow-sm' : ''}
+                      ${isRejected ? 'border-destructive ring-4 ring-destructive/20 text-destructive shadow-sm' : ''}
+                      ${!isCompleted && !isActive ? 'border-muted-foreground/30 text-muted-foreground/50' : ''}
+                    `}>
+                      {isCompleted ? <CheckCircle2 className="size-5" /> : isRejected ? <Trash2 className="size-5" /> : <Icon className="size-5" />}
+                    </div>
+                    <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider
+                      ${isCompleted ? 'text-foreground' : ''}
+                      ${isActive && !isRejected ? 'text-primary' : ''}
+                      ${isRejected ? 'text-destructive' : ''}
+                      ${!isCompleted && !isActive ? 'text-muted-foreground' : ''}
+                    `}>
+                      {isRejected ? 'Recusado/Perdido' : step.label}
+                    </span>
+
+                    {/* Botão de avançar apenas no step ativo se houver próximo */}
+                    {isActive && step.nextLabel && !isRejected && !isEditing && !pedidoExistente && (
+                      <Button
+                        size="sm"
+                        onClick={handleAdvanceStatus}
+                        disabled={isUpdatingStatus}
+                        className="mt-2 h-7 text-[9px] sm:text-[10px] uppercase font-bold tracking-wider rounded-full px-2 sm:px-4 shadow-md hover:scale-105 transition-transform"
+                      >
+                        {isUpdatingStatus ? "..." : step.nextLabel} <ArrowRight className="size-3 ml-1" />
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -285,8 +407,8 @@ export default function OrcamentoDetailPage({
                         <Label className="text-xs font-semibold mb-1 block">Quantidade</Label>
                         <Input
                           type="number"
-                          value={item.quantidade || ""}
-                          onChange={(e) => atualizarItem(item.id, "quantidade", Number(e.target.value))}
+                          value={item.quantidade}
+                          onChange={(e) => atualizarItem(item.id, "quantidade", e.target.value)}
                           className="bg-muted/20"
                         />
                       </div>
@@ -303,10 +425,10 @@ export default function OrcamentoDetailPage({
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
                         <Input
-                          type="number"
-                          step="0.01"
-                          value={item.precoUnitario || ""}
-                          onChange={(e) => atualizarItem(item.id, "precoUnitario", Number(e.target.value))}
+                          type="text"
+                          inputMode="decimal"
+                          value={item.precoUnitario}
+                          onChange={(e) => atualizarItem(item.id, "precoUnitario", e.target.value)}
                           className="bg-muted/20 font-mono"
                         />
                       </div>
@@ -314,7 +436,10 @@ export default function OrcamentoDetailPage({
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
                         <div className="flex h-10 items-center justify-end rounded-md bg-primary/10 px-3 text-lg font-bold text-primary border border-primary/20">
-                          {formatCurrency(item.quantidade * item.precoUnitario)}
+                          {formatCurrency(
+                            (typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade) * 
+                            (typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',','.')) || 0 : item.precoUnitario)
+                          )}
                         </div>
                       </div>
 
@@ -430,6 +555,14 @@ export default function OrcamentoDetailPage({
           </Card>
         </div>
       </div>
+  )
+}
+
+export default function OrcamentoDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  return (
+    <AppShell>
+      <OrcamentoDetailContent id={id} />
     </AppShell>
   )
 }

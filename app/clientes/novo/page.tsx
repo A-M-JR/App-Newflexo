@@ -11,6 +11,7 @@ import Link from "next/link"
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
+import { saveCliente } from "@/lib/actions/clientes"
 
 // Utils simples para mascaras
 const maskCNPJ = (value: string) => {
@@ -44,9 +45,11 @@ const maskUF = (value: string) => {
 
 export default function NovoClientePage() {
     return (
-        <Suspense fallback={<AppShell><div>Carregando...</div></AppShell>}>
-            <NovoClienteContent />
-        </Suspense>
+        <AppShell>
+            <Suspense fallback={<div>Carregando...</div>}>
+                <NovoClienteContent />
+            </Suspense>
+        </AppShell>
     )
 }
 
@@ -205,7 +208,7 @@ function NovoClienteContent() {
         }
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         const newErrors: Record<string, string> = {}
 
@@ -222,19 +225,20 @@ function NovoClienteContent() {
             return
         }
 
-        // Sucesso Mockado
-        toast.success("Cliente salvo com sucesso!", {
-            description: `O cliente ${formData.razaoSocial} foi adicionado à carteira.`
-        })
-
-        // Voltar
-        setTimeout(() => {
+        try {
+            await saveCliente(formData)
+            toast.success("Cliente salvo com sucesso!", {
+                description: `O cliente ${formData.razaoSocial} foi adicionado à carteira.`
+            })
             router.push("/clientes")
-        }, 1000)
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+            toast.error("Erro ao salvar o cliente no banco de dados.")
+        }
     }
 
     return (
-        <AppShell>
             <form onSubmit={handleSubmit} className="flex flex-col gap-6 max-w-5xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
 
                 {/* Header */}
@@ -469,6 +473,5 @@ function NovoClienteContent() {
 
                 </div>
             </form>
-        </AppShell>
     )
 }

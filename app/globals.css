@@ -123,10 +123,15 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground cursor-default;
     min-height: 100vh;
     background-image: radial-gradient(ellipse at top, var(--color-muted) 0%, var(--color-background) 60%);
     background-size: 100% 100%;
+  }
+
+  /* Libera o cursor de texto (pipe) somente onde faz sentido digitar */
+  input, textarea, [contenteditable="true"] {
+    @apply cursor-text;
   }
 
   /* Custom Premium Scrollbar */

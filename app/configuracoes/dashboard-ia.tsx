@@ -1,11 +1,12 @@
 "use client"
 
+import React from "react"
 import { useAI } from "@/lib/ai-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sparkles, Activity, Zap, Info } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts"
 
-export function AIDashboard() {
+export const AIDashboard = React.memo(function AIDashboard() {
     const { usage, config } = useAI()
 
     // Mock de dados para o gráfico (pode ser expandido conforme uso)
@@ -109,4 +110,4 @@ export function AIDashboard() {
             </div>
         </div>
     )
-}
+})

@@ -31,13 +31,13 @@ export function UserSelector() {
 
         <div className="space-y-2">
           <label className="text-xs font-semibold text-foreground">Trocar de Usuário</label>
-          <Select value={currentUser?.id || ""} onValueChange={login}>
+          <Select value={currentUser?.id?.toString() || ""} onValueChange={login}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Selecione um usuário" />
             </SelectTrigger>
             <SelectContent>
               {users.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
+                <SelectItem key={user.id} value={user.id.toString()}>
                   <div className="flex items-center gap-2">
                     <LogIn className="size-3" />
                     <span>

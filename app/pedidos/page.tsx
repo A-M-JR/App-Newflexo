@@ -14,8 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard, Filter } from "lucide-react"
-import { pedidos, clientes, formatCurrency, formatStatus, getStatusColor, getVendedorById } from "@/lib/mock-data"
-import { useState, useMemo } from "react"
+import { formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
+import { getPedidos } from "@/lib/actions/pedidos"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 
@@ -25,21 +26,31 @@ export default function PedidosPage() {
   const [fSlaOnly, setFSlaOnly] = useState(false)
   const [fDataOrder, setFDataOrder] = useState("") // Default empty to list all on load
 
+  const [pedidosList, setPedidosList] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getPedidos().then(data => {
+      setPedidosList(data)
+      setLoading(false)
+    })
+  }, [])
+
   const { isVendedor, vendedor } = useAuth()
 
   // Filter by current user if vendedor, show all if admin
   const userPedidos = useMemo(() => {
-    return isVendedor && vendedor ? pedidos.filter((p) => p.vendedorId === vendedor.id) : pedidos
-  }, [isVendedor, vendedor])
+    return isVendedor && vendedor ? pedidosList.filter((p) => p.vendedorId === vendedor.id) : pedidosList
+  }, [isVendedor, vendedor, pedidosList])
 
   const filtered = useMemo(() => {
     let result = userPedidos.filter((p) => {
-      const cliente = clientes.find((c) => c.id === p.clienteId)
+      const cliente = p.cliente
       const term = search.toLowerCase()
 
       const matchSearch = p.numero.toLowerCase().includes(term) ||
-        cliente?.razaoSocial.toLowerCase().includes(term) ||
-        getVendedorById(p.vendedorId)?.nome.toLowerCase().includes(term)
+        (cliente?.razaoSocial || "").toLowerCase().includes(term) ||
+        (p.vendedor?.nome || "").toLowerCase().includes(term)
 
       const matchStatus = fStatus ? p.status === fStatus : true
 
@@ -265,8 +276,15 @@ export default function PedidosPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground animate-pulse bg-card">
+                        Carregando pedidos de produção...
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {filtered.map((ped) => {
-                    const cliente = clientes.find((c) => c.id === ped.clienteId)
+                    const cliente = ped.cliente
                     const sla = getSlaStatus(ped.prazoEntrega, ped.status)
 
                     return (
@@ -282,7 +300,7 @@ export default function PedidosPage() {
                           <div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {cliente?.cnpj}</div>
                         </TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-[12px]">
-                          {getVendedorById(ped.vendedorId)?.nome || "N/A"}
+                          {ped.vendedor?.nome || "N/A"}
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex flex-col gap-1">
@@ -314,7 +332,7 @@ export default function PedidosPage() {
                       </TableRow>
                     )
                   })}
-                  {filtered.length === 0 && (
+                  {(!loading && filtered.length === 0) && (
                     <TableRow>
                       <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                         <div className="flex flex-col items-center justify-center gap-3">

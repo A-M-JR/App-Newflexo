@@ -22,7 +22,7 @@ export function PDFOrder({ pedido, cliente, vendedor }: PDFOrderProps) {
           </div>
           <div className="text-right">
             <h2 className="text-2xl font-bold text-gray-700">PEDIDO</h2>
-            <p className="text-lg font-semibold text-blue-900">#{pedido.id.toUpperCase()}</p>
+            <p className="text-lg font-semibold text-blue-900">#{pedido.id}</p>
           </div>
         </div>
 
@@ -76,7 +76,7 @@ export function PDFOrder({ pedido, cliente, vendedor }: PDFOrderProps) {
           <h3 className="font-bold text-gray-700 mb-3 border-b border-gray-300 pb-2">INFORMAÇÕES DO PEDIDO</h3>
           <p className="text-sm mb-1">
             <span className="font-semibold text-gray-600">Orçamento Origem:</span>
-            <span className="ml-2 text-gray-900">{pedido.orcamentoId?.toUpperCase() || 'N/A'}</span>
+            <span className="ml-2 text-gray-900">{pedido.orcamentoId || 'N/A'}</span>
           </p>
           {vendedor && (
             <>
@@ -118,7 +118,7 @@ export function PDFOrder({ pedido, cliente, vendedor }: PDFOrderProps) {
           <tbody>
             {pedido.itens.map((item, index) => (
               <tr key={index} className="border border-gray-300">
-                <td className="p-2 text-gray-900 font-medium">{item.etiquetaId?.toUpperCase() || '-'}</td>
+                <td className="p-2 text-gray-900 font-medium">{item.etiquetaId || '-'}</td>
                 <td className="p-2 text-gray-900">{item.descricao || '-'}</td>
                 <td className="p-2 text-center text-gray-900">{item.quantidade.toLocaleString('pt-BR')}</td>
                 <td className="p-2 text-right text-gray-900">

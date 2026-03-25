@@ -1,77 +1,65 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  engineType      = "library"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // directUrl = env("DIRECT_URL") // Descomentar se o Supabase exigir conexão direta para pull
 }
 
-// ----------------------------------------------------------------------
-// GESTÃO DE ACESSOS E COLABORADORES
-// ----------------------------------------------------------------------
-
 model User {
-  id         String   @id @default(cuid())
-  nome       String
-  email      String   @unique
-  senha      String   // Hashed via bcrypt
-  role       String   // "admin" | "vendedor" | "producao"
-  ativo      Boolean  @default(true)
-  criadoEm   DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
-  vendedorId String?  // Opcional, vincula o login web a uma meta de Vendedor
-
+  id           Int             @id @default(autoincrement())
+  nome         String
+  email        String          @unique
+  senha        String
+  role         String
+  ativo        Boolean         @default(true)
+  criadoEm     DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  vendedorId   Int?
   chatMessages AIChatMessage[]
 }
 
 model Vendedor {
-  id         String   @id @default(cuid())
+  id         Int         @id @default(autoincrement())
   nome       String
-  email      String   @unique
+  email      String      @unique
   telefone   String
-  comissao   Float    // Percentual 0-100
+  comissao   Float
   regiao     String
-  ativo      Boolean  @default(true)
-  criadoEm   DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
+  ativo      Boolean     @default(true)
+  criadoEm   DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   orcamentos Orcamento[]
   pedidos    Pedido[]
 }
 
-// ----------------------------------------------------------------------
-// BANCO DE DADOS DE CLIENTES E PRODUTOS (ETIQUETAS)
-// ----------------------------------------------------------------------
-
 model Cliente {
-  id           String   @id @default(cuid())
-  razaoSocial  String
-  cnpj         String   @unique
-  ie           String?
-  email        String?
-  telefone     String
-  endereco     String
-  cep          String
-  cidade       String
-  estado       String
-  observacoes  String?
-  ativo        Boolean  @default(true)
-  ultimaCompra DateTime?
-  criadoEm     DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  orcamentos   Orcamento[]
-  pedidos      Pedido[]
-  etiquetasExclusivas ClienteEtiqueta[] // Etiquetas personalizadas restritas a este cliente
+  id                  Int               @id @default(autoincrement())
+  razaoSocial         String
+  cnpj                String            @unique
+  ie                  String?
+  email               String?
+  telefone            String
+  endereco            String
+  cep                 String
+  cidade              String
+  estado              String
+  observacoes         String?
+  ativo               Boolean           @default(true)
+  ultimaCompra        DateTime?
+  criadoEm            DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  etiquetasExclusivas ClienteEtiqueta[]
+  orcamentos          Orcamento[]
+  pedidos             Pedido[]
 }
 
 model Etiqueta {
-  id                    String   @id @default(cuid())
+  id                    Int               @id @default(autoincrement())
   nome                  String
-  codigo                String   @unique
+  codigo                String            @unique
   material              String
   tipoAdesivo           String
   largura               Float
@@ -83,35 +71,27 @@ model Etiqueta {
   coresDescricao        String?
   orientacaoRebobinagem String?
   observacoesTecnicas   String?
-  pasta                 String?  // Caminho ou URL de repositório da Arte
-  aplicacoesEspeciais   String[] // Array PostgreSQL para Múltiplas Aplicações
-  ativo                 Boolean  @default(true)
-  criadoEm              DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  clientesAutorizados   ClienteEtiqueta[] // Cliente/Etiqueta Pivot Table
-  
+  pasta                 String?
+  aplicacoesEspeciais   String[]
+  ativo                 Boolean           @default(true)
+  criadoEm              DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  clientesAutorizados   ClienteEtiqueta[]
   itensOrcamento        ItemOrcamento[]
   itensPedido           ItemPedido[]
 }
 
-// Tabela Pivot (Relação N:N Explicita)
 model ClienteEtiqueta {
-  clienteId   String
-  etiquetaId  String
-
-  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-  etiqueta    Etiqueta @relation(fields: [etiquetaId], references: [id], onDelete: Cascade)
+  clienteId  Int
+  etiquetaId Int
+  cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  etiqueta   Etiqueta @relation(fields: [etiquetaId], references: [id], onDelete: Cascade)
 
   @@id([clienteId, etiquetaId])
 }
 
-// ----------------------------------------------------------------------
-// CONFIGURAÇÕES GLOBAIS DA NEWFLEXO (MATRIZ) E STATUS DINÂMICOS
-// ----------------------------------------------------------------------
-
 model Empresa {
-  id                String   @id @default(cuid())
+  id                Int      @id @default(autoincrement())
   razaoSocial       String
   nomeFantasia      String
   cnpj              String   @unique
@@ -125,74 +105,63 @@ model Empresa {
   bairro            String
   cidade            String
   estado            String
-  corSidebar        String?  // Hex Color
+  corSidebar        String?
   updatedAt         DateTime @updatedAt
 }
 
 model Status {
-  id        String   @id @default(cuid())
-  nome      String
-  ordem     Int      // Sequência para Quadros Kanban e Tabelas
-  modulo    String   // "ORCAMENTO" | "PEDIDO" | "GERAL" - Onde vai ser usado?
-  cor       String   // Identidade visual (Green/Red/Warning ou HEX) para a Ui
-  ativo     Boolean  @default(true) // Habilidade de "aposentar" uma coluna no futuro
-  criadoEm  DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id         Int         @id @default(autoincrement())
+  nome       String
+  ordem      Int
+  modulo     String
+  cor        String
+  ativo      Boolean     @default(true)
+  criadoEm   DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
   orcamentos Orcamento[]
   pedidos    Pedido[]
-  
-  // Exemplo de Índice para Performance no Kanban:
+
   @@index([modulo, ordem])
 }
 
-// ----------------------------------------------------------------------
-// MÓDULO FINANCEIRO (ORÇAMENTAÇÃO E EMISSÃO DE ORDENS)
-// ----------------------------------------------------------------------
-
 model Orcamento {
-  id           String   @id @default(cuid())
-  numero       String   @unique
-  clienteId    String
-  vendedorId   String
-  statusId     String
+  id           Int             @id @default(autoincrement())
+  numero       String          @unique
+  clienteId    Int
+  vendedorId   Int
+  statusId     Int
   observacoes  String?
   totalGeral   Float
-  ativo        Boolean  @default(true) // Caso cancelado bruscamente
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
-
-  cliente      Cliente         @relation(fields: [clienteId], references: [id])
-  vendedor     Vendedor        @relation(fields: [vendedorId], references: [id])
-  statusObj    Status          @relation(fields: [statusId], references: [id])
-  
+  ativo        Boolean         @default(true)
+  criadoEm     DateTime        @default(now())
+  atualizadoEm DateTime        @updatedAt
   itens        ItemOrcamento[]
-  pedidos      Pedido[]        // Relacionamento 1:N com Pedidos. Um Orçamento pode gerar Vários Pedidos fracionados.
+  cliente      Cliente         @relation(fields: [clienteId], references: [id])
+  statusObj    Status          @relation(fields: [statusId], references: [id])
+  vendedor     Vendedor        @relation(fields: [vendedorId], references: [id])
+  pedidos      Pedido[]
 }
 
 model ItemOrcamento {
-  id            String   @id @default(cuid())
-  orcamentoId   String
-  etiquetaId    String?  // Pode ser preenchido "Em branco" para Orçamentos genéricos sem Faca feita
+  id            Int       @id @default(autoincrement())
+  orcamentoId   Int
+  etiquetaId    Int?
   descricao     String
   quantidade    Int
   unidade       String
   precoUnitario Float
   total         Float
-
-  orcamento     Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id])
+  orcamento     Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 }
 
 model Pedido {
-  id                     String   @id @default(cuid())
-  numero                 String   @unique
-  orcamentoId            String?  // Um pedido não exige obrigatoriamente um orçamento
-  clienteId              String
-  vendedorId             String
-  statusId               String
-  
-  // Ficha de Produção
+  id                     Int          @id @default(autoincrement())
+  numero                 String       @unique
+  orcamentoId            Int?
+  clienteId              Int
+  vendedorId             Int
+  statusId               Int
   sentidoSaidaRolo       String
   tipoTubete             String
   gapEntreEtiquetas      String
@@ -206,66 +175,55 @@ model Pedido {
   frete                  String?
   observacoesGerais      String?
   totalGeral             Float
-
-  ativo                  Boolean  @default(true) // P/ Soft Deletes
-  criadoEm               DateTime @default(now())
-  atualizadoEm           DateTime @updatedAt
-
-  orcamento              Orcamento? @relation(fields: [orcamentoId], references: [id])
-  cliente                Cliente    @relation(fields: [clienteId], references: [id])
-  vendedor               Vendedor   @relation(fields: [vendedorId], references: [id])
-  statusObj              Status     @relation(fields: [statusId], references: [id])
-  
+  ativo                  Boolean      @default(true)
+  criadoEm               DateTime     @default(now())
+  atualizadoEm           DateTime     @updatedAt
   itens                  ItemPedido[]
+  cliente                Cliente      @relation(fields: [clienteId], references: [id])
+  orcamento              Orcamento?   @relation(fields: [orcamentoId], references: [id])
+  statusObj              Status       @relation(fields: [statusId], references: [id])
+  vendedor               Vendedor     @relation(fields: [vendedorId], references: [id])
 }
 
 model ItemPedido {
-  id            String   @id @default(cuid())
-  pedidoId      String
-  etiquetaId    String?
+  id            Int       @id @default(autoincrement())
+  pedidoId      Int
+  etiquetaId    Int?
   descricao     String
   quantidade    Int
   unidade       String
   precoUnitario Float
   total         Float
-
-  // Se apagar o Pedido, apaga os itens juntos via Cascade no nível do banco.
-  pedido        Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
   etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id])
+  pedido        Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 }
-// ----------------------------------------------------------------------
-// MÓDULO IA — PERSISTÊNCIA E MONITORAMENTO
-// ----------------------------------------------------------------------
 
 model AIConfig {
-  id            String   @id @default("singleton") // Apenas um registro global
-  provider      String   @default("gemini-flash")  // "gpt-4o-mini" | "gemini-flash" | "desativado"
-  apiKey        String   @default("")              // Chave criptografada no mundo real (aqui texto simples p/ MVP)
-  systemPrompt  String   @default("Você é o assistente inteligente da Newflexo, focado em ajudar na gestão de orçamentos, pedidos e produção de etiquetas.")
-  monthlyLimit  Int      @default(500)
-  updatedAt     DateTime @updatedAt
+  id           Int      @id @default(1)
+  provider     String   @default("gemini-flash")
+  apiKey       String   @default("")
+  systemPrompt String   @default("Você é o assistente inteligente da Newflexo, focado em ajudar na gestão de orçamentos, pedidos e produção de etiquetas.")
+  monthlyLimit Int      @default(500)
+  updatedAt    DateTime @updatedAt
 }
 
 model AIChatMessage {
-  id        String   @id @default(cuid())
-  userId    String   // Vínculo com o usuário que enviou
-  role      String   // "user" | "assistant"
-  content   String   @db.Text
-  toolCalls Json?    // Armazena chamadas de ferramenta em formato JSON
-  image     String?  @db.Text // Referência ou base64 (limitado)
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  role      String
+  content   String
+  toolCalls Json?
+  image     String?
   timestamp DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, timestamp])
 }
 
 model AIUsage {
-  id          String   @id @default(cuid())
-  monthYear   String   // Formato "MM-YYYY"
-  count       Int      @default(0)
-  tokensUsed  Int      @default(0)
-  updatedAt   DateTime @updatedAt
-
-  @@unique([monthYear])
+  id         Int      @id @default(autoincrement())
+  monthYear  String   @unique
+  count      Int      @default(0)
+  tokensUsed Int      @default(0)
+  updatedAt  DateTime @updatedAt
 }

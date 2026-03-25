@@ -3,16 +3,14 @@ import {
   Etiqueta,
   Orcamento,
   Pedido,
-  ProducaoStatus,
   Vendedor,
   User,
-  Notificacao,
   AIConfig,
   Empresa
 } from "./types"
 
 export let empresaDefault: Empresa = {
-  id: "emp-1",
+  id: 1,
   razaoSocial: "M F LABELS INDUSTRIA GRAFICA LTDA",
   nomeFantasia: "Newflexo Rótulos e Etiquetas",
   cnpj: "18.330.143/0001-38",
@@ -32,7 +30,7 @@ export let empresaDefault: Empresa = {
 
 export const vendedores: Vendedor[] = [
   {
-    id: "vnd-001",
+    id: 1,
     nome: "Carlos Eduardo",
     email: "carlos.eduardo@newflexo.com.br",
     telefone: "(62) 99999-1111",
@@ -41,7 +39,7 @@ export const vendedores: Vendedor[] = [
     criadoEm: "2024-01-01",
   },
   {
-    id: "vnd-002",
+    id: 2,
     nome: "Ana Silva",
     email: "ana.silva@newflexo.com.br",
     telefone: "(11) 99999-2222",
@@ -50,7 +48,7 @@ export const vendedores: Vendedor[] = [
     criadoEm: "2024-01-01",
   },
   {
-    id: "vnd-003",
+    id: 3,
     nome: "Roberto Costa",
     email: "roberto.costa@newflexo.com.br",
     telefone: "(85) 99999-3333",
@@ -60,63 +58,43 @@ export const vendedores: Vendedor[] = [
   },
 ]
 
-// --- Módulo IA ---
-export const aiConfigDefault: AIConfig = {
-  provider: "gemini-flash",
-  apiKey: "AIzaSyD_kCVvcfBvjN9P-_v5-godTnlrGBPXnJ8",
-  systemPrompt: `Você é o Assistente Especialista da Newflexo, responsável por auxiliar na gestão de uma gráfica de etiquetas e rótulos.
- 
-Sua personalidade: Profissional, eficiente e focado em resultados.
- 
-DIRETRIZES DE COMPORTAMENTO:
-1. ESCOPO RESTRITO: Você só pode responder sobre temas da Newflexo(Pedidos, Orçamentos, Clientes, CRM, Produção Gráfica).Se o usuário perguntar sobre outros temas(receitas, notícias, programação geral), recuse educadamente.
-2. AÇÕES DO SISTEMA: Você tem permissão para usar ferramentas para:
-- 'buscar_cnpj': Sempre use quando o usuário fornecer um CNPJ.
-   - 'gerar_orcamento': Use quando o usuário quiser criar uma cotação.
-   - 'abrir_pedido': Use para converter demandas em ordens de produção.
-3. VISÃO(IMAGES): Se o usuário enviar uma imagem, analise como se fosse uma arte de etiqueta ou foto de produto gráfico.Verifique cores, faca e texto.
-4. TONS E VALORES: Sempre use R$ para moedas e o formato brasileiro para datas.
-5. CONTEXTO DE NEGÓCIO: Lembre - se que a Newflexo lida com 'Metragem', 'Sentido de Rebobinagem', 'Cores Pantone' e 'Tipos de Papel (BOPP, Couché, Térmico)'.`,
-  monthlyLimit: 500
-}
-
 export const users: User[] = [
   {
-    id: "usr-001",
+    id: 1,
     nome: "Admin System",
     email: "admin@newflexo.com.br",
     role: "admin",
     criadoEm: "2024-01-01",
   },
   {
-    id: "usr-002",
+    id: 2,
     nome: "Carlos Eduardo",
     email: "carlos.eduardo@newflexo.com.br",
     role: "vendedor",
-    vendedorId: "vnd-001",
+    vendedorId: 1,
     criadoEm: "2024-01-01",
   },
   {
-    id: "usr-003",
+    id: 3,
     nome: "Ana Silva",
     email: "ana.silva@newflexo.com.br",
     role: "vendedor",
-    vendedorId: "vnd-002",
+    vendedorId: 2,
     criadoEm: "2024-01-01",
   },
   {
-    id: "usr-004",
+    id: 4,
     nome: "Roberto Costa",
     email: "roberto.costa@newflexo.com.br",
     role: "vendedor",
-    vendedorId: "vnd-003",
+    vendedorId: 3,
     criadoEm: "2024-01-01",
   },
 ]
 
 export const clientes: Cliente[] = [
   {
-    id: "cli-001",
+    id: 1,
     razaoSocial: "Santa Lucia Industria e Comercio de Carnes Ltda",
     endereco: "Rod. BR-153, Km 42 - Distrito Industrial",
     telefone: "(62) 3333-4455",
@@ -127,10 +105,10 @@ export const clientes: Cliente[] = [
     estado: "GO",
     observacoes: "Cliente preferencial. Entrega prioritaria.",
     criadoEm: "2024-01-15",
-    ultimaCompra: "2024-06-06", // Recente
+    ultimaCompra: "2024-06-06",
   },
   {
-    id: "cli-002",
+    id: 2,
     razaoSocial: "Alimentos Bom Sabor S.A.",
     endereco: "Av. das Industrias, 1500 - Bloco B",
     telefone: "(11) 4002-8922",
@@ -141,10 +119,10 @@ export const clientes: Cliente[] = [
     estado: "SP",
     observacoes: "Solicitar aprovacao de cores antes da producao.",
     criadoEm: "2024-02-20",
-    ultimaCompra: "2024-03-15", // Mais de 30 dias atrÃ¡s
+    ultimaCompra: "2024-03-15",
   },
   {
-    id: "cli-003",
+    id: 3,
     razaoSocial: "Bebidas Tropical Ltda ME",
     endereco: "Rua dos Limoeiros, 320 - Sala 5",
     telefone: "(85) 3232-1010",
@@ -154,10 +132,10 @@ export const clientes: Cliente[] = [
     cidade: "Fortaleza",
     estado: "CE",
     criadoEm: "2024-03-10",
-    ultimaCompra: "2024-06-10", // Recente
+    ultimaCompra: "2024-06-10",
   },
   {
-    id: "cli-004",
+    id: 4,
     razaoSocial: "Fazenda Sao Joao",
     endereco: "Estrada Rural Km 12",
     telefone: "(16) 9988-7766",
@@ -167,13 +145,13 @@ export const clientes: Cliente[] = [
     cidade: "Ribeirao Preto",
     estado: "SP",
     criadoEm: "2023-11-05",
-    ultimaCompra: "2024-02-10", // Mais de 30 dias (Risco de churn)
+    ultimaCompra: "2024-02-10",
   },
 ]
 
 export const etiquetas: Etiqueta[] = [
   {
-    id: "etq-001",
+    id: 1,
     nome: "Rotulo Linguica Toscana",
     codigo: "RTL-001",
     material: "BOPP Brilho",
@@ -186,7 +164,7 @@ export const etiquetas: Etiqueta[] = [
     observacoesTecnicas: "Impressao flexografica. Resistente a baixa temperatura.",
   },
   {
-    id: "etq-002",
+    id: 2,
     nome: "Etiqueta Codigo de Barras",
     codigo: "ECB-002",
     material: "Papel Couche",
@@ -199,7 +177,7 @@ export const etiquetas: Etiqueta[] = [
     observacoesTecnicas: "Impressao termica direta compativel.",
   },
   {
-    id: "etq-003",
+    id: 3,
     nome: "Rotulo Suco Tropical Manga",
     codigo: "RST-003",
     material: "BOPP Fosco",
@@ -212,7 +190,7 @@ export const etiquetas: Etiqueta[] = [
     observacoesTecnicas: "Acabamento com verniz UV. Resistente a umidade.",
   },
   {
-    id: "etq-004",
+    id: 4,
     nome: "Etiqueta Lacre Seguranca",
     codigo: "ELS-004",
     material: "PVC Destrutivel",
@@ -225,7 +203,7 @@ export const etiquetas: Etiqueta[] = [
     observacoesTecnicas: "Material void/destrutivel para lacre de garantia.",
   },
   {
-    id: "etq-005",
+    id: 5,
     nome: "Rotulo Cerveja Artesanal",
     codigo: "RCA-005",
     material: "Papel Adesivo Metalizado",
@@ -241,19 +219,19 @@ export const etiquetas: Etiqueta[] = [
 
 export const orcamentos: Orcamento[] = [
   {
-    id: "orc-001",
+    id: 1,
     numero: "ORC-2024-001",
-    clienteId: "cli-001",
-    vendedorId: "vnd-001",
+    clienteId: 1,
+    vendedorId: 1,
     status: "aprovado",
     observacoes: "Cliente solicitou urgencia na entrega.",
     criadoEm: "2024-06-01",
     atualizadoEm: "2024-06-05",
     itens: [
       {
-        id: "item-orc-001",
-        orcamentoId: "orc-001",
-        etiquetaId: "etq-001",
+        id: 1,
+        orcamentoId: 1,
+        etiquetaId: 1,
         descricao: "Rotulo Linguica Toscana 100x150mm - BOPP Brilho - 4 cores - 1000 unid/rolo - Tubete 76mm",
         quantidade: 50000,
         unidade: "unid",
@@ -261,9 +239,9 @@ export const orcamentos: Orcamento[] = [
         total: 4000,
       },
       {
-        id: "item-orc-002",
-        orcamentoId: "orc-001",
-        etiquetaId: "etq-002",
+        id: 2,
+        orcamentoId: 1,
+        etiquetaId: 2,
         descricao: "Etiqueta Codigo de Barras 50x30mm - Papel Couche - 1 cor - 5000 unid/rolo - Tubete 40mm",
         quantidade: 100000,
         unidade: "unid",
@@ -274,19 +252,19 @@ export const orcamentos: Orcamento[] = [
     totalGeral: 6000,
   },
   {
-    id: "orc-002",
+    id: 2,
     numero: "ORC-2024-002",
-    clienteId: "cli-003",
-    vendedorId: "vnd-003",
+    clienteId: 3,
+    vendedorId: 3,
     status: "rascunho",
     observacoes: "",
     criadoEm: "2024-06-10",
     atualizadoEm: "2024-06-10",
     itens: [
       {
-        id: "item-orc-003",
-        orcamentoId: "orc-002",
-        etiquetaId: "etq-003",
+        id: 3,
+        orcamentoId: 2,
+        etiquetaId: 3,
         descricao: "Rotulo Suco Tropical Manga 120x80mm - BOPP Fosco - 6 cores - 2000 unid/rolo - Tubete 76mm",
         quantidade: 30000,
         unidade: "unid",
@@ -300,11 +278,11 @@ export const orcamentos: Orcamento[] = [
 
 export const pedidos: Pedido[] = [
   {
-    id: "ped-001",
+    id: 1,
     numero: "PED-2024-001",
-    orcamentoId: "orc-001",
-    clienteId: "cli-001",
-    vendedorId: "vnd-001",
+    orcamentoId: 1,
+    clienteId: 1,
+    vendedorId: 1,
     status: "em_producao",
     sentidoSaidaRolo: "Externo / Lado esquerdo",
     tipoTubete: "76mm",
@@ -321,9 +299,9 @@ export const pedidos: Pedido[] = [
     atualizadoEm: "2024-06-06",
     itens: [
       {
-        id: "item-ped-001",
-        pedidoId: "ped-001",
-        etiquetaId: "etq-001",
+        id: 1,
+        pedidoId: 1,
+        etiquetaId: 1,
         descricao: "Rotulo Linguica Toscana 100x150mm - BOPP Brilho - 4 cores - 1000 unid/rolo - Tubete 76mm\nModelo: Santa Lucia Premium\nDestino: Linha de producao SP",
         quantidade: 50000,
         unidade: "unid",
@@ -331,9 +309,9 @@ export const pedidos: Pedido[] = [
         total: 4000,
       },
       {
-        id: "item-ped-002",
-        pedidoId: "ped-001",
-        etiquetaId: "etq-002",
+        id: 2,
+        pedidoId: 1,
+        etiquetaId: 2,
         descricao: "Etiqueta Codigo de Barras 50x30mm - Papel Couche - 1 cor - 5000 unid/rolo - Tubete 40mm\nModelo: EAN-13 padrao\nDestino: Logistica e expedicao",
         quantidade: 100000,
         unidade: "unid",
@@ -346,52 +324,52 @@ export const pedidos: Pedido[] = [
 ]
 
 // Helper functions
-export function getUserById(id: string): User | undefined {
-  return users.find((u) => u.id === id)
+export function getUserById(id: number | string): User | undefined {
+  return users.find((u) => u.id === Number(id))
 }
 
 export function getUserByEmail(email: string): User | undefined {
   return users.find((u) => u.email === email)
 }
 
-export function getVendedorById(id: string): Vendedor | undefined {
-  return vendedores.find((v) => v.id === id)
+export function getVendedorById(id: number | string): Vendedor | undefined {
+  return vendedores.find((v) => v.id === Number(id))
 }
 
 export function getVendedorByEmail(email: string): Vendedor | undefined {
   return vendedores.find((v) => v.email === email)
 }
 
-export function getClienteById(id: string): Cliente | undefined {
-  return clientes.find((c) => c.id === id)
+export function getClienteById(id: number | string): Cliente | undefined {
+  return clientes.find((c) => c.id === Number(id))
 }
 
-export function getEtiquetaById(id: string): Etiqueta | undefined {
-  return etiquetas.find((e) => e.id === id)
+export function getEtiquetaById(id: number | string): Etiqueta | undefined {
+  return etiquetas.find((e) => e.id === Number(id))
 }
 
-export function getOrcamentoById(id: string): Orcamento | undefined {
-  return orcamentos.find((o) => o.id === id)
+export function getOrcamentoById(id: number | string): Orcamento | undefined {
+  return orcamentos.find((o) => o.id === Number(id))
 }
 
-export function getPedidoById(id: string): Pedido | undefined {
-  return pedidos.find((p) => p.id === id)
+export function getPedidoById(id: number | string): Pedido | undefined {
+  return pedidos.find((p) => p.id === Number(id))
 }
 
-export function getOrcamentosByCliente(clienteId: string): Orcamento[] {
-  return orcamentos.filter((o) => o.clienteId === clienteId)
+export function getOrcamentosByCliente(clienteId: number | string): Orcamento[] {
+  return orcamentos.filter((o) => o.clienteId === Number(clienteId))
 }
 
-export function getOrcamentosByVendedor(vendedorId: string): Orcamento[] {
-  return orcamentos.filter((o) => o.vendedorId === vendedorId)
+export function getOrcamentosByVendedor(vendedorId: number | string): Orcamento[] {
+  return orcamentos.filter((o) => o.vendedorId === Number(vendedorId))
 }
 
-export function getPedidosByVendedor(vendedorId: string): Pedido[] {
-  return pedidos.filter((p) => p.vendedorId === vendedorId)
+export function getPedidosByVendedor(vendedorId: number | string): Pedido[] {
+  return pedidos.filter((p) => p.vendedorId === Number(vendedorId))
 }
 
-export function getPedidosByCliente(clienteId: string): Pedido[] {
-  return pedidos.filter((p) => p.clienteId === clienteId)
+export function getPedidosByCliente(clienteId: number | string): Pedido[] {
+  return pedidos.filter((p) => p.clienteId === Number(clienteId))
 }
 
 export function formatCurrency(value: number): string {

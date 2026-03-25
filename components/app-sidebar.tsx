@@ -35,24 +35,25 @@ const menuItems = [
     icon: LayoutDashboard,
   },
   {
+    label: "Orçamentos",
+    href: "/orcamentos",
+    icon: FileText,
+    highlight: true,
+  },
+  {
+    label: "Pedidos de Produção",
+    href: "/pedidos",
+    icon: Factory,
+  },
+  {
     label: "Clientes",
     href: "/clientes",
     icon: Users,
   },
   {
-    label: "Catalogo de Etiquetas",
+    label: "Catálogo de Etiquetas",
     href: "/etiquetas",
     icon: Tags,
-  },
-  {
-    label: "Orcamentos",
-    href: "/orcamentos",
-    icon: FileText,
-  },
-  {
-    label: "Pedidos de Producao",
-    href: "/pedidos",
-    icon: Factory,
   },
 ]
 
@@ -93,13 +94,15 @@ export function AppSidebar() {
                       className={`
                         my-0.5 h-10 transition-all duration-200 
                         ${isActive
-                          ? "bg-primary/10 text-primary font-medium hover:bg-primary/15 hover:text-primary shadow-sm"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                          ? "bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90"
+                          : (item as any).highlight 
+                            ? "bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90 hover:text-primary-foreground"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                         }
                       `}
                     >
                       <Link href={item.href} className="flex items-center gap-3">
-                        <item.icon className={`size-[18px] ${isActive ? "text-primary fill-primary/10" : ""}`} />
+                        <item.icon className="size-[18px]" />
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -249,13 +252,14 @@ export function AppSidebar() {
               href="https://bitwiseagency.com.br/"
               target="_blank"
               rel="noopener noreferrer"
-              className="group/agency flex flex-col items-center gap-1 opacity-40 hover:opacity-100 transition-all duration-300 py-2 rounded-lg hover:bg-sidebar-accent/30"
+              className="group/agency flex flex-col items-center gap-1 opacity-90 hover:opacity-100 transition-all duration-300 py-2 mt-3"
             >
-              <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
+              <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80 flex items-center justify-center gap-1.5 w-full">
+                <Sparkles className="size-3 text-primary/70" />
                 Crafted by
               </span>
-              <span className="text-[11px] font-black tracking-tight text-foreground group-hover/agency:text-primary transition-colors">
-                BITWISE<span className="text-primary/70 font-light">AGENCY</span>
+              <span className="text-[13px] font-black tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent group-hover/agency:from-primary group-hover/agency:to-primary/70 transition-all">
+                BITWISE<span className="font-light">AGENCY</span>
               </span>
             </a>
           </div>

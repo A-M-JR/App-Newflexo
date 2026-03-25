@@ -9,13 +9,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Save, Building2, MapPin, Contact, FileText, Factory } from "lucide-react"
 import {
-  clientes,
-  getOrcamentosByCliente,
-  getPedidosByCliente,
   formatCurrency,
   formatStatus,
   getStatusColor,
 } from "@/lib/mock-data"
+import { getClienteById, saveCliente } from "@/lib/actions/clientes"
 import Link from "next/link"
 import { use, useState, useEffect } from "react"
 import { toast } from "sonner"
@@ -58,7 +56,9 @@ export default function ClienteDetailPage({
 }) {
   const { id } = use(params)
   const router = useRouter()
-  const clienteOrig = clientes.find((c) => c.id === id)
+  
+  const [clienteOrig, setClienteOrig] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
   const [formData, setFormData] = useState({
     razaoSocial: "",
@@ -77,22 +77,36 @@ export default function ClienteDetailPage({
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (clienteOrig) {
-      setFormData({
-        razaoSocial: clienteOrig.razaoSocial || "",
-        cnpj: clienteOrig.cnpj || "",
-        ie: clienteOrig.ie || "",
-        telefone: clienteOrig.telefone || "",
-        email: "", // Not in mock yet
-        cep: clienteOrig.cep || "",
-        endereco: clienteOrig.endereco || "",
-        numero: "", // Not in mock yet
-        cidade: clienteOrig.cidade || "",
-        estado: clienteOrig.estado || "",
-        observacoes: clienteOrig.observacoes || ""
-      })
-    }
-  }, [clienteOrig])
+    getClienteById(Number(id)).then(data => {
+      if (data) {
+        setClienteOrig(data)
+        setFormData({
+          razaoSocial: data.razaoSocial || "",
+          cnpj: data.cnpj || "",
+          ie: data.ie || "",
+          telefone: data.telefone || "",
+          email: data.email || "",
+          cep: data.cep || "",
+          endereco: data.endereco || "",
+          numero: "",
+          cidade: data.cidade || "",
+          estado: data.estado || "",
+          observacoes: data.observacoes || ""
+        })
+      }
+      setLoading(false)
+    })
+  }, [id])
+
+  if (loading) {
+    return (
+      <AppShell>
+        <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+          <p className="text-muted-foreground">Carregando dados do cliente...</p>
+        </div>
+      </AppShell>
+    )
+  }
 
   if (!clienteOrig) {
     return (
@@ -107,8 +121,8 @@ export default function ClienteDetailPage({
     )
   }
 
-  const clienteOrcamentos = getOrcamentosByCliente(clienteOrig.id)
-  const clientePedidos = getPedidosByCliente(clienteOrig.id)
+  const clienteOrcamentos = clienteOrig.orcamentos || []
+  const clientePedidos = clienteOrig.pedidos || []
 
   const fetchCNPJ = async (cnpj: string) => {
     const cleanCnpj = cnpj.replace(/\D/g, "")
@@ -195,7 +209,7 @@ export default function ClienteDetailPage({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const newErrors: Record<string, string> = {}
 
@@ -211,13 +225,17 @@ export default function ClienteDetailPage({
       return
     }
 
-    toast.success("Cliente atualizado com sucesso!", {
-      description: `Os dados de ${formData.razaoSocial} foram salvos.`
-    })
-
-    setTimeout(() => {
+    try {
+      await saveCliente({ id: Number(id), ...formData })
+      toast.success("Cliente atualizado com sucesso!", {
+        description: `Os dados de ${formData.razaoSocial} foram salvos.`
+      })
       router.push("/clientes")
-    }, 1000)
+      router.refresh()
+    } catch (error) {
+      console.error(error)
+      toast.error("Erro ao atualizar o cliente no banco de dados.")
+    }
   }
 
   return (
@@ -236,7 +254,7 @@ export default function ClienteDetailPage({
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-foreground">Editar Cliente</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Cliente desde {clienteOrig.criadoEm}
+                Cliente desde {clienteOrig.criadoEm ? new Date(clienteOrig.criadoEm).toLocaleDateString("pt-BR") : "Desconhecido"}
               </p>
             </div>
           </div>
@@ -393,7 +411,7 @@ export default function ClienteDetailPage({
                   <p className="text-sm text-muted-foreground text-center py-8">Nenhum orçamento.</p>
                 ) : (
                   <div className="divide-y divide-border/50">
-                    {clienteOrcamentos.map((orc) => (
+                    {clienteOrcamentos.map((orc: any) => (
                       <Link
                         key={orc.id}
                         href={`/orcamentos/${orc.id}`}
@@ -430,7 +448,7 @@ export default function ClienteDetailPage({
                   <p className="text-sm text-muted-foreground text-center py-8">Nenhum pedido de produção.</p>
                 ) : (
                   <div className="divide-y divide-border/50">
-                    {clientePedidos.map((ped) => (
+                    {clientePedidos.map((ped: any) => (
                       <Link
                         key={ped.id}
                         href={`/pedidos/${ped.id}`}

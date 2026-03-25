@@ -15,6 +15,7 @@ import {
 import { usePathname, useRouter } from "next/navigation"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuth } from "@/lib/auth-context"
+import { getEmpresa } from "@/lib/actions/config"
 
 const breadcrumbMap: Record<string, string> = {
   clientes: "Clientes",
@@ -60,6 +61,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (savedColor) {
       applyTheme(savedColor)
     }
+
+    // Sincroniza com o banco
+    const syncTheme = async () => {
+      try {
+        const empresa = await getEmpresa()
+        if (empresa.corSidebar && empresa.corSidebar !== savedColor) {
+          applyTheme(empresa.corSidebar)
+          localStorage.setItem('flexo_theme_sidebar', empresa.corSidebar)
+        }
+      } catch (e) {
+        console.error("Erro ao sincronizar tema:", e)
+      }
+    }
+
+    syncTheme()
   }, [])
 
   useEffect(() => {
@@ -72,6 +88,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Enquanto estiver carregando ou sem usuário, mostramos uma versão simplificada do layout 
   // para evitar o flash total de tela branca.
   const showContent = !isLoading && !!currentUser;
+
+  if (!showContent) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-background">
+        <img src="/logo_quadrada.png" alt="Carregando..." className="w-16 h-16 mb-6 opacity-50 animate-pulse drop-shadow-md" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <SidebarProvider>
@@ -106,26 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Breadcrumb>
         </header>
         <div className="flex-1 overflow-auto p-4 md:p-6">
-          {!showContent && isLoading ? (
-            <div className="flex flex-col gap-6 animate-pulse">
-              <div className="space-y-2">
-                <div className="h-10 w-64 bg-muted rounded-md" />
-                <div className="h-4 w-48 bg-muted rounded-md" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="h-28 w-full bg-muted rounded-xl" />
-                <div className="h-28 w-full bg-muted rounded-xl" />
-                <div className="h-28 w-full bg-muted rounded-xl" />
-              </div>
-              <div className="h-[400px] w-full bg-muted rounded-xl" />
-            </div>
-          ) : !showContent ? (
-            <div className="flex h-[50vh] w-full items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : (
-            children
-          )}
+          {children}
         </div>
       </SidebarInset>
       <Toaster richColors position="top-right" />

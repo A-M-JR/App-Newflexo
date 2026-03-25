@@ -18,6 +18,14 @@ interface VendedorFormDialogProps {
 
 const REGIOES = ["Centro-Oeste", "Nordeste", "Norte", "Sudeste", "Sul"]
 
+const maskPhone = (value: string) => {
+    return value
+        .replace(/\D/g, "")
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4,5})(\d{4})/, "$1-$2")
+        .substring(0, 15)
+}
+
 export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDialogProps) {
   const [nome, setNome] = useState(vendedor?.nome || "")
   const [email, setEmail] = useState(vendedor?.email || "")
@@ -37,7 +45,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
     }
 
     const newVendedor: Vendedor = {
-      id: vendedor?.id || `vnd-${Date.now()}`,
+      id: vendedor?.id || Date.now(),
       nome,
       email,
       telefone,
@@ -60,7 +68,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6" autoComplete="off">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="nome">Nome do Vendedor <span className="text-destructive">*</span></Label>
@@ -70,6 +78,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
                 onChange={(e) => setNome(e.target.value)}
                 placeholder="Ex: Carlos Eduardo"
                 className="bg-muted/50 focus-visible:bg-background"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -83,6 +92,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="carlos@newflexo.com"
                 className="bg-muted/50 focus-visible:bg-background"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -92,9 +102,10 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
               <Input
                 id="telefone"
                 value={telefone}
-                onChange={(e) => setTelefone(e.target.value)}
+                onChange={(e) => setTelefone(maskPhone(e.target.value))}
                 placeholder="(62) 99999-9999"
                 className="bg-muted/50 focus-visible:bg-background"
+                autoComplete="new-password"
                 required
               />
             </div>
@@ -111,6 +122,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
                 onChange={(e) => setComissao(e.target.value)}
                 placeholder="5"
                 className="bg-muted/50 focus-visible:bg-background"
+                autoComplete="new-password"
                 required
               />
             </div>

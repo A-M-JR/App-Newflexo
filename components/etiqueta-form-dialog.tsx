@@ -49,7 +49,7 @@ interface EtiquetaFormDialogProps {
 }
 
 export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit }: EtiquetaFormDialogProps) {
-  const [selectedClientes, setSelectedClientes] = useState<string[]>([])
+  const [selectedClientes, setSelectedClientes] = useState<number[]>([])
   const [searchTerm, setSearchTerm] = useState("")
 
   // Checkboxes list para Aplicações Especiais
@@ -100,13 +100,13 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit }: Etiqu
     }
   }, [open, etiquetaToEdit, reset])
 
-  const toggleCliente = (id: string) => {
+  const toggleCliente = (id: number) => {
     setSelectedClientes(prev =>
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     )
   }
 
-  const removeCliente = (id: string) => {
+  const removeCliente = (id: number) => {
     setSelectedClientes(prev => prev.filter(c => c !== id))
   }
 

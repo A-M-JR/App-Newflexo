@@ -13,59 +13,156 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Search, Eye, Clock, Users, FileText, Factory, ArrowUpRight, DollarSign } from "lucide-react"
-import { pedidos, clientes, orcamentos, vendedores, formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
-import { useState } from "react"
+import { Search, Eye, Clock, Users, FileText, Factory, ArrowUpRight, DollarSign, Loader2 } from "lucide-react"
+import { formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
+import { getPedidos } from "@/lib/actions/pedidos"
+import { getOrcamentos } from "@/lib/actions/orcamentos"
+import { getClientes } from "@/lib/actions/clientes"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts"
 
-const chartData = [
-  { name: "Jan", orcamentos: 45, conversoes: 24 },
-  { name: "Fev", orcamentos: 38, conversoes: 18 },
-  { name: "Mar", orcamentos: 30, conversoes: 12 },
-  { name: "Abr", orcamentos: 41, conversoes: 22 },
-  { name: "Mai", orcamentos: 34, conversoes: 19 },
-  { name: "Jun", orcamentos: 52, conversoes: 33 },
-]
+// chartData foi movido para um useMemo dentro do componente para ser dinâmico
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [search, setSearch] = useState("")
   const { isVendedor, vendedor } = useAuth()
 
+  const [pedidosList, setPedidosList] = useState<any[]>([])
+  const [clientesList, setClientesList] = useState<any[]>([])
+  const [orcamentosList, setOrcamentosList] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      getPedidos(),
+      getClientes(),
+      getOrcamentos()
+    ]).then(([peds, clis, orcs]) => {
+      setPedidosList(peds)
+      setClientesList(clis)
+      setOrcamentosList(orcs)
+      setLoading(false)
+    })
+  }, [])
+
   // Filter by current user if vendedor, show all if admin
-  const userPedidos = isVendedor && vendedor ? pedidos.filter((p) => p.vendedorId === vendedor.id) : pedidos
+  const userPedidos = isVendedor && vendedor ? pedidosList.filter((p) => p.vendedorId === vendedor.id) : pedidosList
 
   const filtered = userPedidos.filter((p) => {
-    const cliente = clientes.find((c) => c.id === p.clienteId)
-    const vend = vendedores.find((v) => v.id === p.vendedorId)
+    const cliente = p.cliente
+    const vend = p.vendedor
     const term = search.toLowerCase()
     return (
       p.numero.toLowerCase().includes(term) ||
-      cliente?.razaoSocial.toLowerCase().includes(term) ||
+      (cliente?.razaoSocial || "").toLowerCase().includes(term) ||
       p.status.includes(term) ||
-      vend?.nome.toLowerCase().includes(term)
+      (vend?.nome || "").toLowerCase().includes(term)
     )
   })
 
   // Basic Metrics
   const totalReceita = userPedidos.reduce((acc, ped) => acc + (ped.totalGeral || 0), 0)
   const ativos = userPedidos.filter(p => p.status === 'em_producao').length
-  const totalOrcamentos = orcamentos.length
+  const totalOrcamentos = orcamentosList.length
 
   // Clientes Inativos (+40 dias sem compra)
   const quarentaDiasAtras = new Date()
   quarentaDiasAtras.setDate(quarentaDiasAtras.getDate() - 40)
 
-  const clientesInativos = clientes.filter(c => {
+  const clientesInativos = clientesList.filter(c => {
     if (!c.ultimaCompra) return false
     const dataUltimaCompra = new Date(c.ultimaCompra)
     return dataUltimaCompra < quarentaDiasAtras
   })
 
+  // Cálculo Dinâmico do Gráfico
+  const dynamicChartData = useMemo(() => {
+    const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    const baseDate = new Date()
+    const result = []
+
+    for (let i = 5; i >= 0; i--) {
+      // Cria a data no primeiro dia do mes
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
+      const monthNum = d.getMonth()
+      const yearNum = d.getFullYear()
+
+      const orcsMes = orcamentosList.filter(o => {
+        const dObj = new Date(o.criadoEm)
+        // Se isVendedor for true, conta apenas os do vendedor também
+        const belongsToSeller = !isVendedor || (vendedor && o.vendedorId === vendedor.id)
+        return dObj.getMonth() === monthNum && dObj.getFullYear() === yearNum && belongsToSeller
+      }).length
+
+      const pedsMes = userPedidos.filter(p => {
+        const dObj = new Date(p.criadoEm)
+        return dObj.getMonth() === monthNum && dObj.getFullYear() === yearNum
+      }).length
+
+      result.push({
+        name: monthsNames[monthNum],
+        orcamentos: orcsMes,
+        conversoes: pedsMes
+      })
+    }
+    return result
+  }, [orcamentosList, userPedidos, isVendedor, vendedor])
+
+  // Evita re-renderização pesada do Recharts a cada tecla digitada no campo de busca
+  const renderChart = useMemo(() => (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={dynamicChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+        <XAxis
+          dataKey="name"
+          stroke="#64748b"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          dy={10}
+        />
+        <YAxis
+          stroke="#64748b"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+          dx={-10}
+        />
+        <Tooltip
+          cursor={{ fill: '#f1f5f9' }}
+          contentStyle={{
+            backgroundColor: '#ffffff',
+            borderColor: '#e2e8f0',
+            borderRadius: '8px',
+            color: '#0f172a',
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
+          }}
+          itemStyle={{ color: '#0f172a', fontWeight: 500 }}
+          labelStyle={{ color: '#64748b', marginBottom: '8px', fontWeight: 600 }}
+        />
+        <Legend wrapperStyle={{ paddingTop: "10px" }} />
+        <Bar
+          dataKey="orcamentos"
+          name="Orçamentos Gerados"
+          fill="#94a3b8"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={40}
+        />
+        <Bar
+          dataKey="conversoes"
+          name="Conversões Fechadas"
+          fill="#3b82f6"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={40}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  ), [dynamicChartData])
+
   return (
-    <AppShell>
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
         {/* Header Section */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -116,18 +213,26 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {loading && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground animate-pulse">
+                        <Loader2 className="size-6 animate-spin mx-auto mb-2" />
+                        Aguarde, carregando informações...
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {filtered.map((ped) => {
-                    const cliente = clientes.find((c) => c.id === ped.clienteId)
+                    const cliente = ped.cliente
                     return (
                       <TableRow key={ped.id} className="group hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium font-mono text-xs text-muted-foreground group-hover:text-foreground transition-colors">
                           {ped.numero}
                         </TableCell>
                         <TableCell className="text-foreground max-w-[200px] truncate font-medium">
-                          {cliente?.razaoSocial}
+                          {cliente?.razaoSocial || "-"}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                          {vendedores.find(v => v.id === ped.vendedorId)?.nome || '-'}
+                          {ped.vendedor?.nome || '-'}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
                           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -154,7 +259,7 @@ export default function DashboardPage() {
                       </TableRow>
                     )
                   })}
-                  {filtered.length === 0 && (
+                  {!loading && filtered.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                         Nenhum pedido encontrado.
@@ -244,53 +349,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="pl-2">
                 <div className="h-[250px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis
-                        dataKey="name"
-                        stroke="#64748b"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        dy={10}
-                      />
-                      <YAxis
-                        stroke="#64748b"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        dx={-10}
-                      />
-                      <Tooltip
-                        cursor={{ fill: '#f1f5f9' }}
-                        contentStyle={{
-                          backgroundColor: '#ffffff',
-                          borderColor: '#e2e8f0',
-                          borderRadius: '8px',
-                          color: '#0f172a',
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
-                        }}
-                        itemStyle={{ color: '#0f172a', fontWeight: 500 }}
-                        labelStyle={{ color: '#64748b', marginBottom: '8px', fontWeight: 600 }}
-                      />
-                      <Legend wrapperStyle={{ paddingTop: "10px" }} />
-                      <Bar
-                        dataKey="orcamentos"
-                        name="Orçamentos Gerados"
-                        fill="#94a3b8"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={40}
-                      />
-                      <Bar
-                        dataKey="conversoes"
-                        name="Conversões Fechadas"
-                        fill="#3b82f6"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={40}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {renderChart}
                 </div>
               </CardContent>
             </Card>
@@ -306,7 +365,8 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="flex-1 overflow-auto pt-4 max-h-[300px]">
                 <div className="space-y-4 pr-2">
-                  {clientesInativos.length > 0 ? clientesInativos.map(cliente => {
+                  {loading && <div className="text-center text-xs p-4 text-muted-foreground">Carregando métricas...</div>}
+                  {!loading && clientesInativos.length > 0 ? clientesInativos.map(cliente => {
                     const dataCompra = new Date(cliente.ultimaCompra!)
                     const diasInt = Math.floor((new Date().getTime() - dataCompra.getTime()) / (1000 * 3600 * 24))
                     return (
@@ -323,18 +383,25 @@ export default function DashboardPage() {
                         </Badge>
                       </div>
                     )
-                  }) : (
+                  }) : (!loading && (
                     <div className="text-center text-sm text-muted-foreground py-8">
                       Todos os clientes estão com compras ativas em menos de 40 dias! 🎉
                     </div>
-                  )}
+                  ))}
                 </div>
               </CardContent>
             </Card>
           </div>
         </div>
 
-      </div>
+    </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <AppShell>
+      <DashboardContent />
     </AppShell>
   )
 }

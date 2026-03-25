@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { User, Vendedor } from "./types"
-import { getUserById, getVendedorById, users } from "./mock-data"
+import { verifySession } from "./actions/users"
 
 export type LoginResult = "success" | "invalid_credentials" | "user_blocked" | "user_not_found"
 
@@ -13,7 +13,7 @@ interface AuthContextType {
   isAdmin: boolean
   isVendedor: boolean
   isLoading: boolean
-  login: (email: string, senha?: string) => LoginResult
+  login: (email: string, senha?: string) => Promise<LoginResult>
   logout: () => void
 }
 
@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval)
   }, [])
 
-  const checkSession = () => {
+  const checkSession = async () => {
     const sessionData = localStorage.getItem("flexo_session")
 
     if (sessionData) {
@@ -49,15 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        const user = getUserById(userId)
-        if (user) {
-          setCurrentUser(user)
-          if (user.vendedorId) {
-            const vnd = getVendedorById(user.vendedorId)
-            if (vnd) setVendedor(vnd)
-          }
+        const result = await verifySession(userId)
+        if (result && result.user) {
+          setCurrentUser(result.user)
+          setVendedor(result.vendor)
         } else {
-          logout() // Usuário foi deletado do mock/banco
+          logout() // Usuário foi deletado ou inativado
         }
       } catch (e) {
         logout() // Objeto corrompido
@@ -67,36 +64,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false)
   }
 
-  const login = (email: string, senha?: string): LoginResult => {
-    // Busca por e-mail nos mocks
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase())
+  const login = async (email: string, senha?: string): Promise<LoginResult> => {
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: senha }),
+      })
 
-    if (!user) {
-      return "user_not_found"
+      if (!response.ok) {
+        if (response.status === 404) return "user_not_found"
+        if (response.status === 403) return "user_blocked"
+        return "invalid_credentials"
+      }
+
+      const { user, vendor: dbVendor } = await response.json()
+      setCurrentUser(user)
+
+      // Cria Sessão de 12 Horas em Milissegundos
+      const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
+      const sessionObject = {
+        userId: user.id,
+        expiresAt: Date.now() + TWELVE_HOURS_MS
+      }
+
+      localStorage.setItem("flexo_session", JSON.stringify(sessionObject))
+
+      setVendedor(dbVendor || null)
+      return "success"
+    } catch (error) {
+      console.error("Login Error:", error)
+      return "invalid_credentials"
     }
-
-    if (user.ativo === false) {
-      return "user_blocked"
-    }
-
-    setCurrentUser(user)
-
-    // Cria Sessão de 12 Horas em Milissegundos
-    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
-    const sessionObject = {
-      userId: user.id,
-      expiresAt: Date.now() + TWELVE_HOURS_MS
-    }
-
-    localStorage.setItem("flexo_session", JSON.stringify(sessionObject))
-
-    if (user.vendedorId) {
-      const vnd = getVendedorById(user.vendedorId)
-      if (vnd) setVendedor(vnd)
-    } else {
-      setVendedor(null)
-    }
-    return "success"
   }
 
   const logout = () => {

@@ -41,14 +41,13 @@ export default function LoginPage() {
     const router = useRouter()
     const { login } = useAuth()
 
-    const handleLogin = (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault()
         setIsLoggingIn(true)
         setLoginError(null)
 
-        // Simulate network delay for premium feel
-        setTimeout(() => {
-            const result = login(email, senha)
+        try {
+            const result = await login(email, senha)
             if (result === "success") {
                 toast.success("Bem-vindo! Sessão iniciada com sucesso.")
                 router.push("/")
@@ -63,7 +62,10 @@ export default function LoginPage() {
 
                 setIsLoggingIn(false)
             }
-        }, 800)
+        } catch (error) {
+            toast.error("Erro ao conectar com o servidor.")
+            setIsLoggingIn(false)
+        }
     }
 
     const currentError = loginError ? errorMessages[loginError] : null

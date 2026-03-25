@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PDFOrder } from '@/components/pdf-order';
 import { exportPdfFromElement } from '@/lib/pdf-export';
-import { clientes, pedidos } from '@/lib/mock-data';
+import { getPedidoById } from '@/lib/actions/pedidos';
 import { FileDown, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface PDFPageProps {
@@ -13,24 +13,29 @@ interface PDFPageProps {
 }
 
 export default function PDFPage({ params }: PDFPageProps) {
-  const [id, setId] = useState<string>('');
+  const [pedido, setPedido] = useState<any>(null);
+  const [cliente, setCliente] = useState<any>(null);
+  const [loadingData, setLoadingData] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
-      setId(id);
+      getPedidoById(Number(id)).then(data => {
+        if (data) {
+          setPedido(data);
+          setCliente(data.cliente);
+        }
+        setLoadingData(false);
+      }).catch(() => setLoadingData(false));
     });
   }, [params]);
-
-  const pedido = pedidos.find((p: any) => p.id === id);
-  const cliente = pedido ? clientes.find((c: any) => c.id === pedido.clienteId) : null;
 
   const handleDownloadPDF = async () => {
     setIsLoading(true);
     try {
       await exportPdfFromElement(
         'pdf-content',
-        `Pedido_${pedido?.id?.toUpperCase()}_${new Date().toISOString().split('T')[0]}.pdf`
+        `Pedido_${pedido?.id}_${new Date().toISOString().split('T')[0]}.pdf`
       );
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -43,7 +48,7 @@ export default function PDFPage({ params }: PDFPageProps) {
     window.print();
   };
 
-  if (!id) {
+  if (loadingData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -70,7 +75,7 @@ export default function PDFPage({ params }: PDFPageProps) {
       {/* Toolbar */}
       <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4 max-w-7xl mx-auto">
-          <Link href={`/pedidos/${id}`}>
+          <Link href={`/pedidos/${pedido.id}`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Plus, Edit2, KeyRound, Power, Users, UserCheck, UserX, ShieldCheck, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,26 +8,58 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { users, vendedores, getVendedorById } from "@/lib/mock-data"
-import { User } from "@/lib/types"
-import { useAuth } from "@/lib/auth-context"
+import { getUsers, saveUser, toggleUserActive, updateUserPassword } from "@/lib/actions/users"
+import { getVendedores } from "@/lib/actions/vendedores"
 import { UsuarioFormDialog } from "@/components/usuario-form-dialog"
 import { AppShell } from "@/components/app-shell"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { useAuth } from "@/lib/auth-context"
+import { User, Vendedor } from "@/lib/types"
 
 export default function UsuariosPage() {
-  const { isAdmin, isLoading } = useAuth()
-  const [usuariosList, setUsuariosList] = useState<User[]>(users.map(u => ({ ...u, ativo: u.ativo !== false })))
+  const { isAdmin, isLoading: isAuthLoading } = useAuth()
+  const [usuariosList, setUsuariosList] = useState<User[]>([])
+  const [vendedoresList, setVendedoresList] = useState<Vendedor[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingUsuario, setEditingUsuario] = useState<User | null>(null)
   const [fStatusFilter, setFStatusFilter] = useState<"todos" | "ativo" | "inativo">("todos")
   const [search, setSearch] = useState("")
+  const [toggleWarning, setToggleWarning] = useState<{ id: number; currentStatus: boolean; nome: string } | null>(null)
 
   // Password Change State
   const [passwordUser, setPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState("")
 
+  const loadInitialData = async () => {
+    setIsLoading(true)
+    try {
+      const [usersData, vendorsData] = await Promise.all([
+        getUsers(),
+        getVendedores()
+      ])
+      setUsuariosList(usersData)
+      setVendedoresList(vendorsData)
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error)
+      toast.error("Erro ao carregar dados do banco.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadInitialData()
+  }, [])
+
+  // Helper function for display
+  const getVendedorById = (id: number) => vendedoresList.find(v => v.id === id)
+
+  if (isAuthLoading) {
+    return <AppShell><div className="p-8"><Skeleton className="h-40 w-full" /></div></AppShell>
+  }
 
   if (!isAdmin) {
     return (
@@ -51,20 +83,39 @@ export default function UsuariosPage() {
     )
   }
 
-  const handleSaveUsuario = (usuario: User) => {
-    if (editingUsuario) {
-      setUsuariosList(usuariosList.map((u) => (u.id === usuario.id ? usuario : u)))
-    } else {
-      setUsuariosList([...usuariosList, usuario])
+  const handleSaveUsuario = async (usuario: User) => {
+    try {
+      await saveUser(usuario)
+      await loadInitialData()
+      toast.success(editingUsuario ? "Usuário atualizado" : "Usuário cadastrado")
+      setEditingUsuario(null)
+      setShowForm(false)
+    } catch (error) {
+      console.error("Erro ao salvar usuário:", error)
+      toast.error("Erro ao salvar no banco de dados.")
     }
-    setEditingUsuario(null)
-    setShowForm(false)
   }
 
-  const handleToggleActive = (id: string, currentStatus: boolean) => {
-    const action = currentStatus ? "inativar" : "reativar"
-    if (confirm(`Deseja realmente ${action} este acesso? O usuário ${currentStatus ? "perderá" : "recuperará"} o acesso ao sistema imediatamente.`)) {
-      setUsuariosList(usuariosList.map((u) => u.id === id ? { ...u, ativo: !currentStatus } : u))
+  const handleToggleActive = (id: number, currentStatus: boolean, nome: string) => {
+    setToggleWarning({ id, currentStatus, nome })
+  }
+
+  const confirmToggleActive = async () => {
+    if (!toggleWarning) return
+    const { id, currentStatus, nome } = toggleWarning
+    const actionState = currentStatus ? "bloqueado" : "desbloqueado"
+
+    try {
+      await toggleUserActive(id)
+      await loadInitialData()
+      toast.success("Acesso Atualizado!", {
+        description: `O acesso de ${nome} foi ${actionState} com sucesso.`,
+      })
+    } catch (error) {
+      console.error("Erro ao alterar status:", error)
+      toast.error("Erro ao atualizar status no servidor.")
+    } finally {
+      setToggleWarning(null)
     }
   }
 
@@ -73,7 +124,7 @@ export default function UsuariosPage() {
     setShowForm(true)
   }
 
-  const handleSavePassword = (e: React.FormEvent) => {
+  const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newPassword || newPassword.length < 6) {
       toast.error("Erro na Senha", {
@@ -81,12 +132,20 @@ export default function UsuariosPage() {
       })
       return
     }
-    // Lógica para salvar a senha no backend ficaria aqui
-    toast.success("Senha Redefinida", {
-      description: `Senha do usuário ${passwordUser?.nome} atualizada com sucesso!`
-    })
-    setPasswordUser(null)
-    setNewPassword("")
+    
+    try {
+      if (passwordUser) {
+        await updateUserPassword(passwordUser.id, newPassword)
+        toast.success("Senha Redefinida", {
+          description: `Senha do usuário ${passwordUser.nome} atualizada com sucesso!`
+        })
+      }
+      setPasswordUser(null)
+      setNewPassword("")
+    } catch (error) {
+      console.error("Erro ao redefinir senha:", error)
+      toast.error("Erro ao salvar nova senha no banco.")
+    }
   }
 
   return (
@@ -166,6 +225,7 @@ export default function UsuariosPage() {
         {showForm && (
           <UsuarioFormDialog
             usuario={editingUsuario}
+            vendedores={vendedoresList}
             onSave={handleSaveUsuario}
             onClose={() => {
               setShowForm(false)
@@ -173,6 +233,34 @@ export default function UsuariosPage() {
             }}
           />
         )}
+
+        {/* Status AlertDialog */}
+        <AlertDialog open={!!toggleWarning} onOpenChange={(open) => !open && setToggleWarning(null)}>
+          <AlertDialogContent className="sm:max-w-md border-border/50 shadow-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Power className={`size-5 ${toggleWarning?.currentStatus ? "text-destructive" : "text-emerald-500"}`} />
+                Confirmar Ação
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm">
+                Tem certeza que deseja <strong>{toggleWarning?.currentStatus ? "bloquear" : "desbloquear"}</strong> o acesso de <span className="font-semibold text-foreground">{toggleWarning?.nome}</span>?
+                <br /><br />
+                {toggleWarning?.currentStatus 
+                  ? "Ao bloquear, a pessoa será desconectada imediatamente e não poderá mais entrar no sistema usando sua senha." 
+                  : "Ao desbloquear, a pessoa voltará a ter acesso normal ao sistema usando suas credenciais atuais."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel className="hover:bg-muted">Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmToggleActive} 
+                className={toggleWarning?.currentStatus ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"}
+              >
+                {toggleWarning?.currentStatus ? "Sim, Bloquear Acesso" : "Sim, Desbloquear Acesso"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Users Table */}
         <Card className="overflow-hidden border-border/50 shadow-sm">
@@ -280,7 +368,7 @@ export default function UsuariosPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleToggleActive(usuario.id, isActive)}
+                            onClick={() => handleToggleActive(usuario.id, isActive, usuario.nome)}
                             title={isActive ? "Bloquear Acesso" : "Desbloquear Acesso"}
                             className={`h-8 w-8 p-0 transition-colors ${isActive ? "text-muted-foreground hover:text-destructive hover:bg-destructive/10" : "text-destructive hover:text-emerald-600 hover:bg-emerald-500/10"}`}
                           >

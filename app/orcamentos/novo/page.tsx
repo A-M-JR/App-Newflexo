@@ -15,39 +15,63 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle } from "lucide-react"
-import { clientes, etiquetas, formatCurrency, getOrcamentosByCliente, vendedores } from "@/lib/mock-data"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check } from "lucide-react"
+import { etiquetas, formatCurrency } from "@/lib/mock-data"
+import { getClientes } from "@/lib/actions/clientes"
+import { getVendedores } from "@/lib/actions/vendedores"
+import { getOrcamentos, saveOrcamento } from "@/lib/actions/orcamentos"
 import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 
 interface NovoItem {
   id: string
   descricao: string
-  quantidade: number
+  quantidade: number | string
   unidade: string
-  precoUnitario: number
+  precoUnitario: number | string
   observacao: string
 }
 
 export default function NovoOrcamentoPage() {
   return (
-    <Suspense fallback={<AppShell><div>Carregando...</div></AppShell>}>
-      <NovoOrcamentoContent />
-    </Suspense>
+    <AppShell>
+      <Suspense fallback={<div>Carregando...</div>}>
+        <NovoOrcamentoContent />
+      </Suspense>
+    </AppShell>
   )
 }
 
 function NovoOrcamentoContent() {
-  const [clienteId, setClienteId] = useState("")
-  const [vendedorId, setVendedorId] = useState("")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { currentUser } = useAuth()
+
+  const [clienteId, setClienteId] = useState<number | "">("")
+  const [vendedorId, setVendedorId] = useState<number | "">("")
   const [itens, setItens] = useState<NovoItem[]>([])
   const [observacoes, setObservacoes] = useState("")
   const [showRecompra, setShowRecompra] = useState(false)
-  const searchParams = useSearchParams()
-  const { currentUser } = useAuth()
+  const [openCatalogo, setOpenCatalogo] = useState(false)
+
+  const [clientes, setClientes] = useState<any[]>([])
+  const [vendedores, setVendedores] = useState<any[]>([])
+  const [todosOrcamentos, setTodosOrcamentos] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([getClientes(), getVendedores(), getOrcamentos()]).then(([cls, vds, orcs]) => {
+      setClientes(cls)
+      setVendedores(vds)
+      setTodosOrcamentos(orcs)
+      setLoading(false)
+    })
+  }, [])
 
   // Auto-seleção do vendedor logado
   useEffect(() => {
@@ -62,13 +86,13 @@ function NovoOrcamentoContent() {
     const aiItens = searchParams.get("itens")
     const aiObs = searchParams.get("obs")
 
-    if (aiCliente) {
+    if (aiCliente && clientes.length > 0) {
       // Busca inteligente: tenta encontrar o cliente mais próximo por nome
       const match = clientes.find(c =>
         c.razaoSocial.toLowerCase().includes(aiCliente.toLowerCase())
       )
       if (match) {
-        handleClienteChange(match.id)
+        handleClienteChange(match.id.toString())
       }
     }
 
@@ -93,24 +117,25 @@ function NovoOrcamentoContent() {
         description: "Revise os dados antes de salvar."
       })
     }
-  }, [searchParams])
+  }, [searchParams, clientes])
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId)
-  const historicoOrcamentos = clienteId ? getOrcamentosByCliente(clienteId) : []
+  const historicoOrcamentos = clienteId ? todosOrcamentos.filter(o => o.clienteId === clienteId) : []
   const itensAnteriores = historicoOrcamentos.flatMap((o) => o.itens)
 
   // Auto-expand repurchase section when customer with history is selected
   const handleClienteChange = (id: string) => {
-    setClienteId(id)
-    const hasHistory = getOrcamentosByCliente(id).length > 0
+    const numId = Number(id)
+    setClienteId(numId)
+    const hasHistory = todosOrcamentos.filter(o => o.clienteId === numId).length > 0
     setShowRecompra(hasHistory)
   }
 
   // Sugestões de Etiquetas para o Cliente Selecionado
-  const etiquetasSugeridas = clienteId ? etiquetas.filter(e => e.clientesIds?.includes(clienteId)) : []
+  const etiquetasSugeridas = clienteId ? etiquetas.filter(e => e.clientesIds?.includes(Number(clienteId))) : []
 
   function adicionarItem() {
-    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao: "", quantidade: 0, unidade: "unid", precoUnitario: 0, observacao: "" }])
+    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao: "", quantidade: 1, unidade: "unid", precoUnitario: "", observacao: "" }])
   }
 
   function removerItem(id: string) {
@@ -121,23 +146,28 @@ function NovoOrcamentoContent() {
     setItens(itens.map(item => item.id === id ? { ...item, [field]: value } : item))
   }
 
-  function adicionarRecompra(descricao: string, precoUnitario: number) {
-    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao, quantidade: 0, unidade: "unid", precoUnitario, observacao: "" }])
+  function adicionarRecompra(descricao: string, precoUnitario: number | string) {
+    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao, quantidade: 1, unidade: "unid", precoUnitario, observacao: "" }])
     setShowRecompra(false)
     toast.success("Item de recompra adicionado!")
   }
 
   function adicionarEtiquetaCatalogo(etqId: string) {
-    const etq = etiquetas.find((e) => e.id === etqId)
+    const etq = etiquetas.find((e) => e.id === Number(etqId))
     if (!etq) return
     const descricao = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}`
-    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao, quantidade: 1, unidade: "unid", precoUnitario: 0, observacao: "" }])
+    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao, quantidade: 1, unidade: "unid", precoUnitario: "", observacao: "" }])
     toast.success("Etiqueta adicionada ao orçamento!")
+    setOpenCatalogo(false)
   }
 
-  const totalGeral = itens.reduce((sum, item) => sum + item.quantidade * item.precoUnitario, 0)
+  const totalGeral = itens.reduce((sum, item) => {
+    const qtd = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade
+    const preco = typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',','.')) || 0 : item.precoUnitario
+    return sum + qtd * preco
+  }, 0)
 
-  function handleSalvar() {
+  async function handleSalvar() {
     if (!clienteId) {
       toast.error("Selecione um cliente.")
       return
@@ -150,13 +180,30 @@ function NovoOrcamentoContent() {
       toast.error("Adicione pelo menos um item.")
       return
     }
-    toast.success("Orcamento salvo com sucesso!", {
-      description: `Total: ${formatCurrency(totalGeral)}`,
-    })
+    
+    try {
+      await saveOrcamento({
+        clienteId,
+        vendedorId,
+        observacoes,
+        totalGeral
+      }, itens)
+
+      toast.success("Orcamento salvo com sucesso!", {
+        description: `Total: ${formatCurrency(totalGeral)}`,
+      })
+      router.push("/orcamentos")
+    } catch (error) {
+      console.error(error)
+      toast.error("Falha ao salvar orçamento no banco de dados.")
+    }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center items-center py-20 animate-pulse text-muted-foreground">Carregando formulário...</div>
   }
 
   return (
-    <AppShell>
       <div className="flex flex-col gap-6">
         <div className="flex items-center gap-4">
           <Link href="/orcamentos">
@@ -185,13 +232,13 @@ function NovoOrcamentoContent() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Label>Selecionar Cliente *</Label>
-                  <Select value={clienteId} onValueChange={handleClienteChange}>
+                  <Select value={clienteId?.toString()} onValueChange={handleClienteChange}>
                     <SelectTrigger className="mt-1.5 h-10 bg-muted/30">
                       <SelectValue placeholder="Busque ou selecione um cliente..." />
                     </SelectTrigger>
                     <SelectContent>
                       {clientes.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
+                        <SelectItem key={c.id} value={c.id.toString()}>
                           {c.razaoSocial}
                         </SelectItem>
                       ))}
@@ -238,13 +285,13 @@ function NovoOrcamentoContent() {
             <CardContent className="pt-6 space-y-4">
               <div className="space-y-2">
                 <Label>Vendedor Responsável *</Label>
-                <Select value={vendedorId} onValueChange={setVendedorId}>
+                <Select value={vendedorId?.toString()} onValueChange={(val) => setVendedorId(Number(val))}>
                   <SelectTrigger className="h-10 bg-muted/30">
                     <SelectValue placeholder="Selecione o vendedor responsável..." />
                   </SelectTrigger>
                   <SelectContent>
                     {vendedores.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
+                      <SelectItem key={v.id} value={v.id.toString()}>
                         {v.nome}
                       </SelectItem>
                     ))}
@@ -256,7 +303,7 @@ function NovoOrcamentoContent() {
                 <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/5 p-4 space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
                   <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Comissão e Região</p>
                   <p className="text-sm font-medium text-foreground">
-                    {vendedores.find(v => v.id === vendedorId)?.regiao} • {vendedores.find(v => v.id === vendedorId)?.comissao}% de comissão fixa
+                    {vendedores.find(v => v.id === Number(vendedorId))?.regiao} • {vendedores.find(v => v.id === Number(vendedorId))?.comissao}% de comissão fixa
                   </p>
                 </div>
               )}
@@ -275,7 +322,7 @@ function NovoOrcamentoContent() {
               {etiquetasSugeridas.map(etq => (
                 <div
                   key={etq.id}
-                  onClick={() => adicionarEtiquetaCatalogo(etq.id)}
+                  onClick={() => adicionarEtiquetaCatalogo(etq.id.toString())}
                   className="min-w-[280px] max-w-[280px] border border-amber-200 bg-amber-50/50 hover:bg-amber-100/50 dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 rounded-lg p-3 cursor-pointer transition-all shadow-sm group"
                 >
                   <div className="flex justify-between items-start mb-1">
@@ -333,18 +380,38 @@ function NovoOrcamentoContent() {
                 Itens e Produtos
               </CardTitle>
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Select onValueChange={adicionarEtiquetaCatalogo}>
-                  <SelectTrigger className="w-full sm:w-[250px] h-9 text-xs bg-background">
-                    <SelectValue placeholder="Pesquisar catálogo geral..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {etiquetas.map((etq) => (
-                      <SelectItem key={etq.id} value={etq.id}>
-                        {etq.codigo} - {etq.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={openCatalogo} onOpenChange={setOpenCatalogo}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={openCatalogo}
+                      className="w-full sm:w-[250px] h-9 text-xs justify-between bg-background font-normal"
+                    >
+                      Pesquisar catálogo geral...
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[300px] p-0" align="end">
+                    <Command>
+                      <CommandInput placeholder="Buscar etiqueta (cód ou nome)..." />
+                      <CommandList>
+                        <CommandEmpty>Nenhuma etiqueta encontrada.</CommandEmpty>
+                        <CommandGroup>
+                          {etiquetas.map((etq) => (
+                            <CommandItem
+                              key={etq.id}
+                              value={`${etq.codigo} ${etq.nome}`}
+                              onSelect={() => adicionarEtiquetaCatalogo(etq.id.toString())}
+                            >
+                              {etq.codigo} - {etq.nome}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <Button variant="default" size="sm" onClick={adicionarItem} className="h-9 shrink-0">
                   <Plus className="size-4 mr-1" />
                   Item Avulso
@@ -390,8 +457,8 @@ function NovoOrcamentoContent() {
                         <Label className="text-xs font-semibold mb-1 block">Quantidade</Label>
                         <Input
                           type="number"
-                          value={item.quantidade || ""}
-                          onChange={(e) => atualizarItem(item.id, "quantidade", Number(e.target.value))}
+                          value={item.quantidade}
+                          onChange={(e) => atualizarItem(item.id, "quantidade", e.target.value)}
                           className="bg-muted/20"
                         />
                       </div>
@@ -409,10 +476,10 @@ function NovoOrcamentoContent() {
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
                         <Input
-                          type="number"
-                          step="0.01"
-                          value={item.precoUnitario || ""}
-                          onChange={(e) => atualizarItem(item.id, "precoUnitario", Number(e.target.value))}
+                          type="text"
+                          inputMode="decimal"
+                          value={item.precoUnitario}
+                          onChange={(e) => atualizarItem(item.id, "precoUnitario", e.target.value)}
                           className="bg-muted/20 font-mono"
                         />
                       </div>
@@ -420,7 +487,10 @@ function NovoOrcamentoContent() {
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
                         <div className="flex h-10 items-center justify-end rounded-md bg-primary/10 px-3 text-lg font-bold text-primary border border-primary/20">
-                          {formatCurrency(item.quantidade * item.precoUnitario)}
+                          {formatCurrency(
+                            (typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade) * 
+                            (typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',','.')) || 0 : item.precoUnitario)
+                          )}
                         </div>
                       </div>
 
@@ -494,6 +564,5 @@ function NovoOrcamentoContent() {
           </Card>
         </div>
       </div >
-    </AppShell >
   )
 }
