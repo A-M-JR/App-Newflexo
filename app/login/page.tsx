@@ -124,7 +124,7 @@ export default function LoginPage() {
                                     <Input
                                         id="email"
                                         type="email"
-                                        placeholder="admin@newflexo.com.br"
+                                        placeholder="seu.email@exemplo.com.br"
                                         required
                                         autoComplete="username"
                                         className={`h-11 bg-zinc-50 dark:bg-zinc-950/50 transition-all hover:bg-zinc-100 dark:hover:bg-zinc-900 ${loginError ? "border-amber-300 dark:border-amber-700 focus:border-amber-400 focus:ring-amber-200/30" : "border-zinc-200 dark:border-zinc-800 focus:border-primary focus:ring-1 focus:ring-primary/20"}`}

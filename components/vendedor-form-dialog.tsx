@@ -76,7 +76,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
                 id="nome"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
-                placeholder="Ex: Carlos Eduardo"
+                placeholder="Ex: João da Silva"
                 className="bg-muted/50 focus-visible:bg-background"
                 autoComplete="new-password"
                 required
@@ -90,7 +90,7 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="carlos@newflexo.com"
+                placeholder="exemplo@empresa.com.br"
                 className="bg-muted/50 focus-visible:bg-background"
                 autoComplete="new-password"
                 required
