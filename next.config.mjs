@@ -3,6 +3,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  serverExternalPackages: ['@prisma/client', 'bcryptjs'],
   images: {
     unoptimized: true,
   },
