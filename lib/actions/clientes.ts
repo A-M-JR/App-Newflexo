@@ -21,6 +21,7 @@ export async function getClientes() {
     ...c,
     criadoEm: c.criadoEm.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
+    ultimaCompra: c.ultimaCompra ? c.ultimaCompra.toISOString() : null,
   }))
 }
 
@@ -45,6 +46,7 @@ export async function getClienteById(id: number) {
     ...cliente,
     criadoEm: cliente.criadoEm.toISOString(),
     updatedAt: cliente.updatedAt.toISOString(),
+    ultimaCompra: cliente.ultimaCompra ? cliente.ultimaCompra.toISOString() : null,
   }
 }
 

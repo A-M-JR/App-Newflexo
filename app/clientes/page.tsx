@@ -15,31 +15,29 @@ import {
 } from "@/components/ui/table"
 import { Search, Plus, Eye, Users, Clock, AlertTriangle, Building2 } from "lucide-react"
 import { getClientes } from "@/lib/actions/clientes"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
+import { useDataQuery } from "@/hooks/use-data-query"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ClientesPage() {
   const [search, setSearch] = useState("")
   const [fRetencao, setFRetencao] = useState<"todos" | "30d" | "60d">("todos")
 
-  const [clientes, setClientes] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getClientes().then(data => {
-      setClientes(data)
-      setLoading(false)
-    })
-  }, [])
+  const { data: clientesList = [], isLoading: loading } = useDataQuery<any[]>({
+    key: 'clientes',
+    fetcher: getClientes
+  })
 
   const KPIs = useMemo(() => {
-    let total = clientes.length;
+    const list = clientesList || []
+    let total = list.length;
     let semCompra30 = 0;
     let semCompra60 = 0;
 
     const hoje = new Date();
 
-    clientes.forEach((c) => {
+    list.forEach((c) => {
       const pedidosDoCliente = c.pedidos || [];
       let ultimaData: Date | null = null;
 
@@ -57,17 +55,17 @@ export default function ClientesPage() {
           semCompra30++;
         }
       } else {
-        // Se nunca teve pedido, cai na malha de inativo (+60)
         semCompra60++;
       }
     });
 
     return { total, semCompra30, semCompra60 };
-  }, [clientes]);
+  }, [clientesList]);
 
   const filtered = useMemo(() => {
+    const list = clientesList || []
     const hoje = new Date();
-    return clientes.filter((c) => {
+    return list.filter((c) => {
       const matchSearch =
         c.razaoSocial.toLowerCase().includes(search.toLowerCase()) ||
         c.cnpj.includes(search) ||
@@ -96,7 +94,7 @@ export default function ClientesPage() {
 
       return true;
     });
-  }, [search, fRetencao, clientes]);
+  }, [search, fRetencao, clientesList]);
 
   return (
     <AppShell>
@@ -130,7 +128,7 @@ export default function ClientesPage() {
                 <Users className="size-4 text-primary" />
                 Total de Clientes
               </p>
-              <h2 className="text-2xl font-bold block truncate text-foreground">{KPIs.total}</h2>
+              <h2 className="text-2xl font-bold block truncate text-foreground">{loading && clientesList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.total}</h2>
               <p className="text-xs text-muted-foreground font-medium mt-1">Base Ativa Cadastrada</p>
             </CardContent>
           </Card>
@@ -144,7 +142,7 @@ export default function ClientesPage() {
                 <Clock className="size-4" />
                 Alerta de Retenção
               </p>
-              <h2 className="text-2xl font-bold text-amber-700 dark:text-amber-300">{KPIs.semCompra30}</h2>
+              <h2 className="text-2xl font-bold text-amber-700 dark:text-amber-300">{loading && clientesList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.semCompra30}</h2>
               <p className="text-xs text-amber-500 font-medium">+30 dias sem compras</p>
             </CardContent>
           </Card>
@@ -156,9 +154,9 @@ export default function ClientesPage() {
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
                 <AlertTriangle className="size-4" />
-                Risco Evasão (Churn)
+                Risco Evasão
               </p>
-              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{KPIs.semCompra60}</h2>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && clientesList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.semCompra60}</h2>
               <p className="text-xs text-red-500 font-medium">+60 dias sem movimentação</p>
             </CardContent>
           </Card>
@@ -202,58 +200,35 @@ export default function ClientesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loading && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground animate-pulse">
-                        Carregando base de clientes...
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {filtered.map((cliente) => {
+                  {loading && clientesList?.length === 0 ? (
+                    [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
+                  ) : filtered.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum cliente encontrado.</p></TableCell></TableRow>
+                  ) : filtered.map((cliente) => {
                     const numOrcamentos = cliente.orcamentos?.length || 0
                     const numPedidos = cliente.pedidos?.length || 0
                     return (
                       <TableRow key={cliente.id} className="group hover:bg-muted/30 transition-colors">
-                        <TableCell className="font-medium text-foreground max-w-[200px] truncate">
-                          {cliente.razaoSocial}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-xs">
-                          {cliente.cnpj}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
-                          {cliente.cidade} / <span className="text-foreground">{cliente.estado}</span>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
-                          {cliente.telefone}
-                        </TableCell>
+                        <TableCell className="font-medium text-foreground max-w-[200px] truncate">{cliente.razaoSocial}</TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-xs">{cliente.cnpj}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{cliente.cidade} / <span className="text-foreground">{cliente.estado}</span></TableCell>
+                        <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">{cliente.telefone}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-900 border shadow-none">
-                              {numOrcamentos} orç.
-                            </Badge>
-                            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-900 shadow-none">
-                              {numPedidos} ped.
-                            </Badge>
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-900 border shadow-none">{numOrcamentos} orç.</Badge>
+                            <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-900 shadow-none">{numPedidos} ped.</Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Link href={`/clientes/${cliente.id}`}>
-                            <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
-                              <Eye className="size-4" />
-                              <span className="sr-only">Ver detalhes</span>
-                            </Button>
-                          </Link>
+                        <TableCell className="text-right pr-6">
+                            <Link href={`/clientes/${cliente.id}`}>
+                                <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                                    <Eye className="size-4" />
+                                </Button>
+                            </Link>
                         </TableCell>
                       </TableRow>
                     )
                   })}
-                  {!loading && filtered.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Nenhum cliente encontrado.
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </div>

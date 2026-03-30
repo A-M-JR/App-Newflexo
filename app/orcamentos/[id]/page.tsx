@@ -16,13 +16,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown } from "lucide-react"
 import {
   formatCurrency,
   formatStatus,
   getStatusColor,
 } from "@/lib/mock-data"
 import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus } from "@/lib/actions/orcamentos"
+import { getEtiquetas } from "@/lib/actions/etiquetas"
 import Link from "next/link"
 import { toast } from "sonner"
 import { use, useState, useEffect } from "react"
@@ -41,6 +44,8 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const [itens, setItens] = useState<any[]>([])
   
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [etiquetasList, setEtiquetasList] = useState<any[]>([])
+  const [openCatalogo, setOpenCatalogo] = useState(false)
 
   // Status mapping for the visual steps
   const steps = [
@@ -95,13 +100,17 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   }
 
   useEffect(() => {
-    getOrcamentoById(Number(id)).then(data => {
+    Promise.all([
+      getOrcamentoById(Number(id)),
+      getEtiquetas()
+    ]).then(([data, etqs]) => {
       if (data) {
         setOrcamento(data)
         setStatus(data.status)
         setObservacoes(data.observacoes || "")
-        setItens(data.itens.map((i: any) => ({ ...i, observacao: "" })))
+        setItens(data.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
       }
+      setEtiquetasList(etqs)
       setLoading(false)
     })
   }, [id])
@@ -176,6 +185,29 @@ function OrcamentoDetailContent({ id }: { id: string }) {
       return
     }
     setItens(itens.filter(i => i.id !== id))
+  }
+
+  function adicionarItemVazio() {
+    const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
+    setItens([...itens, { id: nextId, descricao: "", quantidade: 1, unidade: "unid", precoUnitario: 0, observacao: "" }])
+  }
+
+  function adicionarEtiquetaCatalogo(etqId: string) {
+    const etq = etiquetasList.find((e) => e.id === Number(etqId))
+    if (!etq) return
+    const descricao = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}`
+    const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
+    
+    setItens([...itens, { 
+      id: nextId, 
+      descricao, 
+      quantidade: 1, 
+      unidade: "unid", 
+      precoUnitario: etq.preco || 0, 
+      observacao: "" 
+    }])
+    toast.success("Etiqueta adicionada!")
+    setOpenCatalogo(false)
   }
 
   return (
@@ -371,6 +403,44 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                 <Tag className="size-4 text-primary" />
                 Itens e Produtos
               </CardTitle>
+              {isEditing && (
+                <div className="flex items-center gap-2">
+                  <Popover open={openCatalogo} onOpenChange={setOpenCatalogo}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-[11px] font-normal"
+                      >
+                        Puxar do Catálogo
+                        <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="end">
+                      <Command>
+                        <CommandInput placeholder="Buscar etiqueta..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhuma etiqueta encontrada.</CommandEmpty>
+                          <CommandGroup>
+                            {etiquetasList.map((etq) => (
+                              <CommandItem
+                                key={etq.id}
+                                value={`${etq.codigo} ${etq.nome}`}
+                                onSelect={() => adicionarEtiquetaCatalogo(etq.id.toString())}
+                              >
+                                {etq.codigo} - {etq.nome}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <Button variant="ghost" size="sm" onClick={adicionarItemVazio} className="h-8 text-[11px] text-primary">
+                    <Plus className="size-3 mr-1" /> Item Avulso
+                  </Button>
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent className={isEditing ? "pt-6 bg-muted/5" : "pt-0 border-t border-border/50"}>

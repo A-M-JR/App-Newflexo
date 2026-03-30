@@ -118,6 +118,62 @@ const AI_TOOLS = [
                 }
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "consultar_clientes",
+            description: "Busca a base oficial de clientes no banco de dados. Pode ser por nome ou buscar todos.",
+            parameters: {
+                type: "object",
+                properties: {
+                    termo: { type: "string", description: "Opcional: Nome ou razão social para filtrar" }
+                }
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "inserir_cliente",
+            description: "Cadastra oficialmente um novo cliente no banco e retorna sucesso.",
+            parameters: {
+                type: "object",
+                properties: {
+                    razao_social: { type: "string", description: "Razão social do cliente" },
+                    cnpj: { type: "string", description: "Número de CNPJ" },
+                    email: { type: "string", description: "Email (se houver, vazio senao)" },
+                    telefone: { type: "string", description: "Telefone de contato (se houver)" }
+                },
+                required: ["razao_social", "cnpj"]
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "consultar_pedidos",
+            description: "Busca os últimos pedidos e suas aprovações no banco.",
+            parameters: {
+                type: "object",
+                properties: {
+                    status: { type: "string", description: "Filtrar (ex: APROVADO, EM_PRODUCAO, CONCLUIDO)" }
+                }
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "consultar_orcamentos",
+            description: "Consulta as emissões de orçamentos recentes no sistema.",
+            parameters: {
+                type: "object",
+                properties: {
+                    id: { type: "string", description: "Opcional" }
+                }
+            }
+        }
     }
 ]
 

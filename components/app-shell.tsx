@@ -84,19 +84,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser, isLoading, router])
 
-  // Se não estiver carregando e não tiver usuário, o useEffect acima cuidará do redirecionamento.
-  // Enquanto estiver carregando ou sem usuário, mostramos uma versão simplificada do layout 
-  // para evitar o flash total de tela branca.
-  const showContent = !isLoading && !!currentUser;
-
-  if (!showContent) {
-    return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-background">
-        <img src="/logo_quadrada.png" alt="Carregando..." className="w-16 h-16 mb-6 opacity-50 animate-pulse drop-shadow-md" />
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
+  // Se estiver carregando, mostramos a estrutura mas com o conteúdo pulsando (skeleton)
+  const isAuthorized = !!currentUser;
 
   return (
     <SidebarProvider>
@@ -131,7 +120,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Breadcrumb>
         </header>
         <div className="flex-1 overflow-auto p-4 md:p-6">
-          {children}
+          {isLoading || !isAuthorized ? (
+            <div className="flex flex-col gap-6 animate-pulse">
+               <div className="h-8 w-64 bg-muted/50 rounded-md mb-2" />
+               <div className="h-4 w-96 bg-muted/50 rounded-md mb-8" />
+               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                 {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-muted/50 rounded-xl" />)}
+               </div>
+               <div className="h-96 bg-muted/50 rounded-xl mt-4" />
+            </div>
+          ) : children}
         </div>
       </SidebarInset>
       <Toaster richColors position="top-right" />

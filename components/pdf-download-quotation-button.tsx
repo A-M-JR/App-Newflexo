@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { FileDown, Loader2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import { Orcamento, Cliente, Vendedor } from '@/lib/types'
-import { empresaDefault } from '@/lib/mock-data'
+import { getEmpresa } from '@/lib/actions/config'
 
 interface PDFDownloadQuotationButtonProps {
   orcamento: Orcamento
@@ -77,6 +77,7 @@ export function PDFDownloadQuotationButton({
   const generatePDF = async () => {
     setIsLoading(true)
     try {
+      const empresaData = await getEmpresa();
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       const pageW = 210
       const pageH = 297
@@ -106,15 +107,15 @@ export function PDFDownloadQuotationButton({
         doc.setTextColor(...PRIMARY_BLUE)
         doc.setFontSize(24)
         doc.setFont('helvetica', 'bold')
-        doc.text(empresaDefault.nomeFantasia.toUpperCase(), margin, y + 6)
+        doc.text(empresaData.nomeFantasia.toUpperCase(), margin, y + 6)
       }
 
       doc.setTextColor(...TEXT_MUTED)
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')
-      doc.text(`${empresaDefault.razaoSocial}`, margin, y + 16)
-      doc.text(`CNPJ: ${empresaDefault.cnpj}`, margin, y + 20)
-      doc.text(`Contato: ${empresaDefault.telefone} | ${empresaDefault.email}`, margin, y + 24)
+      doc.text(`${empresaData.razaoSocial}`, margin, y + 16)
+      doc.text(`CNPJ: ${empresaData.cnpj}`, margin, y + 20)
+      doc.text(`Contato: ${empresaData.telefone} | ${empresaData.email}`, margin, y + 24)
 
       // Informações do Documento (direita)
       doc.setFontSize(10)

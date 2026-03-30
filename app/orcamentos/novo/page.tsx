@@ -22,6 +22,7 @@ import { etiquetas, formatCurrency } from "@/lib/mock-data"
 import { getClientes } from "@/lib/actions/clientes"
 import { getVendedores } from "@/lib/actions/vendedores"
 import { getOrcamentos, saveOrcamento } from "@/lib/actions/orcamentos"
+import { getEtiquetas } from "@/lib/actions/etiquetas"
 import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -62,13 +63,15 @@ function NovoOrcamentoContent() {
   const [clientes, setClientes] = useState<any[]>([])
   const [vendedores, setVendedores] = useState<any[]>([])
   const [todosOrcamentos, setTodosOrcamentos] = useState<any[]>([])
+  const [etiquetasList, setEtiquetasList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([getClientes(), getVendedores(), getOrcamentos()]).then(([cls, vds, orcs]) => {
+    Promise.all([getClientes(), getVendedores(), getOrcamentos(), getEtiquetas()]).then(([cls, vds, orcs, etqs]) => {
       setClientes(cls)
       setVendedores(vds)
       setTodosOrcamentos(orcs)
+      setEtiquetasList(etqs)
       setLoading(false)
     })
   }, [])
@@ -132,7 +135,7 @@ function NovoOrcamentoContent() {
   }
 
   // Sugestões de Etiquetas para o Cliente Selecionado
-  const etiquetasSugeridas = clienteId ? etiquetas.filter(e => e.clientesIds?.includes(Number(clienteId))) : []
+  const etiquetasSugeridas = clienteId ? etiquetasList.filter(e => e.clientesIds?.includes(Number(clienteId))) : []
 
   function adicionarItem() {
     setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao: "", quantidade: 1, unidade: "unid", precoUnitario: "", observacao: "" }])
@@ -153,10 +156,17 @@ function NovoOrcamentoContent() {
   }
 
   function adicionarEtiquetaCatalogo(etqId: string) {
-    const etq = etiquetas.find((e) => e.id === Number(etqId))
+    const etq = etiquetasList.find((e) => e.id === Number(etqId))
     if (!etq) return
     const descricao = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}`
-    setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao, quantidade: 1, unidade: "unid", precoUnitario: "", observacao: "" }])
+    setItens([...itens, { 
+      id: Math.random().toString(36).substr(2, 9), 
+      descricao, 
+      quantidade: 1, 
+      unidade: "unid", 
+      precoUnitario: etq.preco || "", 
+      observacao: "" 
+    }])
     toast.success("Etiqueta adicionada ao orçamento!")
     setOpenCatalogo(false)
   }
@@ -398,7 +408,7 @@ function NovoOrcamentoContent() {
                       <CommandList>
                         <CommandEmpty>Nenhuma etiqueta encontrada.</CommandEmpty>
                         <CommandGroup>
-                          {etiquetas.map((etq) => (
+                          {etiquetasList.map((etq) => (
                             <CommandItem
                               key={etq.id}
                               value={`${etq.codigo} ${etq.nome}`}

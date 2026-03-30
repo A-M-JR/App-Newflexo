@@ -21,6 +21,9 @@ import { Button } from "@/components/ui/button"
 import { useAI } from "@/lib/ai-context"
 import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
+import { getClientes, saveCliente } from "@/lib/actions/clientes"
+import { getPedidos } from "@/lib/actions/pedidos"
+import { getOrcamentos } from "@/lib/actions/orcamentos"
 
 interface ChatMessage {
     role: "user" | "assistant"
@@ -269,6 +272,83 @@ export function AIChatPanel() {
                 })
                 // Opcional: Redirecionar para um dashboard se quiser
             }
+            else if (name === 'consultar_clientes') {
+                const clientes = await getClientes()
+                const filtrados = args.termo ? clientes.filter(c => c.razaoSocial.toLowerCase().includes(args.termo.toLowerCase()) || (c.cnpj && c.cnpj.includes(args.termo))) : clientes.slice(0, 5)
+                
+                let resposta = args.termo ? `Resultado da busca por "${args.termo}":\n\n` : `Últimos clientes cadastrados:\n\n`
+                if (filtrados.length === 0) {
+                    resposta = `Nenhum cliente encontrado com o termo "${args.termo}".`
+                } else {
+                    filtrados.forEach(c => {
+                        resposta += `🏢 **${c.razaoSocial}**\nCNPJ: ${c.cnpj || 'ND'}\nContato: ${c.telefone || 'N/A'}\nStatus: ${c.ativo ? '🟢 Ativo' : '🔴 Inativo'}\n---\n`
+                    })
+                }
+
+                addMessage({
+                    role: "assistant",
+                    content: resposta,
+                })
+            }
+            else if (name === 'inserir_cliente') {
+                try {
+                    const novoCliente = await saveCliente({
+                        razaoSocial: args.razao_social,
+                        cnpj: args.cnpj,
+                        email: args.email || "",
+                        telefone: args.telefone || "",
+                        ativo: true
+                    })
+                    addMessage({
+                        role: "assistant",
+                        content: `✅ Cliente **${args.razao_social}** inserido com sucesso direto no banco de dados! O ID oficial dele agora é **${novoCliente.id}**.`,
+                    })
+                } catch(e) {
+                    addMessage({
+                        role: "assistant",
+                        content: `❌ Houve um erro ao gravar no banco do sistema. Detalhes: ${(e as Error).message}`,
+                    })
+                }
+            }
+            else if (name === 'consultar_pedidos') {
+                let pedidos = await getPedidos()
+                if (args.status) {
+                    pedidos = pedidos.filter(p => p.status?.toLowerCase() === args.status.toLowerCase() || p.statusObj?.nome.toLowerCase().includes(args.status.toLowerCase()))
+                }
+                const topPedidos = pedidos.slice(0, 3)
+
+                let resposta = `Últimos pedidos encontrados${args.status ? ' (filtro: ' + args.status + ')' : ''}:\n\n`
+                if (topPedidos.length === 0) {
+                    resposta = `Sem resultados detectados na base.`
+                } else {
+                    topPedidos.forEach(p => {
+                        resposta += `📦 **${p.numero}** | R$ ${p.totalGeral}\nCliente: ${p.cliente?.razaoSocial || 'ND'}\nStatus: ${p.statusObj?.nome || 'ND'}\nCriado Em: ${new Date(p.criadoEm).toLocaleDateString()}\n---\n`
+                    })
+                }
+
+                addMessage({
+                    role: "assistant",
+                    content: resposta,
+                })
+            }
+            else if (name === 'consultar_orcamentos') {
+                const orcs = await getOrcamentos()
+                const topOrcs = orcs.slice(0, 3) 
+
+                let resposta = `Últimos orçamentos emitidos:\n\n`
+                if (topOrcs.length === 0) {
+                    resposta = `Nenhum orçamento encontrado.`
+                } else {
+                    topOrcs.forEach(o => {
+                        resposta += `📄 **${o.numero}** | R$ ${o.totalGeral}\nCliente: ${o.cliente?.razaoSocial}\nCriado em: ${new Date(o.criadoEm).toLocaleDateString()}\n---\n`
+                    })
+                }
+
+                addMessage({
+                    role: "assistant",
+                    content: resposta,
+                })
+            }
         } catch (error) {
             console.error("Erro ao executar ação:", error)
         } finally {
@@ -312,6 +392,30 @@ export function AIChatPanel() {
                 icon: <BarChart3 className="size-4" />,
                 color: "bg-orange-500",
                 description: `Relatório de desempenho: ${args.periodo || 'Período Atual'}`
+            },
+            consultar_clientes: {
+                title: "Consultar DB: Clientes",
+                icon: <Search className="size-4" />,
+                color: "bg-blue-600",
+                description: `Buscar cliente: ${args.termo || 'Todos'}`
+            },
+            inserir_cliente: {
+                title: "Inserção Direta: Cliente",
+                icon: <UserPlus className="size-4" />,
+                color: "bg-indigo-600",
+                description: `Gravar no DB: ${args.razao_social}`
+            },
+            consultar_pedidos: {
+                title: "Consultar DB: Pedidos",
+                icon: <Search className="size-4" />,
+                color: "bg-emerald-600",
+                description: `Pesquisar Base de Produção`
+            },
+            consultar_orcamentos: {
+                title: "Consultar DB: Orçamentos",
+                icon: <Search className="size-4" />,
+                color: "bg-cyan-600",
+                description: `Pesquisar histórico comercial`
             }
         }
 

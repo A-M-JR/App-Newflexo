@@ -29,13 +29,15 @@ export interface Cliente {
   endereco: string
   telefone: string
   cnpj: string
-  ie: string
+  ie?: string | null
   cep: string
   cidade: string
   estado: string
-  observacoes?: string
+  email?: string | null
+  observacoes?: string | null
   criadoEm: string
-  ultimaCompra?: string
+  updatedAt?: string
+  ultimaCompra?: string | null
 }
 
 export interface Etiqueta {
@@ -49,13 +51,14 @@ export interface Etiqueta {
   numeroCores: number
   tipoTubete: string
   quantidadePorRolo: number
-  observacoesTecnicas?: string
+  observacoesTecnicas?: string | null
   clientesIds?: number[]
-  pasta?: string
-  metragem?: number
-  coresDescricao?: string
+  pasta?: string | null
+  metragem?: number | null
+  preco?: number | null
+  coresDescricao?: string | null
   aplicacoesEspeciais?: string[]
-  orientacaoRebobinagem?: string
+  orientacaoRebobinagem?: string | null
 }
 
 export type StatusOrcamento = "rascunho" | "enviado" | "aprovado" | "recusado"

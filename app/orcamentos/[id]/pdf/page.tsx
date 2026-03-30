@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PDFQuotation } from '@/components/pdf-quotation';
 import { exportPdfFromElement } from '@/lib/pdf-export';
-import { clientes, orcamentos } from '@/lib/mock-data';
+import { getOrcamentoById } from '@/lib/actions/orcamentos';
 import { FileDown, ArrowLeft, Loader2 } from 'lucide-react';
 
 interface PDFPageProps {
@@ -13,17 +13,22 @@ interface PDFPageProps {
 }
 
 export default function QuotationPDFPage({ params }: PDFPageProps) {
-  const [id, setId] = useState<string>('');
+  const [orcamento, setOrcamento] = useState<any>(null);
+  const [cliente, setCliente] = useState<any>(null);
+  const [loadingData, setLoadingData] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     params.then(({ id }) => {
-      setId(id);
+      getOrcamentoById(Number(id)).then(data => {
+        if (data) {
+          setOrcamento(data);
+          setCliente(data.cliente);
+        }
+        setLoadingData(false);
+      }).catch(() => setLoadingData(false));
     });
   }, [params]);
-
-  const orcamento = orcamentos.find((o: any) => o.id === id);
-  const cliente = orcamento ? clientes.find((c: any) => c.id === orcamento.clienteId) : null;
 
   const handleDownloadPDF = async () => {
     setIsLoading(true);
@@ -43,7 +48,7 @@ export default function QuotationPDFPage({ params }: PDFPageProps) {
     window.print();
   };
 
-  if (!id) {
+  if (loadingData) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -70,7 +75,7 @@ export default function QuotationPDFPage({ params }: PDFPageProps) {
       {/* Toolbar */}
       <div className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between p-4 max-w-7xl mx-auto">
-          <Link href={`/orcamentos/${id}`}>
+          <Link href={`/orcamentos/${orcamento.id}`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Voltar

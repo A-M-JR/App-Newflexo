@@ -17,27 +17,32 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { useState, useEffect } from "react"
-import { clientes } from "@/lib/mock-data"
-import { Check, X } from "lucide-react"
-import type { Etiqueta } from "@/lib/types"
+import { useState, useEffect, useMemo } from "react"
+import { getClientes } from "@/lib/actions/clientes"
+import { saveEtiqueta, getNextEtiquetaCode } from "@/lib/actions/etiquetas"
+import { useDataQuery } from "@/hooks/use-data-query"
+import { Check, X, Info, Sparkles, Box, Ruler, Palette, Layers, MousePointer2, Loader2, DollarSign } from "lucide-react"
+import type { Etiqueta, Cliente } from "@/lib/types"
+import { LabelPreview } from "./etiqueta-preview"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const etiquetaSchema = z.object({
-  nome: z.string().min(3, "Nome obrigatorio"),
-  codigo: z.string().min(2, "Codigo obrigatorio"),
-  material: z.string().min(2, "Material obrigatorio"),
-  tipoAdesivo: z.string().min(2, "Tipo de adesivo obrigatorio"),
+  nome: z.string().min(3, "Nome obrigatório"),
+  codigo: z.string().min(1, "Código obrigatório"),
+  material: z.string().min(2, "Material obrigatório"),
+  tipoAdesivo: z.string().min(2, "Tipo de adesivo obrigatório"),
   largura: z.coerce.number().positive("Largura deve ser positiva"),
   altura: z.coerce.number().positive("Altura deve ser positiva"),
-  numeroCores: z.coerce.number().int().min(1, "Minimo 1 cor"),
-  tipoTubete: z.string().min(1, "Tipo de tubete obrigatorio"),
+  numeroCores: z.coerce.number().int().min(1, "Mínimo 1 cor"),
+  tipoTubete: z.string().min(1, "Tipo de tubete obrigatório"),
   quantidadePorRolo: z.coerce.number().int().positive("Quantidade deve ser positiva"),
-  observacoesTecnicas: z.string().optional(),
-  pasta: z.string().optional(),
-  metragem: z.coerce.number().optional(),
-  coresDescricao: z.string().optional(),
-  aplicacoesEspeciais: z.array(z.string()).optional(),
-  orientacaoRebobinagem: z.string().optional(),
+  preco: z.coerce.number().min(0, "Preço inválido").optional(),
+  observacoesTecnicas: z.string().optional().nullable(),
+  pasta: z.string().optional().nullable(),
+  metragem: z.coerce.number().optional().nullable(),
+  coresDescricao: z.string().optional().nullable(),
 })
 
 type EtiquetaFormData = z.infer<typeof etiquetaSchema>
@@ -45,277 +50,398 @@ type EtiquetaFormData = z.infer<typeof etiquetaSchema>
 interface EtiquetaFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  etiquetaToEdit?: Etiqueta | null // Para edicao
+  etiquetaToEdit?: Etiqueta | null
+  onSuccess?: () => void
 }
 
-export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit }: EtiquetaFormDialogProps) {
+
+export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSuccess }: EtiquetaFormDialogProps) {
   const [selectedClientes, setSelectedClientes] = useState<number[]>([])
   const [searchTerm, setSearchTerm] = useState("")
-
-  // Checkboxes list para Aplicações Especiais
-  const opcoesAplicacoes = ["Verniz UV Local", "Verniz UV Total", "Cold Stamp", "Hot Stamping", "Laminação"]
   const [selectedAplicacoes, setSelectedAplicacoes] = useState<string[]>([])
+  const [loadingAutoCode, setLoadingAutoCode] = useState(false)
+
+  // Fetch real clientes using useDataQuery
+  const { data: dbClientes = [], isLoading: loadingClientes } = useDataQuery<Cliente[]>({
+    key: 'clientes',
+    fetcher: getClientes,
+    enabled: open // Only fetch when dialog is open
+  })
 
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     setValue,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<EtiquetaFormData>({
     resolver: zodResolver(etiquetaSchema),
+    defaultValues: {
+        numeroCores: 1,
+        largura: 0,
+        altura: 0,
+        quantidadePorRolo: 0,
+        preco: 0
+    }
   })
 
+  const watchValues = watch()
+
   useEffect(() => {
-    if (open) {
-      if (etiquetaToEdit) {
-        reset({
-          nome: etiquetaToEdit.nome,
-          codigo: etiquetaToEdit.codigo,
-          material: etiquetaToEdit.material,
-          tipoAdesivo: etiquetaToEdit.tipoAdesivo,
-          largura: etiquetaToEdit.largura,
-          altura: etiquetaToEdit.altura,
-          numeroCores: etiquetaToEdit.numeroCores,
-          tipoTubete: etiquetaToEdit.tipoTubete,
-          quantidadePorRolo: etiquetaToEdit.quantidadePorRolo,
-          observacoesTecnicas: etiquetaToEdit.observacoesTecnicas || "",
-          pasta: etiquetaToEdit.pasta || "",
-          metragem: etiquetaToEdit.metragem || undefined,
-          coresDescricao: etiquetaToEdit.coresDescricao || "",
-          orientacaoRebobinagem: etiquetaToEdit.orientacaoRebobinagem || "",
-        })
-        setSelectedClientes(etiquetaToEdit.clientesIds || [])
-        setSelectedAplicacoes(etiquetaToEdit.aplicacoesEspeciais || [])
-      } else {
-        reset({
-          nome: "", codigo: "", material: "", tipoAdesivo: "", largura: 0, altura: 0,
-          numeroCores: 1, tipoTubete: "", quantidadePorRolo: 0, observacoesTecnicas: "",
-          pasta: "", coresDescricao: "", orientacaoRebobinagem: ""
-        })
-        setSelectedClientes([])
-        setSelectedAplicacoes([])
+    async function loadInitialData() {
+      if (open) {
+        if (etiquetaToEdit) {
+          reset({
+            nome: etiquetaToEdit.nome,
+            codigo: etiquetaToEdit.codigo,
+            material: etiquetaToEdit.material,
+            tipoAdesivo: etiquetaToEdit.tipoAdesivo,
+            largura: etiquetaToEdit.largura,
+            altura: etiquetaToEdit.altura,
+            numeroCores: etiquetaToEdit.numeroCores,
+            tipoTubete: etiquetaToEdit.tipoTubete,
+            quantidadePorRolo: etiquetaToEdit.quantidadePorRolo,
+            preco: etiquetaToEdit.preco || 0,
+            observacoesTecnicas: etiquetaToEdit.observacoesTecnicas || "",
+            pasta: etiquetaToEdit.pasta || "",
+            metragem: etiquetaToEdit.metragem || undefined,
+            coresDescricao: etiquetaToEdit.coresDescricao || "",
+          })
+          setSelectedClientes(etiquetaToEdit.clientesIds || [])
+          setSelectedAplicacoes(etiquetaToEdit.aplicacoesEspeciais || [])
+        } else {
+          reset({
+            nome: "", codigo: "", material: "", tipoAdesivo: "", largura: 0, altura: 0,
+            numeroCores: 1, tipoTubete: "", quantidadePorRolo: 0, observacoesTecnicas: "",
+            pasta: "", coresDescricao: "", metragem: undefined, preco: 0
+          })
+          setSelectedClientes([])
+          setSelectedAplicacoes([])
+          
+          setLoadingAutoCode(true)
+          try {
+            const nextCode = await getNextEtiquetaCode()
+            setValue("codigo", nextCode)
+          } catch (err) {
+            console.error("Erro ao buscar próximo código", err)
+          } finally {
+            setLoadingAutoCode(false)
+          }
+        }
+        setSearchTerm("")
       }
-      setSearchTerm("")
     }
-  }, [open, etiquetaToEdit, reset])
+    loadInitialData()
+  }, [open, etiquetaToEdit, reset, setValue])
 
   const toggleCliente = (id: number) => {
-    setSelectedClientes(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    )
-  }
-
-  const removeCliente = (id: number) => {
-    setSelectedClientes(prev => prev.filter(c => c !== id))
+    setSelectedClientes(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
   }
 
   const toggleAplicacao = (app: string) => {
-    setSelectedAplicacoes(prev =>
-      prev.includes(app) ? prev.filter(a => a !== app) : [...prev, app]
-    )
+    setSelectedAplicacoes(prev => prev.includes(app) ? prev.filter(a => a !== app) : [...prev, app])
   }
 
-  function onSubmit(data: EtiquetaFormData) {
-    const finalData = {
-      ...data,
-      clientesIds: selectedClientes.length > 0 ? selectedClientes : undefined,
-      aplicacoesEspeciais: selectedAplicacoes.length > 0 ? selectedAplicacoes : undefined
+  async function onSubmit(data: EtiquetaFormData) {
+    try {
+      const finalData = {
+        ...data,
+        id: etiquetaToEdit?.id,
+        clientesIds: selectedClientes,
+        aplicacoesEspeciais: selectedAplicacoes
+      }
+
+      await saveEtiqueta(finalData)
+
+      toast.success(etiquetaToEdit ? "Etiqueta atualizada!" : "Nova etiqueta cadastrada!", {
+        description: data.nome,
+        icon: <Check className="size-4 text-green-500" />
+      })
+      onOpenChange(false)
+      onSuccess?.()
+    } catch (error) {
+      toast.error("Erro ao salvar etiqueta")
     }
-
-    toast.success(etiquetaToEdit ? "Etiqueta atualizada com sucesso!" : "Etiqueta matriz cadastrada com sucesso!", {
-      description: data.nome,
-    })
-    onOpenChange(false)
   }
 
-  const filteredClientes = clientes.filter(c =>
-    c.razaoSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.cnpj.includes(searchTerm)
-  )
+  const filteredClientes = useMemo(() => {
+    if (!dbClientes) return []
+    return dbClientes.filter(c =>
+      c.razaoSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.cnpj.includes(searchTerm)
+    )
+  }, [dbClientes, searchTerm])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] md:max-w-4xl lg:max-w-5xl max-h-[90vh] overflow-y-auto bg-card text-card-foreground p-0 border-0 shadow-lg">
-        <div className="p-6 pb-4 border-b border-border/50 bg-muted/20">
-          <DialogTitle className="text-xl font-bold text-foreground">
-            {etiquetaToEdit ? "Editar Matriz/Etiqueta" : "Nova Matriz e Rótulo"}
-          </DialogTitle>
-          <DialogDescription className="mt-1">
-            {etiquetaToEdit ? "Altere as especificações técnicas gerais da etiqueta base." : "Cadastre as especificações da etiqueta e vincule-a a clientes caso seja exclusiva."}
-          </DialogDescription>
+      <DialogContent className="max-w-[95vw] md:max-w-4xl lg:max-w-5xl p-0 border-0 shadow-2xl overflow-hidden bg-background">
+        
+        <div className="relative h-20 bg-gradient-to-r from-primary/90 to-primary p-6 flex flex-col justify-center overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+            <Layers className="size-32 rotate-12" />
+          </div>
+          <div className="z-10 flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+                <Box className="size-5" />
+                {etiquetaToEdit ? `Editando Matriz: ${etiquetaToEdit.codigo}` : "Cadastro Completo de Etiqueta"}
+              </DialogTitle>
+              <p className="text-xs text-white/70 mt-1">Preencha as informações técnicas para registro no catálogo.</p>
+            </div>
+            {etiquetaToEdit && <Badge className="bg-white/20 text-white border-0">Edição Ativa</Badge>}
+          </div>
         </div>
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 pt-5 flex flex-col gap-8">
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-
-            {/* Coluna Esquerda: Dados Basicos */}
-            <div className="space-y-4 lg:col-span-3">
-              <h3 className="text-sm font-semibold text-primary mb-2">Características Físicas</h3>
-
+        <div className="flex flex-col lg:flex-row h-full max-h-[80vh]">
+          
+          <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto p-6 flex flex-col">
+            <div className="space-y-8 animate-in fade-in duration-500">
+              
+              {/* SEÇÃO 1: IDENTIFICAÇÃO */}
               <div className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="nome" className={errors.nome ? "text-destructive" : ""}>Nome da Matriz / Descrição *</Label>
-                  <Input id="nome" {...register("nome")} className={`bg-muted/30 ${errors.nome ? "border-destructive focus-visible:ring-destructive" : ""}`} />
-                  {errors.nome && <p className="text-[10px] text-destructive">{errors.nome.message}</p>}
+                <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+                  <MousePointer2 className="size-4" />
+                  <h4>Identificação e Rastreabilidade</h4>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
+                
+                <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="codigo" className={errors.codigo ? "text-destructive" : ""}>Ref / Código *</Label>
-                    <Input id="codigo" placeholder="EXT-01" {...register("codigo")} className={`bg-muted/30 ${errors.codigo ? "border-destructive" : ""}`} />
+                    <Label className="text-xs font-medium">Nome da Matriz / Produto *</Label>
+                    <Input id="nome" {...register("nome")} placeholder="Ex: Rótulo de Vinho - Syrah 750ml" className="bg-muted/30 focus-visible:ring-primary h-9" />
+                    {errors.nome && <p className="text-[10px] text-destructive italic">{errors.nome.message}</p>}
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="material" className={errors.material ? "text-destructive" : ""}>Material (Faca) *</Label>
-                    <Input id="material" placeholder="BOPP, Couchê..." {...register("material")} className={`bg-muted/30 ${errors.material ? "border-destructive" : ""}`} />
+
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid gap-2">
+                      <Label className="text-xs font-medium flex items-center gap-2">
+                        Código Sequencial *
+                        {loadingAutoCode && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+                      </Label>
+                      <Input id="codigo" {...register("codigo")} placeholder="123" className="bg-muted/30 h-9 font-mono" />
+                      {errors.codigo && <p className="text-[10px] text-destructive">{errors.codigo.message}</p>}
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-xs font-medium">Pasta de Arquivo</Label>
+                      <Input id="pasta" {...register("pasta")} placeholder="X-1234" className="bg-muted/30 h-9" />
+                    </div>
+                    <div className="hidden lg:grid gap-2">
+                      <Label className="text-xs font-medium">Metragem Rolo</Label>
+                      <Input type="number" {...register("metragem")} placeholder="Ex: 500" className="bg-muted/30 h-9" />
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="tipoAdesivo">Carga/Adesivo *</Label>
-                    <Input id="tipoAdesivo" placeholder="Borracha 20g" {...register("tipoAdesivo")} className="bg-muted/30" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="numeroCores">Número de Cores *</Label>
-                    <Input id="numeroCores" type="number" {...register("numeroCores")} className="bg-muted/30" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="largura">Largura (mm) *</Label>
-                    <Input id="largura" type="number" {...register("largura")} className="bg-muted/30" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="altura">Altura (mm) *</Label>
-                    <Input id="altura" type="number" {...register("altura")} className="bg-muted/30" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="tipoTubete">Tubete (Polegadas) *</Label>
-                    <Input id="tipoTubete" placeholder="40, 76..." {...register("tipoTubete")} className="bg-muted/30" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="quantidadePorRolo">Vol. p/ Rolo (Un) *</Label>
-                    <Input id="quantidadePorRolo" type="number" {...register("quantidadePorRolo")} className="bg-muted/30" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="pasta">Pasta Archivo</Label>
-                    <Input id="pasta" placeholder="Ex: X-4045" {...register("pasta")} className="bg-muted/30" />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="metragem">Metragem Rolo</Label>
-                    <Input id="metragem" type="number" placeholder="Ex: 100" {...register("metragem")} className="bg-muted/30" />
-                  </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="coresDescricao">Cores (Descrição)</Label>
-                  <Input id="coresDescricao" placeholder="Ex: Preto, Vermelho" {...register("coresDescricao")} className="bg-muted/30" />
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="orientacaoRebobinagem">Orientação de Rebobinagem</Label>
-                  <Input id="orientacaoRebobinagem" placeholder="Ex: Ext 0º, Ext 90º..." {...register("orientacaoRebobinagem")} className="bg-muted/30" />
-                </div>
-              </div>
-            </div>
-
-            {/* Coluna Direita: Exclusividade e Observacoes */}
-            <div className="space-y-4 lg:col-span-2">
-              <h3 className="text-sm font-semibold text-primary mb-2">Acabamentos e Vinculações</h3>
-
-              <div className="grid gap-2 mb-4">
-                <Label>Aplicações Especiais (Opcional)</Label>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {opcoesAplicacoes.map(app => (
-                    <button
-                      key={app}
-                      type="button"
-                      onClick={() => toggleAplicacao(app)}
-                      className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${selectedAplicacoes.includes(app)
-                        ? 'bg-primary/10 border-primary text-primary font-medium'
-                        : 'bg-background hover:bg-muted border-border text-muted-foreground'
-                        }`}
-                    >
-                      {app}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Clientes Vinculados (Opcional)</Label>
-                <p className="text-[10px] text-muted-foreground pb-1">Selecione para quais clientes esta etiqueta ficará destacada como disponível.</p>
-
-                <Input
-                  placeholder="Buscar Cliente para vincular..."
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                  className="h-8 text-xs bg-background"
-                />
-
-                {/* Lista Dropdown Fake de Clientes */}
-                {searchTerm.length > 0 && (
-                  <div className="border border-border/50 rounded-md max-h-32 overflow-y-auto bg-background/50 shadow-inner mt-1">
-                    {filteredClientes.map(cliente => (
-                      <button
-                        key={cliente.id}
-                        type="button"
-                        onClick={() => toggleCliente(cliente.id)}
-                        className="w-full flex items-center justify-between text-left px-3 py-2 text-xs hover:bg-muted/50 border-b border-border/30 last:border-0"
-                      >
-                        <span className="truncate max-w-[80%]">{cliente.razaoSocial}</span>
-                        {selectedClientes.includes(cliente.id) && (
-                          <Check className="size-3 text-primary" />
+                  <div className="space-y-3 pt-2">
+                    <Label className="text-xs font-medium flex items-center gap-1.5 text-muted-foreground">
+                        <Check className="size-3 text-primary" />
+                        Vincular Clientes (Exclusividade)
+                    </Label>
+                    <div className="border border-border p-3 rounded-lg bg-muted/10 space-y-3">
+                        <div className="relative">
+                          <Input 
+                            placeholder="Buscar cliente para vincular..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="h-8 text-xs bg-background pr-8"
+                          />
+                          {loadingClientes && <Loader2 className="absolute right-2 top-2 size-3 animate-spin text-muted-foreground" />}
+                        </div>
+                        
+                        {searchTerm.length > 0 && !loadingClientes && (
+                           <div className="border border-border/50 rounded-md max-h-32 overflow-y-auto bg-background/80 shadow-md">
+                              {filteredClientes.map(cliente => (
+                                <button key={cliente.id} type="button" onClick={() => toggleCliente(cliente.id)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-primary/10">
+                                   <span className="truncate">{cliente.razaoSocial}</span>
+                                   {selectedClientes.includes(cliente.id) && <Check className="size-3 text-primary" />}
+                                </button>
+                              ))}
+                              {filteredClientes.length === 0 && (
+                                <div className="p-2 text-center text-[10px] text-muted-foreground">Nenhum cliente encontrado</div>
+                              )}
+                           </div>
                         )}
-                      </button>
-                    ))}
-                    {filteredClientes.length === 0 && (
-                      <div className="text-center text-[10px] text-muted-foreground p-3">Cliente não encontrado.</div>
-                    )}
-                  </div>
-                )}
 
-                {/* Tags Selecionadas */}
-                {selectedClientes.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2 p-2 bg-muted/20 border border-border/30 rounded-md min-h-12 max-h-24 overflow-y-auto">
-                    {selectedClientes.map(id => {
-                      const cl = clientes.find(c => c.id === id)
-                      if (!cl) return null
-                      return (
-                        <Badge key={id} variant="secondary" className="text-[9px] px-1.5 py-0 items-center gap-1 shadow-sm border border-border/50">
-                          <span className="max-w-[120px] truncate">{cl.razaoSocial}</span>
-                          <button type="button" onClick={() => removeCliente(id)} className="hover:bg-destructive/10 hover:text-destructive rounded-full p-0.5 transition-colors">
-                            <X className="size-2.5" />
-                          </button>
-                        </Badge>
-                      )
-                    })}
+                        <div className="flex flex-wrap gap-1.5">
+                            {selectedClientes.map(id => {
+                                const cl = dbClientes?.find(c => c.id === id)
+                                return (
+                                    <Badge key={id} variant="secondary" className="text-[9px] gap-1 px-1.5 py-0">
+                                        {cl?.razaoSocial || `Cliente #${id}`}
+                                        <X className="size-2.5 cursor-pointer hover:text-destructive" onClick={() => toggleCliente(id)} />
+                                    </Badge>
+                                )
+                            })}
+                        </div>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
 
-              <div className="grid gap-2 mt-4">
-                <Label htmlFor="observacoesTecnicas">Especificações de Produção</Label>
-                <Textarea id="observacoesTecnicas" rows={5} placeholder="Ex: Rolo com saída para fora..." {...register("observacoesTecnicas")} className="bg-muted/30 resize-none" />
+              <Separator />
+
+              {/* SEÇÃO 2: FICHA TÉCNICA */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+                  <Ruler className="size-4" />
+                  <h4>Ficha Técnica e Dimensões</h4>
+                </div>
+
+                <div className="grid gap-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium">Largura (mm) *</Label>
+                            <Input type="number" {...register("largura")} className="bg-muted/30 h-9" />
+                            {errors.largura && <p className="text-[10px] text-destructive">{errors.largura.message}</p>}
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium">Altura (mm) *</Label>
+                            <Input type="number" {...register("altura")} className="bg-muted/30 h-9" />
+                            {errors.altura && <p className="text-[10px] text-destructive">{errors.altura.message}</p>}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium">Material Base / Papel *</Label>
+                            <Input {...register("material")} placeholder="Ex: BOPP Branco" className="bg-muted/30 h-9" />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium">Tipo de Adesivo *</Label>
+                            <Input {...register("tipoAdesivo")} placeholder="Ex: Acrílico 20g" className="bg-muted/30 h-9" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium flex items-center gap-1.5">
+                                Número de Cores *
+                                <Palette className="size-3 text-primary/70" />
+                            </Label>
+                            <Input type="number" {...register("numeroCores")} className="bg-muted/30 h-9" />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium">Descrição das Cores</Label>
+                            <Input {...register("coresDescricao")} placeholder="Ex: CMYK + Pantone" className="bg-muted/30 h-9" />
+                        </div>
+                    </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* SEÇÃO 3: PRODUÇÃO E PREÇO */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+                  <DollarSign className="size-4" />
+                  <h4>Comercial e Produção</h4>
+                </div>
+
+                <div className="grid gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium text-amber-600 dark:text-amber-400">Preço Base (por unidade) *</Label>
+                            <div className="relative">
+                                <DollarSign className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                                <Input type="number" step="0.0001" {...register("preco")} className="bg-amber-500/5 focus-visible:ring-amber-500 pl-9 h-10 font-semibold" />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium">Volume por Rolo (Un) *</Label>
+                            <Input type="number" {...register("quantidadePorRolo")} className="bg-muted/30 h-10" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label className="text-xs font-medium flex items-center gap-1.5">
+                                Tubete (Polegadas) *
+                            </Label>
+                            <Input {...register("tipoTubete")} placeholder="Ex: 3 polegadas" className="bg-muted/30 h-9" />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1.5">
+                            <Sparkles className="size-3 text-amber-500" />
+                            Aplicações Especiais
+                        </Label>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                            {["Verniz UV Local", "Verniz UV Total", "Cold Stamp", "Hot Stamping", "Laminação"].map(app => (
+                                <button
+                                    key={app} type="button" onClick={() => toggleAplicacao(app)}
+                                    className={`text-[10px] px-3 py-1.5 rounded-full border transition-all ${selectedAplicacoes.includes(app) 
+                                        ? 'bg-primary text-primary-foreground border-primary shadow-sm ring-2 ring-primary/20' 
+                                        : 'bg-muted/50 border-border text-muted-foreground hover:border-primary/50'}`}
+                                >
+                                    {app}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label className="text-xs font-medium">Observações e Instruções de Rebobinagem</Label>
+                        <Textarea {...register("observacoesTecnicas")} rows={3} placeholder="Instruções específicas para a produção..." className="bg-muted/30 resize-none text-xs" />
+                    </div>
+                </div>
               </div>
             </div>
 
-          </div>
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-border/50 mt-2">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">Registrar Etiqueta</Button>
-          </div>
-        </form>
+            <div className="flex items-center justify-end gap-3 pt-10 mt-6 border-t border-border/50">
+               <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+                 Cancelar
+               </Button>
+               <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 px-8 shadow-md">
+                  {isSubmitting && <Loader2 className="size-4 mr-2 animate-spin" />}
+                  {etiquetaToEdit ? 'Atualizar Matriz' : 'Salvar no Catálogo'}
+               </Button>
+            </div>
+          </form>
+
+          {/* Right Preview Side */}
+          <aside className="hidden lg:flex w-72 xl:w-80 bg-muted/20 border-l border-border/50 p-6 flex-col items-center gap-6 overflow-y-auto">
+            <div className="w-full">
+                <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-center mb-6">Prévia em Tempo Real</h4>
+                <div className="min-h-[220px] flex items-center justify-center p-4 bg-white/50 dark:bg-black/20 rounded-xl border border-border/50 shadow-inner">
+                   <LabelPreview 
+                      largura={Number(watchValues.largura)} 
+                      altura={Number(watchValues.altura)} 
+                      material={watchValues.material || ""}
+                      cores={Number(watchValues.numeroCores)}
+                      aplicacoes={selectedAplicacoes}
+                   />
+                </div>
+            </div>
+
+            <div className="w-full space-y-4">
+                <div className="p-4 bg-primary/5 dark:bg-primary/10 rounded-xl border border-primary/20 shadow-sm ring-1 ring-primary/5">
+                    <h5 className="text-[11px] font-bold mb-3 flex items-center gap-1.5 text-primary uppercase tracking-wider">
+                        <DollarSign className="size-3" /> Valor Comercial
+                    </h5>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-[10px] font-medium text-muted-foreground">R$</span>
+                        <span className="text-2xl font-black text-foreground">{Number(watchValues.preco || 0).toFixed(4)}</span>
+                        <span className="text-[10px] text-muted-foreground ml-1">/ un</span>
+                    </div>
+                </div>
+
+                <div className="p-3 bg-white/80 dark:bg-slate-900/50 rounded-lg border border-border shadow-sm">
+                    <h5 className="text-[11px] font-bold mb-2 flex items-center gap-1.5 text-primary"><Info className="size-3" /> Resumo do Registro</h5>
+                    <div className="space-y-1.5 text-[10px]">
+                        <div className="flex justify-between"><span className="text-muted-foreground">Produto:</span> <span className="font-medium truncate max-w-[120px]">{watchValues.nome || '---'}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Medidas:</span> <span className="font-medium">{watchValues.largura || 0}x{watchValues.altura || 0}mm</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Material:</span> <span className="font-medium">{watchValues.material || '---'}</span></div>
+                    </div>
+                </div>
+
+                <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 rounded-lg border border-amber-200/50 dark:border-amber-900/50">
+                    <p className="text-[9px] text-amber-600 dark:text-amber-400 leading-relaxed italic">
+                        <strong>Dica:</strong> Verifique se a pasta de archivo coincide com o catálogo físico para evitar erros de produção.
+                    </p>
+                </div>
+            </div>
+          </aside>
+        </div>
       </DialogContent>
     </Dialog>
   )

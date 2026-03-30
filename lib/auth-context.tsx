@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { User, Vendedor } from "./types"
 import { verifySession } from "./actions/users"
+import { clearDataCache } from "@/hooks/use-data-query"
 
 export type LoginResult = "success" | "invalid_credentials" | "user_blocked" | "user_not_found"
 
@@ -90,6 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       localStorage.setItem("flexo_session", JSON.stringify(sessionObject))
 
+      // Limpa cache de dados anteriores para a nova sessão
+      clearDataCache()
+
       setVendedor(dbVendor || null)
       return "success"
     } catch (error) {
@@ -104,6 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("flexo_session")
     // O legacy identifier se existir
     localStorage.removeItem("currentUserId")
+    
+    // Limpa cache ao sair também por segurança
+    clearDataCache()
+
     router.push("/login")
   }
 

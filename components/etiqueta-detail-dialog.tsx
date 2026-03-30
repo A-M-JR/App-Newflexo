@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { LabelPreview } from "./etiqueta-preview"
+import { Box, Ruler, Palette, DollarSign, Info, Layers, Settings, FileText, CheckCircle2 } from "lucide-react"
 import type { Etiqueta } from "@/lib/types"
 
 interface EtiquetaDetailDialogProps {
@@ -27,106 +29,173 @@ export function EtiquetaDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-card text-card-foreground">
-        <DialogHeader className="flex flex-row items-center justify-between pb-2">
-          <div>
-            <DialogTitle className="text-xl text-foreground flex items-center gap-2">
-              {etiqueta.nome}
-              {etiqueta.pasta && (
-                <Badge variant="outline" className="text-[10px] font-mono bg-muted/30">
-                  Pasta: {etiqueta.pasta}
-                </Badge>
-              )}
-            </DialogTitle>
+      <DialogContent className="max-w-7xl p-0 border-0 shadow-2xl overflow-hidden bg-background">
+        
+        {/* Modern Gradient Header */}
+        <div className="relative h-24 bg-gradient-to-r from-primary/95 to-primary p-6 flex items-center justify-between overflow-hidden">
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+            <Box className="size-32 rotate-12 text-white" />
           </div>
+          <div className="z-10 flex flex-col">
+            <div className="flex items-center gap-2 mb-1">
+               <DialogTitle className="text-xl font-bold text-white tracking-tight">
+                  Matriz: {etiqueta.codigo}
+               </DialogTitle>
+               {etiqueta.pasta && (
+                  <Badge className="bg-white/20 text-white border-0 text-[10px]">
+                    Pasta {etiqueta.pasta}
+                  </Badge>
+               )}
+            </div>
+            <p className="text-xs text-white/70 font-medium">Especificações Técnicas e Comerciais</p>
+          </div>
+          
           {onEdit && (
             <button
-              type="button"
-              className="text-sm font-medium text-primary hover:underline"
               onClick={() => {
                 onOpenChange(false)
                 onEdit()
               }}
+              className="z-10 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-semibold backdrop-blur-md transition-all border border-white/10 flex items-center gap-2"
             >
+              <Settings className="size-3" />
               Editar Matriz
             </button>
           )}
-        </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="font-mono">{etiqueta.codigo}</Badge>
-            <Badge variant="outline">{etiqueta.material}</Badge>
-            {etiqueta.clientesIds && etiqueta.clientesIds.length > 0 && (
-              <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-400">
-                Matriz Exclusiva
-              </Badge>
-            )}
-          </div>
+        </div>
 
-          <Separator />
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Medidas</p>
-              <p className="text-sm font-medium text-foreground">{etiqueta.largura} x {etiqueta.altura} mm</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Cores</p>
-              <p className="text-sm font-medium text-foreground">
-                {etiqueta.numeroCores} {etiqueta.coresDescricao ? `(${etiqueta.coresDescricao})` : ""}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Tipo de Adesivo</p>
-              <p className="text-sm font-medium text-foreground">{etiqueta.tipoAdesivo}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Tipo de Tubete</p>
-              <p className="text-sm font-medium text-foreground">{etiqueta.tipoTubete}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Qtd. por Rolo</p>
-              <p className="text-sm font-medium text-foreground">{etiqueta.quantidadePorRolo.toLocaleString("pt-BR")}</p>
-            </div>
-            {etiqueta.metragem && (
-              <div>
-                <p className="text-xs text-muted-foreground">Metragem</p>
-                <p className="text-sm font-medium text-foreground">{etiqueta.metragem} m</p>
-              </div>
-            )}
-            {etiqueta.orientacaoRebobinagem && (
-              <div className="col-span-2">
-                <p className="text-xs text-muted-foreground">Orientação Rebobinagem</p>
-                <p className="text-sm font-medium text-foreground">{etiqueta.orientacaoRebobinagem}</p>
-              </div>
-            )}
-          </div>
-
-          {(etiqueta.aplicacoesEspeciais && etiqueta.aplicacoesEspeciais.length > 0) && (
-            <>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">Aplicações Especiais</p>
-                <div className="flex gap-2 flex-wrap">
-                  {etiqueta.aplicacoesEspeciais.map(app => (
-                    <Badge key={app} variant="secondary" className="bg-primary/10 text-primary border-primary/20 shrink-0">
-                      {app}
+        <div className="flex flex-col md:flex-row h-full max-h-[85vh]">
+          
+          {/* Side Bar - Preview & Basic Info */}
+          <aside className="w-full md:w-64 bg-muted/20 border-r border-border/50 p-6 flex flex-col items-center">
+            <div className="w-full">
+               <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-center mb-6">Prévia em Escala</h4>
+               <div className="min-h-[220px] flex flex-col items-center justify-center p-4 bg-white/50 dark:bg-black/20 rounded-2xl border border-border/50 shadow-inner group">
+                  <LabelPreview 
+                    largura={etiqueta.largura} 
+                    altura={etiqueta.altura} 
+                    material={etiqueta.material} 
+                    cores={etiqueta.numeroCores}
+                    aplicacoes={etiqueta.aplicacoesEspeciais || []}
+                  />
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <Badge variant="outline" className="text-[10px] font-semibold bg-background shadow-xs">
+                      {etiqueta.material}
                     </Badge>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
+                    {etiqueta.clientesIds && etiqueta.clientesIds.length > 0 && (
+                      <Badge className="text-[9px] bg-amber-500/10 text-amber-600 border-amber-200 dark:bg-amber-500/5 dark:text-amber-400 flex items-center gap-1">
+                        <CheckCircle2 className="size-2.5" />
+                        Matriz Exclusiva
+                      </Badge>
+                    )}
+                  </div>
+               </div>
+            </div>
 
-          {etiqueta.observacoesTecnicas && (
-            <>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Especificações de Produção / Observações</p>
-                <p className="text-sm text-foreground bg-muted/40 p-3 rounded-md border border-border/50">{etiqueta.observacoesTecnicas}</p>
-              </div>
-            </>
-          )}
+            <div className="w-full mt-auto pt-6 space-y-3">
+                <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">
+                    <p className="text-[10px] text-primary/70 uppercase font-bold mb-1 tracking-tight">Valor Unitário</p>
+                    <div className="flex items-baseline gap-1 text-primary">
+                        <span className="text-[10px] font-medium">R$</span>
+                        <span className="text-xl font-black">{Number(etiqueta.preco || 0).toFixed(4)}</span>
+                        <span className="text-[10px] ml-1 opacity-70">/ un</span>
+                    </div>
+                </div>
+            </div>
+          </aside>
+
+          {/* Main Info Panels */}
+          <main className="flex-1 p-6 overflow-y-auto">
+            <div className="space-y-8 animate-in fade-in duration-500 slide-in-from-right-2">
+              
+              {/* Info Section: Ficha Técnica */}
+              <section className="space-y-6">
+                 <div className="flex items-center gap-2 text-primary">
+                    <Ruler className="size-4" />
+                    <h3 className="text-sm font-bold uppercase tracking-tight">Ficha Técnica e Dimensões</h3>
+                 </div>
+                 
+                 <div className="pl-6 border-l-2 border-primary/10 space-y-6">
+                    <div className="space-y-1.5">
+                       <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Nome da Matriz / Produto</p>
+                       <p className="text-lg font-bold text-foreground leading-tight">{etiqueta.nome}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="space-y-1">
+                           <p className="text-[10px] text-muted-foreground font-semibold uppercase">Medidas</p>
+                           <p className="text-sm font-semibold text-primary">{etiqueta.largura} x {etiqueta.altura} mm</p>
+                        </div>
+                        <div className="space-y-1">
+                           <p className="text-[10px] text-muted-foreground font-semibold uppercase">Tipo Adesivo</p>
+                           <p className="text-sm font-medium">{etiqueta.tipoAdesivo}</p>
+                        </div>
+                        <div className="space-y-1">
+                           <p className="text-[10px] text-muted-foreground font-semibold uppercase">Material</p>
+                           <p className="text-sm font-medium">{etiqueta.material}</p>
+                        </div>
+                    </div>
+                 </div>
+              </section>
+
+              {/* Info Section: Produção */}
+              <section className="space-y-4">
+                 <div className="flex items-center gap-2 text-primary">
+                    <Settings className="size-4" />
+                    <h3 className="text-sm font-bold uppercase tracking-tight">Produção e Acabamento</h3>
+                 </div>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-6 gap-x-12 pl-6 border-l-2 border-primary/10">
+                    <div className="space-y-1">
+                       <p className="text-[10px] text-muted-foreground font-semibold uppercase">Número de Cores</p>
+                       <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium">{etiqueta.numeroCores}</p>
+                          {etiqueta.coresDescricao && <span className="text-[10px] text-muted-foreground italic truncate max-w-[100px]">({etiqueta.coresDescricao})</span>}
+                       </div>
+                    </div>
+                    <div className="space-y-1">
+                       <p className="text-[10px] text-muted-foreground font-semibold uppercase">Tubete</p>
+                       <p className="text-sm font-medium">{etiqueta.tipoTubete}</p>
+                    </div>
+                    <div className="space-y-1">
+                       <p className="text-[10px] text-muted-foreground font-semibold uppercase">Volume / Rolo</p>
+                       <p className="text-sm font-medium">{etiqueta.quantidadePorRolo.toLocaleString("pt-BR")} un</p>
+                    </div>
+                    {etiqueta.metragem && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-semibold uppercase">Metragem Rolo</p>
+                        <p className="text-sm font-medium">{etiqueta.metragem} m</p>
+                      </div>
+                    )}
+                 </div>
+
+                 {/* Tags de aplicações especiais */}
+                 {(etiqueta.aplicacoesEspeciais && etiqueta.aplicacoesEspeciais.length > 0) && (
+                    <div className="pl-6 flex flex-wrap gap-2 pt-2">
+                       {etiqueta.aplicacoesEspeciais.map(app => (
+                          <Badge key={app} variant="secondary" className="text-[9px] bg-muted py-0 h-5">
+                             {app}
+                          </Badge>
+                       ))}
+                    </div>
+                 )}
+              </section>
+
+              {/* Info Section: Observações */}
+              {(etiqueta.observacoesTecnicas) && (
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 text-primary">
+                      <FileText className="size-4" />
+                      <h3 className="text-sm font-bold uppercase tracking-tight">Observações de Produção</h3>
+                  </div>
+                  <div className="pl-6">
+                    <div className="p-4 bg-muted/40 rounded-xl border border-border/50 text-xs leading-relaxed text-muted-foreground">
+                       {etiqueta.observacoesTecnicas}
+                    </div>
+                  </div>
+                </section>
+              )}
+            </div>
+          </main>
         </div>
       </DialogContent>
     </Dialog>

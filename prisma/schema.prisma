@@ -68,6 +68,7 @@ model Etiqueta {
   tipoTubete            String
   quantidadePorRolo     Int
   metragem              Float?
+  preco                 Float?            @default(0)
   coresDescricao        String?
   orientacaoRebobinagem String?
   observacoesTecnicas   String?

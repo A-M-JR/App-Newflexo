@@ -16,35 +16,33 @@ import {
 import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard, Filter } from "lucide-react"
 import { formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
 import { getPedidos } from "@/lib/actions/pedidos"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
+import { useDataQuery } from "@/hooks/use-data-query"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function PedidosPage() {
   const [search, setSearch] = useState("")
   const [fStatus, setFStatus] = useState("")
   const [fSlaOnly, setFSlaOnly] = useState(false)
-  const [fDataOrder, setFDataOrder] = useState("") // Default empty to list all on load
+  const [fDataOrder, setFDataOrder] = useState("") 
 
-  const [pedidosList, setPedidosList] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getPedidos().then(data => {
-      setPedidosList(data)
-      setLoading(false)
-    })
-  }, [])
+  const { data: pedidosList = [], isLoading: loading } = useDataQuery<any[]>({
+    key: 'pedidos',
+    fetcher: getPedidos
+  })
 
   const { isVendedor, vendedor } = useAuth()
 
   // Filter by current user if vendedor, show all if admin
   const userPedidos = useMemo(() => {
-    return isVendedor && vendedor ? pedidosList.filter((p) => p.vendedorId === vendedor.id) : pedidosList
+    const list = pedidosList || []
+    return isVendedor && vendedor ? list.filter((p: any) => p.vendedorId === vendedor.id) : list
   }, [isVendedor, vendedor, pedidosList])
 
   const filtered = useMemo(() => {
-    let result = userPedidos.filter((p) => {
+    let result = userPedidos.filter((p: any) => {
       const cliente = p.cliente
       const term = search.toLowerCase()
 
@@ -54,10 +52,9 @@ export default function PedidosPage() {
 
       const matchStatus = fStatus ? p.status === fStatus : true
 
-      // Filtro de Data (Mês atual/anterior) via Prazo de Entrega ou premissa
       let matchDate = true
       if (fDataOrder === "mesAtual" || fDataOrder === "mesAnterior") {
-        const itemDate = new Date(p.prazoEntrega.split('/').reverse().join('-')) // converte DD/MM/YYYY
+        const itemDate = new Date(p.prazoEntrega.split('/').reverse().join('-'))
         const now = new Date()
         const isCurrentMonth = itemDate.getMonth() === now.getMonth() && itemDate.getFullYear() === now.getFullYear()
 
@@ -75,9 +72,8 @@ export default function PedidosPage() {
       return matchSearch && matchStatus && matchDate
     })
 
-    // Filtro de SLA urgente (atrasado ou vence em 3 dias)
     if (fSlaOnly) {
-      result = result.filter(p => {
+      result = result.filter((p: any) => {
         if (p.status === 'entregue') return false
         const [d, m, y] = p.prazoEntrega.split('/')
         const prazoDate = new Date(Number(y), Number(m) - 1, Number(d))
@@ -89,15 +85,14 @@ export default function PedidosPage() {
     }
 
     if (fDataOrder === "recente") {
-      result = result.sort((a, b) => new Date(b.prazoEntrega.split('/').reverse().join('-')).getTime() - new Date(a.prazoEntrega.split('/').reverse().join('-')).getTime())
+      result = result.sort((a: any, b: any) => new Date(b.prazoEntrega.split('/').reverse().join('-')).getTime() - new Date(a.prazoEntrega.split('/').reverse().join('-')).getTime())
     } else if (fDataOrder === "antigo") {
-      result = result.sort((a, b) => new Date(a.prazoEntrega.split('/').reverse().join('-')).getTime() - new Date(b.prazoEntrega.split('/').reverse().join('-')).getTime())
+      result = result.sort((a: any, b: any) => new Date(a.prazoEntrega.split('/').reverse().join('-')).getTime() - new Date(b.prazoEntrega.split('/').reverse().join('-')).getTime())
     }
 
     return result
   }, [userPedidos, search, fStatus, fSlaOnly, fDataOrder])
 
-  // SLA Calculation Logic (Current state)
   const getSlaStatus = (prazo: string, status: string) => {
     if (status === 'entregue') return { class: '', icon: null, text: 'Entregue', urgent: false }
 
@@ -117,14 +112,13 @@ export default function PedidosPage() {
     return { class: '', icon: null, text: 'No prazo', urgent: false, isLate: false }
   }
 
-  // Cálculos de KPIs Dinâmicos baseados no Filtro Atual
   const KPIs = useMemo(() => {
     let totalValor = 0;
     let emAnalise = 0;
     let emProducao = 0;
     let atrasados = 0;
 
-    filtered.forEach(p => {
+    filtered.forEach((p: any) => {
       totalValor += p.totalGeral;
       if (p.status === 'em_analise') emAnalise++;
       if (p.status === 'em_producao' || p.status === 'separacao') emProducao++;
@@ -142,28 +136,20 @@ export default function PedidosPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Pedidos de Produção</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Acompanhamento operacional e SLAs de entregas.
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">Acompanhamento operacional e SLAs de entregas.</p>
           </div>
         </div>
 
-        {/* Dynamic KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card
             className={`bg-gradient-to-br from-card to-card/50 border-border/50 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${!fStatus && !fSlaOnly ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
             onClick={() => { setFStatus(''); setFSlaOnly(false) }}
           >
-            <div className="absolute -right-4 -top-4 p-3 opacity-5 pointer-events-none">
-              <LayoutDashboard className="size-24" />
-            </div>
+            <div className="absolute -right-4 -top-4 p-3 opacity-5 pointer-events-none"><LayoutDashboard className="size-24" /></div>
             <CardContent className="p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <LayoutDashboard className="size-4 text-primary" />
-                Valor Total (Todos)
-              </p>
-              <h2 className="text-2xl font-bold block truncate">{formatCurrency(KPIs.totalValor)}</h2>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mt-1">{fDataOrder === 'mesAtual' ? 'Competência: Mês Atual' : (fDataOrder === 'mesAnterior' ? 'Competência: Mês Anterior' : 'Todos os períodos')}</p>
+              <p className="text-sm font-medium text-muted-foreground flex items-center gap-2"><LayoutDashboard className="size-4 text-primary" />Valor Total</p>
+              <h2 className="text-2xl font-bold block truncate">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-32" /> : formatCurrency(KPIs.totalValor)}</h2>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mt-1">{fDataOrder || 'Todos os períodos'}</p>
             </CardContent>
           </Card>
 
@@ -172,11 +158,8 @@ export default function PedidosPage() {
             onClick={() => { setFStatus(fStatus === 'em_analise' ? '' : 'em_analise'); setFSlaOnly(false) }}
           >
             <CardContent className="p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                <PackageOpen className="size-4" />
-                Em Análise Comercial
-              </p>
-              <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-300">{KPIs.emAnalise}</h2>
+              <p className="text-sm font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2"><PackageOpen className="size-4" />Em Análise</p>
+              <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-300">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.emAnalise}</h2>
               <p className="text-xs text-blue-500 font-medium">Aguardando OP</p>
             </CardContent>
           </Card>
@@ -186,12 +169,9 @@ export default function PedidosPage() {
             onClick={() => { setFStatus(fStatus === 'em_producao' ? '' : 'em_producao'); setFSlaOnly(false) }}
           >
             <CardContent className="p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-purple-600 dark:text-purple-400 flex items-center gap-2">
-                <Factory className="size-4" />
-                Em Chão de Fábrica
-              </p>
-              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300">{KPIs.emProducao}</h2>
-              <p className="text-xs text-purple-500 font-medium">Produção e Separação</p>
+              <p className="text-sm font-medium text-purple-600 dark:text-purple-400 flex items-center gap-2"><Factory className="size-4" />Em Produção</p>
+              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.emProducao}</h2>
+              <p className="text-xs text-purple-500 font-medium">Fábrica e Separação</p>
             </CardContent>
           </Card>
 
@@ -200,12 +180,9 @@ export default function PedidosPage() {
             onClick={() => { setFSlaOnly(!fSlaOnly); setFStatus('') }}
           >
             <CardContent className="p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
-                <Truck className="size-4" />
-                Alerta de SLA
-              </p>
-              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{KPIs.atrasados}</h2>
-              <p className="text-xs text-red-500 font-medium">Atrasados ou Fechando Prazo</p>
+              <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2"><Truck className="size-4" />Alerta de SLA</p>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.atrasados}</h2>
+              <p className="text-xs text-red-500 font-medium">Atrasados ou Urgentes</p>
             </CardContent>
           </Card>
         </div>
@@ -221,127 +198,50 @@ export default function PedidosPage() {
                 className="pl-9 bg-background focus-visible:bg-background border-border"
               />
             </div>
-
             <div className="flex items-center gap-3 overflow-x-auto pb-1 md:pb-0">
-              <div className="flex items-center gap-2 shrink-0">
-                <Filter className="size-3.5 text-muted-foreground" />
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status:</label>
-                <select
-                  className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  value={fStatus}
-                  onChange={e => setFStatus(e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  <option value="em_analise">Em Análise</option>
-                  <option value="em_producao">Em Produção</option>
-                  <option value="separacao">Separação/Faturamento</option>
-                  <option value="entregue">Entregue</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Mês (Entrega):</label>
-                <select
-                  className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                  value={fDataOrder}
-                  onChange={e => setFDataOrder(e.target.value)}
-                >
-                  <option value="">Exibir Todos</option>
-                  <option value="mesAtual">Mês Atual</option>
-                  <option value="mesAnterior">Mês Anterior</option>
-                  <option value="recente">Mais Recentes</option>
-                  <option value="antigo">Mais Antigos</option>
-                </select>
-              </div>
-
+              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+                <option value="">Todos Status</option>
+                <option value="em_analise">Em Análise</option>
+                <option value="em_producao">Em Produção</option>
+                <option value="separacao">Separação</option>
+                <option value="entregue">Entregue</option>
+              </select>
+              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fDataOrder} onChange={e => setFDataOrder(e.target.value)}>
+                <option value="">Período Todos</option>
+                <option value="mesAtual">Mês Atual</option>
+                <option value="mesAnterior">Mês Anterior</option>
+                <option value="recente">Recentes</option>
+                <option value="antigo">Antigos</option>
+              </select>
               {(fStatus || fSlaOnly || search || fDataOrder) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFStatus(""); setFSlaOnly(false); setSearch(""); setFDataOrder("") }} className="h-8 px-2 text-xs">
-                  Limpar Filtros
-                </Button>
+                <Button variant="ghost" size="sm" onClick={() => { setFStatus(""); setFSlaOnly(false); setSearch(""); setFDataOrder("") }} className="h-8 px-2 text-xs">Limpar</Button>
               )}
             </div>
           </CardHeader>
-
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader className="bg-transparent">
-                  <TableRow className="hover:bg-transparent border-b border-border/40">
-                    <TableHead className="font-semibold text-muted-foreground text-[13px] h-11">Pedido</TableHead>
-                    <TableHead className="font-semibold text-muted-foreground text-[13px] h-11">Cliente</TableHead>
-                    <TableHead className="hidden lg:table-cell font-semibold text-muted-foreground text-[13px] h-11">Vendedor</TableHead>
-                    <TableHead className="hidden md:table-cell font-semibold text-muted-foreground text-[13px] h-11">Prazo SLA</TableHead>
-                    <TableHead className="text-right font-semibold text-muted-foreground text-[13px] h-11">Status Fila</TableHead>
-                    <TableHead className="text-right font-semibold text-muted-foreground text-[13px] h-11 pr-6">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow><TableHead>Pedido</TableHead><TableHead>Cliente</TableHead><TableHead className="hidden lg:table-cell">Vendedor</TableHead><TableHead className="hidden md:table-cell">Prazo SLA</TableHead><TableHead className="text-right">Status</TableHead><TableHead className="text-right pr-6">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {loading && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground animate-pulse bg-card">
-                        Carregando pedidos de produção...
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {filtered.map((ped) => {
-                    const cliente = ped.cliente
+                  {loading && pedidosList?.length === 0 ? (
+                    [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
+                  ) : filtered.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum pedido encontrado.</p></TableCell></TableRow>
+                  ) : filtered.map((ped: any) => {
                     const sla = getSlaStatus(ped.prazoEntrega, ped.status)
-
                     return (
-                      <TableRow key={ped.id} className={`hover:bg-muted/10 transition-colors border-border/30 group bg-card ${sla.class}`}>
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium font-mono text-blue-500 text-[13px]">{ped.numero}</span>
-                            <span className="text-[11px] font-medium text-muted-foreground">R$ {ped.totalGeral.toFixed(2)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[200px]">
-                          <div className="font-medium text-[13px] text-foreground truncate">{cliente?.razaoSocial}</div>
-                          <div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {cliente?.cnpj}</div>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell text-muted-foreground text-[12px]">
-                          {ped.vendedor?.nome || "N/A"}
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <div className="flex flex-col gap-1">
-                            <span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
-                              <Clock className="size-3.5 text-muted-foreground" />
-                              {ped.prazoEntrega}
-                            </span>
-                            {sla.urgent && (
-                              <span className={`flex items-center gap-1 text-[10px] font-bold ${sla.isLate ? 'text-red-600 dark:text-red-400' : 'text-orange-600 dark:text-orange-400'}`}>
-                                {sla.icon}
-                                {sla.text}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant="outline" className={`${getStatusColor(ped.status)} font-medium border-current/20`}>
-                            {formatStatus(ped.status)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right pr-6">
-                          <Link href={`/pedidos/${ped.id}`}>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50 bg-background/50 backdrop-blur-sm shadow-sm hover:bg-primary/10 hover:text-primary">
-                              <Eye className="size-4" />
-                              <span className="sr-only">Ver</span>
-                            </Button>
-                          </Link>
-                        </TableCell>
+                      <TableRow key={ped.id} className={`hover:bg-muted/10 transition-colors border-border/30 bg-card ${sla.class}`}>
+                        <TableCell><div className="flex flex-col"><span className="font-medium font-mono text-blue-500 text-[13px]">{ped.numero}</span><span className="text-[11px] font-medium text-muted-foreground">R$ {ped.totalGeral.toFixed(2)}</span></div></TableCell>
+                        <TableCell><div className="font-medium text-[13px] text-foreground truncate">{ped.cliente?.razaoSocial}</div><div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {ped.cliente?.cnpj}</div></TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-[12px]">{ped.vendedor?.nome || "N/A"}</TableCell>
+                        <TableCell className="hidden md:table-cell"><div className="flex flex-col gap-1"><span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground"><Clock className="size-3.5 text-muted-foreground" />{ped.prazoEntrega}</span>{sla.urgent && (
+                          <span className={`flex items-center gap-1 text-[10px] font-bold ${sla.isLate ? 'text-red-600' : 'text-orange-600'}`}>{sla.icon}{sla.text}</span>
+                        )}</div></TableCell>
+                        <TableCell className="text-right"><Badge variant="outline" className={`${getStatusColor(ped.status)} font-medium`}>{formatStatus(ped.status)}</Badge></TableCell>
+                        <TableCell className="text-right pr-6"><Link href={`/pedidos/${ped.id}`}><Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button></Link></TableCell>
                       </TableRow>
                     )
                   })}
-                  {(!loading && filtered.length === 0) && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                        <div className="flex flex-col items-center justify-center gap-3">
-                          <Factory className="size-8 text-muted-foreground/30" />
-                          <p>Nenhum pedido de produção encontrado neste período ou filtro.</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
                 </TableBody>
               </Table>
             </div>

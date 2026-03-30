@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Ruler, Palette, Layers } from "lucide-react"
-import { etiquetas } from "@/lib/mock-data"
-import { useState } from "react"
+import { Search, Plus, Ruler, Palette, Layers, Loader2 } from "lucide-react"
+import { useState, useMemo } from "react"
 import { EtiquetaFormDialog } from "@/components/etiqueta-form-dialog"
 import { EtiquetaDetailDialog } from "@/components/etiqueta-detail-dialog"
+import { getEtiquetas } from "@/lib/actions/etiquetas"
+import { useDataQuery } from "@/hooks/use-data-query"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { Etiqueta } from "@/lib/types"
 
 export default function EtiquetasPage() {
@@ -22,21 +24,29 @@ export default function EtiquetasPage() {
   const [fMaterial, setFMaterial] = useState("")
   const [fTubete, setFTubete] = useState("")
 
-  const filtered = etiquetas.filter(
-    (e) => {
-      const matchSearch = e.nome.toLowerCase().includes(search.toLowerCase()) ||
-        e.codigo.toLowerCase().includes(search.toLowerCase()) ||
-        e.material.toLowerCase().includes(search.toLowerCase())
+  const { data: etiquetasList, isLoading: loading, refetch: revalidate } = useDataQuery<Etiqueta[]>({
+    key: 'etiquetas',
+    fetcher: getEtiquetas
+  })
 
-      const matchMaterial = fMaterial ? e.material.toLowerCase() === fMaterial.toLowerCase() : true
-      const matchTubete = fTubete ? e.tipoTubete.includes(fTubete) : true
+  const filtered = useMemo(() => {
+    const list = etiquetasList || []
+    return list.filter(
+        (e) => {
+          const matchSearch = e.nome.toLowerCase().includes(search.toLowerCase()) ||
+            e.codigo.toLowerCase().includes(search.toLowerCase()) ||
+            e.material.toLowerCase().includes(search.toLowerCase())
+    
+          const matchMaterial = fMaterial ? e.material.toLowerCase() === fMaterial.toLowerCase() : true
+          const matchTubete = fTubete ? e.tipoTubete.includes(fTubete) : true
+    
+          return matchSearch && matchMaterial && matchTubete
+        }
+      )
+  }, [etiquetasList, search, fMaterial, fTubete])
 
-      return matchSearch && matchMaterial && matchTubete
-    }
-  )
-
-  const uniqueMaterials = Array.from(new Set(etiquetas.map(e => e.material)))
-  const uniqueTubetes = Array.from(new Set(etiquetas.map(e => e.tipoTubete)))
+  const uniqueMaterials = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.material))), [etiquetasList])
+  const uniqueTubetes = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.tipoTubete))), [etiquetasList])
 
   const handleEdit = () => {
     setEtiquetaToEdit(detailEtiqueta)
@@ -113,7 +123,11 @@ export default function EtiquetasPage() {
 
           <CardContent className="bg-muted/5 border-t border-border/50 pt-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filtered.map((etiqueta) => (
+              {loading && (!etiquetasList || etiquetasList.length === 0) ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <Card key={i} className="border-border/50"><CardContent className="p-6 space-y-4"><Skeleton className="h-4 w-[120px]" /><Skeleton className="h-12 w-full" /><Skeleton className="h-4 w-full" /></CardContent></Card>
+                ))
+              ) : filtered.map((etiqueta) => (
                 <Card
                   key={etiqueta.id}
                   className="group hover:shadow-md transition-all cursor-pointer border-border/50 hover:border-primary/30 relative overflow-hidden"
@@ -152,25 +166,31 @@ export default function EtiquetasPage() {
 
                       <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/50">
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold">Volume Rolo</span>
-                          <span className="text-xs font-medium">{etiqueta.quantidadePorRolo} un</span>
+                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold">Valor Unitário</span>
+                          <span className="text-xs font-bold text-primary flex items-center gap-1">
+                            {etiqueta.preco ? `R$ ${etiqueta.preco.toFixed(4)}` : "R$ 0,0000"}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant="secondary" className="text-[9px] bg-primary/10 text-primary hover:bg-primary/20">
-                            Tb. {etiqueta.tipoTubete}
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold text-right">Volume Rolo</span>
+                          <span className="text-xs font-medium text-right">{etiqueta.quantidadePorRolo} un</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5 pt-2">
+                        <Badge variant="secondary" className="text-[9px] bg-primary/10 text-primary hover:bg-primary/20">
+                          Tb. {etiqueta.tipoTubete}
+                        </Badge>
+                        {etiqueta.clientesIds && etiqueta.clientesIds.length > 0 && (
+                          <Badge variant="outline" className="text-[9px] border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-400">
+                            Exclusiva ({etiqueta.clientesIds.length})
                           </Badge>
-                          {etiqueta.clientesIds && etiqueta.clientesIds.length > 0 && (
-                            <Badge variant="outline" className="text-[9px] border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-400">
-                              Exclusiva ({etiqueta.clientesIds.length})
-                            </Badge>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground bg-background rounded-lg border border-dashed">
                   <Layers className="size-8 opacity-20 mb-2" />
                   <p>Nenhuma etiqueta ou matriz encontrada.</p>
@@ -188,6 +208,7 @@ export default function EtiquetasPage() {
           if (!v) setTimeout(() => setEtiquetaToEdit(null), 300)
         }}
         etiquetaToEdit={etiquetaToEdit}
+        onSuccess={() => revalidate()}
       />
       <EtiquetaDetailDialog
         etiqueta={detailEtiqueta}
