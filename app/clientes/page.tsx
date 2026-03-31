@@ -46,7 +46,7 @@ export default function ClientesPage() {
 
   const { data: dbData, isLoading: loading } = useDataQuery<any>({
     key: { type: 'clientes', page, search: debouncedSearch, filter: fRetencao },
-    fetcher: () => getClientes({ page, limit: 15, search: debouncedSearch })
+    fetcher: () => getClientes({ page, limit: 15, search: debouncedSearch, filter: fRetencao })
   })
 
   // We fallback to empty structures if null
@@ -54,26 +54,6 @@ export default function ClientesPage() {
   const KPIs = dbData?.kpis || { total: 0, semCompra30: 0, semCompra60: 0 }
   const totalPages = dbData?.totalPages || 1
 
-  const filtered = useMemo(() => {
-    const list = clientesList || []
-    const hoje = new Date()
-    return list.filter((c: any) => {
-      if (fRetencao === "todos") return true
-
-      let diffDays = 0
-      if (c.ultimaCompra) {
-        const diffTime = hoje.getTime() - new Date(c.ultimaCompra).getTime()
-        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-      } else {
-        diffDays = 999
-      }
-
-      if (fRetencao === "60d") return diffDays >= 60
-      if (fRetencao === "30d") return diffDays >= 30 && diffDays < 60
-
-      return true
-    })
-  }, [fRetencao, clientesList])
 
   return (
     <AppShell>
@@ -114,7 +94,7 @@ export default function ClientesPage() {
 
           <Card
             className={`bg-gradient-to-br from-amber-50 to-background dark:from-amber-950/20 dark:to-background border-amber-100 dark:border-amber-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fRetencao === '30d' ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-            onClick={() => setFRetencao('30d')}
+            onClick={() => { setFRetencao('30d'); setPage(1); }}
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
@@ -128,7 +108,7 @@ export default function ClientesPage() {
 
           <Card
             className={`bg-gradient-to-br from-red-50 to-background dark:from-red-950/20 dark:to-background border-red-100 dark:border-red-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fRetencao === '60d' ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-            onClick={() => setFRetencao('60d')}
+            onClick={() => { setFRetencao('60d'); setPage(1); }}
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
@@ -181,9 +161,9 @@ export default function ClientesPage() {
                 <TableBody>
                   {loading && clientesList?.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
-                  ) : filtered.length === 0 ? (
+                  ) : clientesList.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum cliente encontrado.</p></TableCell></TableRow>
-                  ) : filtered.map((cliente: any) => {
+                  ) : clientesList.map((cliente: any) => {
                     const numOrcamentos = cliente._count?.orcamentos || 0
                     const numPedidos = cliente._count?.pedidos || 0
                     return (

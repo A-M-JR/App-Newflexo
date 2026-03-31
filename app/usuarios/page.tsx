@@ -27,21 +27,26 @@ export default function UsuariosPage() {
   const [editingUsuario, setEditingUsuario] = useState<User | null>(null)
   const [fStatusFilter, setFStatusFilter] = useState<"todos" | "ativo" | "inativo">("todos")
   const [search, setSearch] = useState("")
+  const [kpis, setKpis] = useState({ total: 0, ativos: 0, bloqueados: 0 })
   const [toggleWarning, setToggleWarning] = useState<{ id: number; currentStatus: boolean; nome: string } | null>(null)
 
   // Password Change State
   const [passwordUser, setPasswordUser] = useState<User | null>(null)
   const [newPassword, setNewPassword] = useState("")
 
-  const loadInitialData = async () => {
+  const loadData = async () => {
     setIsLoading(true)
     try {
-      const [usersData, vendorsData] = await Promise.all([
-        getUsers(),
-        getVendedores()
+      const [usersRes, vendorsData] = await Promise.all([
+        getUsers({ search, status: fStatusFilter }),
+        getVendedores({ mode: 'dropdown' })
       ])
-      setUsuariosList(usersData)
-      setVendedoresList(vendorsData)
+      
+      if (usersRes && 'data' in usersRes) {
+        setUsuariosList(usersRes.data as any)
+        setKpis(usersRes.kpis || { total: 0, ativos: 0, bloqueados: 0 })
+      }
+      setVendedoresList(vendorsData as any)
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
       toast.error("Erro ao carregar dados do banco.")
@@ -51,8 +56,11 @@ export default function UsuariosPage() {
   }
 
   useEffect(() => {
-    loadInitialData()
-  }, [])
+    const timer = setTimeout(() => {
+      loadData()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search, fStatusFilter])
 
   // Helper function for display
   const getVendedorById = (id: number) => vendedoresList.find(v => v.id === id)
@@ -86,7 +94,7 @@ export default function UsuariosPage() {
   const handleSaveUsuario = async (usuario: User) => {
     try {
       await saveUser(usuario)
-      await loadInitialData()
+      await loadData()
       toast.success(editingUsuario ? "Usuário atualizado" : "Usuário cadastrado")
       setEditingUsuario(null)
       setShowForm(false)
@@ -107,7 +115,7 @@ export default function UsuariosPage() {
 
     try {
       await toggleUserActive(id)
-      await loadInitialData()
+      await loadData()
       toast.success("Acesso Atualizado!", {
         description: `O acesso de ${nome} foi ${actionState} com sucesso.`,
       })
@@ -171,55 +179,49 @@ export default function UsuariosPage() {
         </div>
 
         {/* KPI Filter Cards */}
-        {(() => {
-          const totalAtivos = usuariosList.filter(u => u.ativo !== false).length;
-          const totalInativos = usuariosList.filter(u => u.ativo === false).length;
-          return (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Card
-                className={`bg-gradient-to-br from-card to-card/50 border-border/50 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'todos' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-                onClick={() => setFStatusFilter('todos')}
-              >
-                <CardContent className="p-5 flex flex-col gap-1">
-                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Users className="size-4 text-primary" />
-                    Total de Usuários
-                  </p>
-                  <h2 className="text-2xl font-bold text-foreground">{usuariosList.length}</h2>
-                  <p className="text-xs text-muted-foreground font-medium">Base completa</p>
-                </CardContent>
-              </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card
+            className={`bg-gradient-to-br from-card to-card/50 border-border/50 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'todos' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
+            onClick={() => setFStatusFilter('todos')}
+          >
+            <CardContent className="p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Users className="size-4 text-primary" />
+                Total de Usuários
+              </p>
+              <h2 className="text-2xl font-bold text-foreground">{kpis.total}</h2>
+              <p className="text-xs text-muted-foreground font-medium">Base completa</p>
+            </CardContent>
+          </Card>
 
-              <Card
-                className={`bg-gradient-to-br from-emerald-50 to-background dark:from-emerald-950/20 dark:to-background border-emerald-100 dark:border-emerald-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'ativo' ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-                onClick={() => setFStatusFilter(fStatusFilter === 'ativo' ? 'todos' : 'ativo')}
-              >
-                <CardContent className="p-5 flex flex-col gap-1">
-                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                    <UserCheck className="size-4" />
-                    Ativos
-                  </p>
-                  <h2 className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{totalAtivos}</h2>
-                  <p className="text-xs text-emerald-500 font-medium">Com acesso liberado</p>
-                </CardContent>
-              </Card>
+          <Card
+            className={`bg-gradient-to-br from-emerald-50 to-background dark:from-emerald-950/20 dark:to-background border-emerald-100 dark:border-emerald-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'ativo' ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
+            onClick={() => setFStatusFilter('ativo')}
+          >
+            <CardContent className="p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                <UserCheck className="size-4" />
+                Ativos
+              </p>
+              <h2 className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{kpis.ativos}</h2>
+              <p className="text-xs text-emerald-500 font-medium">Com acesso liberado</p>
+            </CardContent>
+          </Card>
 
-              <Card
-                className={`bg-gradient-to-br from-red-50 to-background dark:from-red-950/20 dark:to-background border-red-100 dark:border-red-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'inativo' ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-                onClick={() => setFStatusFilter(fStatusFilter === 'inativo' ? 'todos' : 'inativo')}
-              >
-                <CardContent className="p-5 flex flex-col gap-1">
-                  <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
-                    <UserX className="size-4" />
-                    Bloqueados
-                  </p>
-                  <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{totalInativos}</h2>
-                  <p className="text-xs text-red-500 font-medium">Acesso suspenso</p>
-                </CardContent>
-              </Card>
-            </div>
-          );
-        })()}
+          <Card
+            className={`bg-gradient-to-br from-red-50 to-background dark:from-red-950/20 dark:to-background border-red-100 dark:border-red-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'inativo' ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
+            onClick={() => setFStatusFilter('inativo')}
+          >
+            <CardContent className="p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
+                <UserX className="size-4" />
+                Bloqueados
+              </p>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{kpis.bloqueados}</h2>
+              <p className="text-xs text-red-500 font-medium">Acesso suspenso</p>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Form Dialog */}
         {showForm && (
@@ -304,14 +306,7 @@ export default function UsuariosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {usuariosList.filter(u => {
-                  const term = search.toLowerCase();
-                  const matchSearch = !search || u.nome.toLowerCase().includes(term) || u.email.toLowerCase().includes(term);
-                  if (!matchSearch) return false;
-                  if (fStatusFilter === 'ativo') return u.ativo !== false;
-                  if (fStatusFilter === 'inativo') return u.ativo === false;
-                  return true;
-                }).map((usuario) => {
+                {usuariosList.map((usuario) => {
                   const vendedor = usuario.vendedorId ? getVendedorById(usuario.vendedorId) : null
                   const isActive = usuario.ativo !== false;
                   return (

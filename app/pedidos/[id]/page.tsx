@@ -73,10 +73,10 @@ export default function PedidoDetailPage({
 
   // Status mapping for the visual steps
   const steps = [
-    { id: 'enviado', label: 'Em Análise', icon: Settings, nextId: 'em_producao', nextLabel: 'Iniciar Produção' },
-    { id: 'em_producao', label: 'Em Produção', icon: Package, nextId: 'separacao', nextLabel: 'Enviar p/ Separação' },
-    { id: 'separacao', label: 'Separação', icon: Package, nextId: 'entregue', nextLabel: 'Marcar Entregue' },
-    { id: 'entregue', label: 'Entregue / Faturado', icon: Truck, nextId: null, nextLabel: null },
+    { id: 'enviado', label: 'Em Análise', icon: Settings, nextId: 'em_producao', nextLabel: 'Iniciar Produção', prevId: null, prevLabel: null },
+    { id: 'em_producao', label: 'Em Produção', icon: Package, nextId: 'separacao', nextLabel: 'Enviar p/ Separação', prevId: 'enviado', prevLabel: 'Voltar p/ Análise' },
+    { id: 'separacao', label: 'Separação', icon: Package, nextId: 'entregue', nextLabel: 'Marcar Entregue', prevId: 'em_producao', prevLabel: 'Voltar p/ Produção' },
+    { id: 'entregue', label: 'Entregue / Faturado', icon: Truck, nextId: null, nextLabel: null, prevId: 'separacao', prevLabel: 'Voltar p/ Separação' },
   ]
 
   // Mock function to determine active step based on status
@@ -113,6 +113,25 @@ export default function PedidoDetailPage({
       } catch (err) {
         console.error(err)
         toast.error("Erro ao atualizar o status.")
+      } finally {
+        setIsUpdatingStatus(false)
+      }
+    }
+  }
+
+  const handleBackStatus = async () => {
+    const prevStep = steps[currentStepIndex].prevId;
+    if (prevStep) {
+      setIsUpdatingStatus(true)
+      try {
+        await updatePedidoStatus(pedido.id, prevStep)
+        setCurrentStatus(prevStep as Pedido['status']);
+        toast.success("Status Revertido!", {
+          description: `O pedido voltou para a fase: ${steps[currentStepIndex - 1].label}`
+        })
+      } catch (err) {
+        console.error(err)
+        toast.error("Erro ao reverter o status.")
       } finally {
         setIsUpdatingStatus(false)
       }
@@ -191,16 +210,31 @@ export default function PedidoDetailPage({
                       {step.label}
                     </span>
 
-                    {/* Botão de avançar apenas no step ativo se houver próximo */}
-                    {isActive && step.nextLabel && (
-                      <Button
-                        size="sm"
-                        onClick={handleAdvanceStatus}
-                        disabled={isUpdatingStatus}
-                        className="mt-2 h-7 text-[10px] uppercase font-bold tracking-wider rounded-full px-4 shadow-md hover:scale-105 transition-transform"
-                      >
-                        {isUpdatingStatus ? "Atualizando..." : step.nextLabel} <ArrowRight className="size-3 ml-1" />
-                      </Button>
+                    {/* Botões de navegação apenas no step ativo */}
+                    {isActive && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {step.nextLabel && (
+                          <Button
+                            size="sm"
+                            onClick={handleAdvanceStatus}
+                            disabled={isUpdatingStatus}
+                            className="h-7 text-[10px] uppercase font-bold tracking-wider rounded-full px-4 shadow-md hover:scale-105 transition-transform"
+                          >
+                            {isUpdatingStatus ? "..." : step.nextLabel} <ArrowRight className="size-3 ml-1" />
+                          </Button>
+                        )}
+                        {step.prevLabel && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleBackStatus}
+                            disabled={isUpdatingStatus}
+                            className="h-7 text-[10px] uppercase font-bold tracking-wider rounded-full px-4 border-primary/30 text-primary hover:bg-primary/5"
+                          >
+                            <ArrowLeft className="size-3 mr-1" /> {isUpdatingStatus ? "..." : step.prevLabel}
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )

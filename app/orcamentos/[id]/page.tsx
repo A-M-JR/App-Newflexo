@@ -47,9 +47,9 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
   // Status mapping for the visual steps
   const steps = [
-    { id: 'rascunho', label: 'Em Edição', icon: Edit, nextId: 'enviado', nextLabel: 'Enviar Proposta' },
-    { id: 'enviado', label: 'Enviado p/ Cliente', icon: Send, nextId: 'aprovado', nextLabel: 'Aceitar Termos' },
-    { id: 'aprovado', label: 'Aprovado / Fechado', icon: CheckCircle2, nextId: null, nextLabel: null },
+    { id: 'rascunho', label: 'Em Edição', icon: Edit, nextId: 'enviado', nextLabel: 'Enviar Proposta', prevId: null, prevLabel: null },
+    { id: 'enviado', label: 'Enviado p/ Cliente', icon: Send, nextId: 'aprovado', nextLabel: 'Aceitar Termos', prevId: 'rascunho', prevLabel: 'Voltar p/ Rascunho' },
+    { id: 'aprovado', label: 'Aprovado / Fechado', icon: CheckCircle2, nextId: null, nextLabel: null, prevId: 'enviado', prevLabel: 'Voltar p/ Enviado' },
   ]
 
   const getStepIndex = (st: string) => {
@@ -78,6 +78,25 @@ function OrcamentoDetailContent({ id }: { id: string }) {
       } catch (err) {
         console.error(err)
         toast.error("Erro ao avançar status.")
+      } finally {
+        setIsUpdatingStatus(false)
+      }
+    }
+  }
+
+  const handleBackStatus = async () => {
+    const prevStep = steps[currentStepIndex].prevId;
+    if (prevStep) {
+      setIsUpdatingStatus(true)
+      try {
+        await updateOrcamentoStatus(orcamento.id, prevStep)
+        setStatus(prevStep);
+        toast.success("Status Revertido!", {
+          description: `O orçamento voltou para: ${steps[currentStepIndex - 1].label}`
+        })
+      } catch (err) {
+        console.error(err)
+        toast.error("Erro ao reverter status.")
       } finally {
         setIsUpdatingStatus(false)
       }
@@ -325,16 +344,31 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                       {isRejected ? 'Recusado/Perdido' : step.label}
                     </span>
 
-                    {/* Botão de avançar apenas no step ativo se houver próximo */}
-                    {isActive && step.nextLabel && !isRejected && !isEditing && !pedidoExistente && (
-                      <Button
-                        size="sm"
-                        onClick={handleAdvanceStatus}
-                        disabled={isUpdatingStatus}
-                        className="mt-2 h-7 text-[9px] sm:text-[10px] uppercase font-bold tracking-wider rounded-full px-2 sm:px-4 shadow-md hover:scale-105 transition-transform"
-                      >
-                        {isUpdatingStatus ? "..." : step.nextLabel} <ArrowRight className="size-3 ml-1" />
-                      </Button>
+                    {/* Botões de navegação apenas no step ativo */}
+                    {isActive && !isRejected && !isEditing && !pedidoExistente && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {step.nextLabel && (
+                          <Button
+                            size="sm"
+                            onClick={handleAdvanceStatus}
+                            disabled={isUpdatingStatus}
+                            className="h-7 text-[9px] sm:text-[10px] uppercase font-bold tracking-wider rounded-full px-2 sm:px-4 shadow-md hover:scale-105 transition-transform"
+                          >
+                            {isUpdatingStatus ? "..." : step.nextLabel} <ArrowRight className="size-3 ml-1" />
+                          </Button>
+                        )}
+                        {step.prevLabel && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleBackStatus}
+                            disabled={isUpdatingStatus}
+                            className="h-7 text-[9px] sm:text-[10px] uppercase font-bold tracking-wider rounded-full px-2 sm:px-4 border-primary/30 text-primary hover:bg-primary/5 shadow-sm"
+                          >
+                            <ArrowLeft className="size-3 mr-1" /> {isUpdatingStatus ? "..." : step.prevLabel}
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )

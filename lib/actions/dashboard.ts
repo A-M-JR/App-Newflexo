@@ -7,66 +7,50 @@ import { getPedidos } from "./pedidos"
 export async function getDashboardMetrics(vendedorId?: number) {
   noStore()
   
-  const whereVendedorOrcs = vendedorId ? { vendedorId } : {}
-  const whereVendedorPeds = vendedorId ? { vendedorId } : {}
-
   const quarentaDiasAtras = new Date()
   quarentaDiasAtras.setDate(quarentaDiasAtras.getDate() - 40)
 
-  // Consultas paraleias rápidas para os KPIs (Top Cards)
-  const [
-    totalReceitaAggr,
-    statusEntregue,
-    totalOrcamentosCont,
-    clientesInativosCount,
-    clientesInativosList
-  ] = await Promise.all([
-    prisma.pedido.aggregate({
-      _sum: { totalGeral: true },
-      where: whereVendedorPeds
-    }),
-    
-    // Busca o status de 'Entregue' para poder excluí-lo dos ativos
-    prisma.status.findFirst({ 
-      where: { 
-        modulo: 'pedido', 
-        OR: [
-          { nome: { contains: 'Entregue', mode: 'insensitive' } },
-          { nome: { contains: 'Entrega', mode: 'insensitive' } },
-        ]
-      } 
-    }),
+  const searchVendedor = vendedorId ? Number(vendedorId) : null
 
-    // Conta apenas orçamentos "enviados" (aguardando aprovação do cliente = statusId 4)
-    prisma.orcamento.count({
-      where: { ...whereVendedorOrcs, statusId: 4 }
-    }),
+  // 1. Otimização SQL Raw para métricas do Dashboard
+  // Buscamos receita e pedidos ativos em uma única query
+  const pedidoMetrics: any[] = await prisma.$queryRaw`
+    SELECT 
+      COALESCE(SUM("totalGeral"), 0)::float as total_receita,
+      COUNT(*) FILTER (WHERE "statusId" NOT IN (SELECT id FROM "Status" WHERE "modulo" = 'pedido' AND ("nome" ILIKE '%Entregue%' OR "nome" ILIKE '%Entrega%')))::int as ativos_count
+    FROM "Pedido"
+    WHERE (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
+      AND "ativo" = TRUE
+  `
+  const pedStats = pedidoMetrics[0] || { total_receita: 0, ativos_count: 0 }
 
-    // Conta apenas clientes que JÁ compraram mas estão há +40 dias sem atividade
-    // (exclui quem nunca comprou — ultimaCompra = null)
-    prisma.cliente.count({
-      where: {
-        ultimaCompra: { lt: quarentaDiasAtras, not: null }
-      }
-    }),
-    
-    // Pegar apenas os primeiros 15 p/ a UI
-    prisma.cliente.findMany({
-      where: {
-        ultimaCompra: { lt: quarentaDiasAtras, not: null }
-      },
-      take: 15,
-      orderBy: { ultimaCompra: 'asc' },
-      select: { id: true, razaoSocial: true, ultimaCompra: true }
-    })
-  ])
+  // Buscamos orçamentos aguardando aprovação (statusId 4)
+  const orcamentoMetrics: any[] = await prisma.$queryRaw`
+    SELECT COUNT(*)::int as total_orcamentos
+    FROM "Orcamento"
+    WHERE "statusId" = 4
+      AND (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
+      AND "ativo" = TRUE
+  `
+  const orcStats = orcamentoMetrics[0] || { total_orcamentos: 0 }
 
-  // Pedidos Ativos = todos MENOS os entregues
-  const whereAtivos: any = { ...whereVendedorPeds }
-  if (statusEntregue) {
-    whereAtivos.statusId = { not: statusEntregue.id }
-  }
-  const ativosCount = await prisma.pedido.count({ where: whereAtivos })
+  // Buscamos clientes inativos (mais de 40 dias sem compra e que já compraram antes)
+  const clienteMetrics: any[] = await prisma.$queryRaw`
+    SELECT COUNT(*)::int as inativos_count
+    FROM "Cliente"
+    WHERE "ultimaCompra" < ${quarentaDiasAtras}
+      AND "ultimaCompra" IS NOT NULL
+  `
+  const cliStats = clienteMetrics[0] || { inativos_count: 0 }
+
+  const clientesInativosList = await prisma.cliente.findMany({
+    where: {
+      ultimaCompra: { lt: quarentaDiasAtras, not: null }
+    },
+    take: 15,
+    orderBy: { ultimaCompra: 'asc' },
+    select: { id: true, razaoSocial: true, ultimaCompra: true }
+  })
 
   // Obter Chart Data - Últimos 6 meses
   const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -82,11 +66,17 @@ export async function getDashboardMetrics(vendedorId?: number) {
   
   const [recentOrcamentos, recentPedidos] = await Promise.all([
     prisma.orcamento.findMany({
-      where: { ...whereVendedorOrcs, criadoEm: { gte: sixMonthsAgo } },
+      where: { 
+        vendedorId: vendedorId ? Number(vendedorId) : undefined, 
+        criadoEm: { gte: sixMonthsAgo } 
+      },
       select: { criadoEm: true }
     }),
     prisma.pedido.findMany({
-      where: { ...whereVendedorPeds, criadoEm: { gte: sixMonthsAgo } },
+      where: { 
+        vendedorId: vendedorId ? Number(vendedorId) : undefined, 
+        criadoEm: { gte: sixMonthsAgo } 
+      },
       select: { criadoEm: true }
     })
   ])
@@ -111,16 +101,15 @@ export async function getDashboardMetrics(vendedorId?: number) {
     })
   }
 
-  // Para mostrar a pequena lista de últimos pedidos (se o Dashboard tinha uma listagem)
-  // Reutilizamos a query de listagem recém atualizada para enviar pelo menos os recentes pro frontend
+  // Para mostrar a pequena lista de últimos pedidos
   const recentes = await getPedidos({ page: 1, limit: 10, vendedorId })
 
   return {
     kpis: {
-      totalReceita: totalReceitaAggr._sum.totalGeral || 0,
-      ativos: ativosCount,
-      totalOrcamentos: totalOrcamentosCont,
-      clientesInativos: clientesInativosCount,
+      totalReceita: pedStats.total_receita,
+      ativos: pedStats.ativos_count,
+      totalOrcamentos: orcStats.total_orcamentos,
+      clientesInativos: cliStats.inativos_count,
     },
     clientesInativosList: clientesInativosList.map(c => ({
       ...c,

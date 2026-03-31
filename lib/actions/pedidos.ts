@@ -2,53 +2,17 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
-import { Pedido } from "@/lib/types"
+import { getOrCreateStatus } from "./status"
+import { Prisma } from "@prisma/client"
 
-// Helper para garantir que o status existe no DB
-async function getOrCreateStatus(codigoStr: string) {
-  const map: Record<string, { nome: string, cor: string, ordem: number }> = {
-    'em_analise': { nome: 'Em Análise', cor: '#eab308', ordem: 1 },
-    'em_producao': { nome: 'Em Produção', cor: '#3b82f6', ordem: 2 },
-    'separacao': { nome: 'Separação', cor: '#a855f7', ordem: 3 },
-    'entregue': { nome: 'Entregue', cor: '#22c55e', ordem: 4 },
-  }
-
-  const def = map[codigoStr] || { nome: 'Em Análise', cor: '#eab308', ordem: 1 }
-
-  let status = await prisma.status.findFirst({
-    where: { modulo: 'pedido', nome: def.nome }
-  })
-
-  if (!status) {
-    // Calculamos o id manualmente para evitar colisões com sequências dessincronizadas do Postgres por causa do seed
-    const maxStatus = await prisma.status.findFirst({
-      orderBy: { id: 'desc' }
-    })
-    const nextId = (maxStatus?.id || 0) + 1
-
-    status = await prisma.status.create({
-      data: {
-        id: nextId,
-        nome: def.nome,
-        modulo: 'pedido',
-        cor: def.cor,
-        ordem: def.ordem
-      }
-    })
-  }
-
-  return status.id
-}
-
-// Helper reverso para devolver string
-function mapStatusIdToStr(nome: string) {
-  const map: Record<string, string> = {
-    'Em Análise': 'em_analise',
-    'Em Produção': 'em_producao',
-    'Separação': 'separacao',
-    'Entregue': 'entregue',
-  }
-  return map[nome] || 'em_analise'
+// Helper function map statusId string names to clean strings if they contain "Analise" "Produção" etc.
+function mapStatusIdToStr(statusName: string) {
+  const s = statusName.toLowerCase()
+  if (s.includes('analise')) return 'em_analise'
+  if (s.includes('produ') || s.includes('fabrica')) return 'em_producao'
+  if (s.includes('separa')) return 'separacao'
+  if (s.includes('entregue') || s.includes('entrega')) return 'entregue'
+  return 'em_analise'
 }
 
 export async function getPedidos(params: {
@@ -66,36 +30,62 @@ export async function getPedidos(params: {
   const page = params.page || 1
   const limit = params.limit || 20
   
-  const where: any = {}
-
-  if (params.search) {
-    where.OR = [
-      { numero: { contains: params.search, mode: "insensitive" } },
-      { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
-      { vendedor: { nome: { contains: params.search, mode: "insensitive" } } },
-    ]
-  }
-
   const statusEmAnalise = await getOrCreateStatus('em_analise')
   const statusEmProducao = await getOrCreateStatus('em_producao')
   const statusSeparacao = await getOrCreateStatus('separacao')
   const statusEntregue = await getOrCreateStatus('entregue')
 
+  const searchPattern = `%${params.search || ""}%`
+  const dataInicio = params.dataInicio ? new Date(params.dataInicio) : null
+  const dataFim = params.dataFim ? new Date(params.dataFim) : null
+  if (dataFim) {
+    dataFim.setDate(dataFim.getDate() + 1)
+  }
+  
+  const vendedorId = params.vendedorId ? Number(params.vendedorId) : null
+
+  // 1. Otimização Global: Busca de todos os contadores em UMA ÚNICA query SQL.
+  let statusFilterSql = Prisma.sql`TRUE`
+  if (params.status === 'em_analise') statusFilterSql = Prisma.sql`p."statusId" = ${statusEmAnalise}`
+  else if (params.status === 'em_producao') statusFilterSql = Prisma.sql`p."statusId" IN (${statusEmProducao}, ${statusSeparacao})`
+  else if (params.status === 'separacao') statusFilterSql = Prisma.sql`p."statusId" = ${statusSeparacao}`
+  else if (params.status === 'entregue') statusFilterSql = Prisma.sql`p."statusId" = ${statusEntregue}`
+
+  const counts: any[] = await prisma.$queryRaw`
+    SELECT 
+      COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
+      COUNT(*) FILTER (WHERE p."statusId" = ${statusEmAnalise})::int as em_analise,
+      COUNT(*) FILTER (WHERE p."statusId" IN (${statusEmProducao}, ${statusSeparacao}))::int as em_producao_soma,
+      COUNT(*) FILTER (WHERE p."statusId" = ${statusSeparacao})::int as separacao,
+      COUNT(*) FILTER (WHERE p."statusId" = ${statusEntregue})::int as entregue,
+      COALESCE(SUM(p."totalGeral"), 0)::float as total_valor
+    FROM "Pedido" p
+    LEFT JOIN "Cliente" c ON p."clienteId" = c.id
+    WHERE (p."numero" ILIKE ${searchPattern} OR c."razaoSocial" ILIKE ${searchPattern})
+      AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
+      AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
+      AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
+  `
+  const stats = counts[0] || { total_filtrado: 0, em_analise: 0, em_producao_soma: 0, entregue: 0, separacao: 0, total_valor: 0 }
+
+  // 2. Busca paginada dos registros
+  const where: any = {}
+  if (params.search) {
+    where.OR = [
+      { numero: { contains: params.search, mode: "insensitive" } },
+      { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
+    ]
+  }
   if (params.status) {
     if (params.status === 'em_analise') where.statusId = statusEmAnalise
-    else if (params.status === 'em_producao') where.statusId = statusEmProducao
+    else if (params.status === 'em_producao') where.statusId = { in: [statusEmProducao, statusSeparacao] }
     else if (params.status === 'separacao') where.statusId = statusSeparacao
     else if (params.status === 'entregue') where.statusId = statusEntregue
   }
-
-  if (params.vendedorId) {
-    where.vendedorId = params.vendedorId
-  }
-
+  if (params.vendedorId) where.vendedorId = params.vendedorId
   if (params.dataInicio || params.dataFim) {
     where.criadoEm = {}
     if (params.dataInicio) where.criadoEm.gte = new Date(params.dataInicio)
-    // Add 1 day to end date to include the entire day
     if (params.dataFim) {
       const ends = new Date(params.dataFim)
       ends.setDate(ends.getDate() + 1)
@@ -103,28 +93,17 @@ export async function getPedidos(params: {
     }
   }
 
-  const [total, emAnalise, emProducao, separacao, entregue, totalValorObj, dbPedidos] = await prisma.$transaction([
-    prisma.pedido.count({ where: { ...where, statusId: undefined } }), // base global ignorando o status filtrado
-    prisma.pedido.count({ where: { ...where, statusId: statusEmAnalise } }),
-    prisma.pedido.count({ where: { ...where, statusId: statusEmProducao } }),
-    prisma.pedido.count({ where: { ...where, statusId: statusSeparacao } }),
-    prisma.pedido.count({ where: { ...where, statusId: statusEntregue } }),
-    prisma.pedido.aggregate({
-      _sum: { totalGeral: true },
-      where: { ...where, statusId: undefined }
-    }),
-    prisma.pedido.findMany({
-      where,
-      orderBy: { id: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        cliente: true,
-        vendedor: true,
-        statusObj: true,
-      }
-    })
-  ])
+  const dbPedidos = await prisma.pedido.findMany({
+    where,
+    orderBy: { id: "desc" },
+    skip: (page - 1) * limit,
+    take: limit,
+    include: {
+      cliente: true,
+      vendedor: true,
+      statusObj: true,
+    }
+  })
   
   let pedidos = dbPedidos.map(p => ({
     ...p,
@@ -151,163 +130,121 @@ export async function getPedidos(params: {
   
   return {
     data: pedidos,
-    total,
+    total: stats.total_filtrado,
     page,
-    totalPages: Math.ceil((params.status ? pedidos.length : total) / limit), // simplificacao pro length local no status filter match
+    totalPages: Math.ceil(stats.total_filtrado / limit),
     kpis: {
-      total,
-      emAnalise,
-      emProducao,
-      separacao,
-      entregue,
-      totalValor: totalValorObj._sum.totalGeral || 0
+      total: stats.total_filtrado,
+      emAnalise: stats.em_analise,
+      emProducao: stats.em_producao_soma, 
+      separacao: stats.separacao,
+      entregue: stats.entregue,
+      totalValor: stats.total_valor
     }
   }
 }
 
 export async function getPedidoById(id: number) {
   noStore()
-  const p = await prisma.pedido.findUnique({
+  const pedido = await prisma.pedido.findUnique({
     where: { id },
     include: {
       cliente: true,
-      vendedor: true,
       statusObj: true,
-      itens: true
+      vendedor: true,
+      itens: {
+        include: { etiqueta: true }
+      }
     }
   })
   
-  if (!p) return null
+  if (!pedido) return null
   return {
-    ...p,
-    status: mapStatusIdToStr(p.statusObj?.nome || ''),
-    criadoEm: p.criadoEm.toISOString(),
-    atualizadoEm: p.atualizadoEm.toISOString(),
+    ...pedido,
+    status: mapStatusIdToStr(pedido.statusObj?.nome || ''),
+    criadoEm: pedido.criadoEm.toISOString(),
+    atualizadoEm: pedido.atualizadoEm.toISOString(),
   }
 }
 
-export async function savePedido(data: any, itensData: any[]) {
-  const { 
-    id, 
-    orcamentoId,
-    clienteId, 
-    vendedorId, 
-    statusStr,
-    numero,
-    sentidoSaidaRolo,
-    tipoTubete,
-    gapEntreEtiquetas,
-    numeroPistas,
-    observacoesEmbalagem,
-    observacoesFaturamento,
-    prazoEntrega,
-    formaPagamento,
-    nomeVendedor,
-    nomeComprador,
-    frete,
-    observacoesGerais,
-    totalGeral
-  } = data
+export async function updatePedidoStatus(id: number, statusId: number) {
+  const updated = await prisma.pedido.update({
+    where: { id },
+    data: { statusId },
+    include: { statusObj: true }
+  })
+  revalidatePath("/pedidos")
+  revalidatePath(`/pedidos/${id}`)
+  return {
+    ...updated,
+    status: mapStatusIdToStr(updated.statusObj?.nome || '')
+  }
+}
+
+export async function savePedido(data: any) {
+  const { id, itens, ...rest } = data
   
-  const statusId = await getOrCreateStatus(statusStr || 'em_analise')
-  const reqNumero = numero || `PED-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`
+  const prismaData = {
+    numero: rest.numero,
+    orcamentoId: rest.orcamentoId ? Number(rest.orcamentoId) : null,
+    clienteId: Number(rest.clienteId),
+    vendedorId: Number(rest.vendedorId),
+    statusId: Number(rest.statusId),
+    sentidoSaidaRolo: rest.sentidoSaidaRolo,
+    tipoTubete: rest.tipoTubete,
+    gapEntreEtiquetas: rest.gapEntreEtiquetas,
+    numeroPistas: Number(rest.numeroPistas),
+    observacoesEmbalagem: rest.observacoesEmbalagem,
+    observacoesFaturamento: rest.observacoesFaturamento,
+    prazoEntrega: rest.prazoEntrega,
+    formaPagamento: rest.formaPagamento,
+    nomeVendedor: rest.nomeVendedor,
+    nomeComprador: rest.nomeComprador,
+    frete: rest.frete,
+    observacoesGerais: rest.observacoesGerais,
+    totalGeral: Number(rest.totalGeral),
+    ativo: true,
+  }
 
   if (!id) {
-    if (!clienteId || !vendedorId) throw new Error("Cliente e Vendedor são obrigatórios.")
-
-    const ped = await prisma.pedido.create({
+    const created = await prisma.pedido.create({
       data: {
-        numero: reqNumero,
-        orcamentoId: orcamentoId ? Number(orcamentoId) : null,
-        clienteId: Number(clienteId),
-        vendedorId: Number(vendedorId),
-        statusId,
-        sentidoSaidaRolo: sentidoSaidaRolo || "",
-        tipoTubete: tipoTubete || "",
-        gapEntreEtiquetas: gapEntreEtiquetas || "",
-        numeroPistas: Number(numeroPistas) || 1,
-        observacoesEmbalagem: observacoesEmbalagem || null,
-        observacoesFaturamento: observacoesFaturamento || null,
-        prazoEntrega: prazoEntrega || "",
-        formaPagamento: formaPagamento || "",
-        nomeVendedor: nomeVendedor || null,
-        nomeComprador: nomeComprador || null,
-        frete: frete || null,
-        observacoesGerais: observacoesGerais || null,
-        totalGeral: Number(totalGeral),
+        ...prismaData,
         itens: {
-          create: itensData.map(item => ({
-            descricao: item.descricao,
-            quantidade: Number(item.quantidade),
-            unidade: item.unidade,
-            precoUnitario: Number(item.precoUnitario),
-            total: Number(item.total),
+          create: itens.map((it: any) => ({
+            etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+            descricao: it.descricao,
+            quantidade: Number(it.quantidade),
+            unidade: it.unidade,
+            precoUnitario: Number(it.precoUnitario),
+            total: Number(it.total)
           }))
         }
       }
     })
-    
     revalidatePath("/pedidos")
-    return ped
+    return created
   } else {
-    // Update
-    await prisma.itemPedido.deleteMany({
-      where: { pedidoId: Number(id) }
-    })
-
+    // Update logic for existing order
     const updated = await prisma.pedido.update({
       where: { id: Number(id) },
       data: {
-        orcamentoId: orcamentoId ? Number(orcamentoId) : null,
-        clienteId: Number(clienteId),
-        vendedorId: Number(vendedorId),
-        statusId,
-        sentidoSaidaRolo: sentidoSaidaRolo || "",
-        tipoTubete: tipoTubete || "",
-        gapEntreEtiquetas: gapEntreEtiquetas || "",
-        numeroPistas: Number(numeroPistas) || 1,
-        observacoesEmbalagem: observacoesEmbalagem || null,
-        observacoesFaturamento: observacoesFaturamento || null,
-        prazoEntrega: prazoEntrega || "",
-        formaPagamento: formaPagamento || "",
-        nomeVendedor: nomeVendedor || null,
-        nomeComprador: nomeComprador || null,
-        frete: frete || null,
-        observacoesGerais: observacoesGerais || null,
-        totalGeral: Number(totalGeral),
+        ...prismaData,
         itens: {
-          create: itensData.map(item => ({
-            descricao: item.descricao,
-            quantidade: Number(item.quantidade),
-            unidade: item.unidade,
-            precoUnitario: Number(item.precoUnitario),
-            total: Number(item.total),
+          deleteMany: {},
+          create: itens.map((it: any) => ({
+            etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+            descricao: it.descricao,
+            quantidade: Number(it.quantidade),
+            unidade: it.unidade,
+            precoUnitario: Number(it.precoUnitario),
+            total: Number(it.total)
           }))
         }
       }
     })
-
     revalidatePath("/pedidos")
     revalidatePath(`/pedidos/${id}`)
     return updated
   }
-}
-
-export async function deletePedido(id: number) {
-  const result = await prisma.pedido.delete({
-    where: { id }
-  })
-  revalidatePath("/pedidos")
-  return result
-}
-
-export async function updatePedidoStatus(id: number, statusStr: string) {
-  const statusId = await getOrCreateStatus(statusStr)
-  const updated = await prisma.pedido.update({
-    where: { id },
-    data: { statusId }
-  })
-  revalidatePath("/pedidos")
-  revalidatePath(`/pedidos/${id}`)
-  return updated
 }

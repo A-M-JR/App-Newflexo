@@ -2,11 +2,13 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
+import { Prisma } from "@prisma/client"
 
 export async function getClientes(params: {
   page?: number
   limit?: number
   search?: string
+  filter?: 'todos' | '30d' | '60d'
   mode?: 'full' | 'dropdown'
 } = {}) {
   noStore()
@@ -15,14 +17,63 @@ export async function getClientes(params: {
   const limit = params.limit || 20
   const search = params.search || ""
   const mode = params.mode || 'full'
+  const filter = params.filter || 'todos'
 
-  const where = search ? {
-    OR: [
-      { razaoSocial: { contains: search, mode: "insensitive" as const } },
-      { cnpj: { contains: search, mode: "insensitive" as const } },
-      { cidade: { contains: search, mode: "insensitive" as const } },
+  const searchPattern = `%${search}%`
+  const hoje = new Date()
+  const trintaDiasAtras = new Date(hoje.getTime() - (30 * 24 * 60 * 60 * 1000))
+  const sessentaDiasAtras = new Date(hoje.getTime() - (60 * 24 * 60 * 60 * 1000))
+
+  // 1. Otimização Sugerida pelo Usuário: Busca de contadores em uma única query SQL Raw
+  // Utilizamos a cláusula FILTER (WHERE ...) do Postgres que é extremamente performática.
+  const filterSql = filter === '30d' 
+    ? Prisma.sql`("ultimaCompra" < ${trintaDiasAtras} AND "ultimaCompra" >= ${sessentaDiasAtras}) OR ("ultimaCompra" IS NULL AND "criadoEm" < ${trintaDiasAtras} AND "criadoEm" >= ${sessentaDiasAtras})`
+    : filter === '60d' 
+      ? Prisma.sql`"ultimaCompra" < ${sessentaDiasAtras} OR ("ultimaCompra" IS NULL AND "criadoEm" < ${sessentaDiasAtras})`
+      : Prisma.sql`TRUE`
+
+  const counts: any[] = await prisma.$queryRaw`
+    SELECT 
+      COUNT(*)::int as total_global,
+      COUNT(*) FILTER (WHERE ("ultimaCompra" < ${trintaDiasAtras} AND "ultimaCompra" >= ${sessentaDiasAtras}) OR ("ultimaCompra" IS NULL AND "criadoEm" < ${trintaDiasAtras} AND "criadoEm" >= ${sessentaDiasAtras}))::int as sem_compra_30,
+      COUNT(*) FILTER (WHERE "ultimaCompra" < ${sessentaDiasAtras} OR ("ultimaCompra" IS NULL AND "criadoEm" < ${sessentaDiasAtras}))::int as sem_compra_60,
+      COUNT(*) FILTER (WHERE ${filterSql})::int as total_filtrado
+    FROM "Cliente"
+    WHERE ("razaoSocial" ILIKE ${searchPattern} OR "cnpj" ILIKE ${searchPattern} OR "cidade" ILIKE ${searchPattern})
+  `
+  
+  const stats = counts[0] || { total_global: 0, sem_compra_30: 0, sem_compra_60: 0, total_filtrado: 0 }
+
+  // 2. Busca dos dados da página (FindMany ainda é ideal para tipagem e includes automáticos)
+  const where: any = {}
+  if (search) {
+    where.OR = [
+      { razaoSocial: { contains: search, mode: "insensitive" } },
+      { cnpj: { contains: search, mode: "insensitive" } },
+      { cidade: { contains: search, mode: "insensitive" } },
     ]
-  } : {}
+  }
+
+  if (filter === '30d') {
+    where.OR = [
+      { ultimaCompra: { lt: trintaDiasAtras, gte: sessentaDiasAtras } },
+      { AND: [ { ultimaCompra: null }, { criadoEm: { lt: trintaDiasAtras, gte: sessentaDiasAtras } } ] }
+    ]
+  } else if (filter === '60d') {
+     const retentionFilter = {
+      OR: [
+        { ultimaCompra: { lt: sessentaDiasAtras } },
+        { AND: [ { ultimaCompra: null }, { criadoEm: { lt: sessentaDiasAtras } } ] }
+      ]
+    }
+    if (search) {
+       const searchFilter = { OR: where.OR }
+       delete where.OR
+       where.AND = [searchFilter, retentionFilter]
+    } else {
+       where.OR = retentionFilter.OR
+    }
+  }
 
   if (mode === 'dropdown') {
     const dbClientes = await prisma.cliente.findMany({
@@ -31,53 +82,33 @@ export async function getClientes(params: {
       take: limit,
       select: { id: true, razaoSocial: true, cnpj: true, endereco: true, cidade: true, estado: true }
     })
-    return { data: dbClientes, total: dbClientes.length, page: 1, totalPages: 1 }
+    return { data: dbClientes, total: stats.total_filtrado, page: 1, totalPages: 1 }
   }
 
-  const hoje = new Date()
-  const trintaDiasAtras = new Date(hoje.getTime() - (30 * 24 * 60 * 60 * 1000))
-  const sessentaDiasAtras = new Date(hoje.getTime() - (60 * 24 * 60 * 60 * 1000))
-
-  const [total, semCompra30, semCompra60, dbClientes] = await prisma.$transaction([
-    prisma.cliente.count({ where }),
-    prisma.cliente.count({ 
-      where: { 
-        ultimaCompra: { lt: trintaDiasAtras, gte: sessentaDiasAtras }
-      }
-    }),
-    prisma.cliente.count({ 
-      where: { 
-        OR: [
-          { ultimaCompra: { lt: sessentaDiasAtras } },
-          { ultimaCompra: null }
-        ]
-      }
-    }),
-    prisma.cliente.findMany({
-      where,
-      orderBy: { razaoSocial: "asc" },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        _count: { select: { orcamentos: true, pedidos: true } }
-      }
-    })
-  ])
+  const dbClientes = await prisma.cliente.findMany({
+    where,
+    orderBy: { razaoSocial: "asc" },
+    skip: (page - 1) * limit,
+    take: limit,
+    include: {
+      _count: { select: { orcamentos: true, pedidos: true } }
+    }
+  })
   
   return {
-    data: dbClientes.map(c => ({
+    data: dbClientes.map((c: any) => ({
       ...c,
       criadoEm: c.criadoEm.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
       ultimaCompra: c.ultimaCompra ? c.ultimaCompra.toISOString() : null,
     })),
-    total,
+    total: stats.total_filtrado,
     page,
-    totalPages: Math.ceil(total / limit),
+    totalPages: Math.ceil(stats.total_filtrado / limit),
     kpis: {
-      total,
-      semCompra30,
-      semCompra60
+      total: stats.total_global,
+      semCompra30: stats.sem_compra_30,
+      semCompra60: stats.sem_compra_60
     }
   }
 }

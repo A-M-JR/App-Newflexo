@@ -6,7 +6,6 @@ import { ArrowLeft, Plus, Edit2, UserCog, Power, Users, UserCheck, UserX, Search
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { vendedores } from "@/lib/mock-data"
 import { Vendedor } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
 import { getVendedores, saveVendedor, toggleVendedorActive } from "@/lib/actions/vendedores"
@@ -24,13 +23,17 @@ export default function VendedoresPage() {
   const [editingVendedor, setEditingVendedor] = useState<Vendedor | null>(null)
   const [fStatusFilter, setFStatusFilter] = useState<"todos" | "ativo" | "inativo">("todos")
   const [search, setSearch] = useState("")
+  const [kpis, setKpis] = useState({ total: 0, ativos: 0, pausados: 0 })
   const [toggleWarning, setToggleWarning] = useState<{ id: number; currentStatus: boolean; nome: string } | null>(null)
 
-  const loadVendedores = async () => {
+  const loadData = async () => {
     setIsLoading(true)
     try {
-      const data = await getVendedores()
-      setVendedoresList(data)
+      const res = await getVendedores({ search, status: fStatusFilter, mode: 'full' })
+      if (res && 'data' in res) {
+        setVendedoresList(res.data)
+        setKpis(res.kpis || { total: 0, ativos: 0, pausados: 0 })
+      }
     } catch (error) {
       console.error("Erro ao carregar vendedores:", error)
       toast.error("Erro ao carregar dados do banco.")
@@ -40,9 +43,11 @@ export default function VendedoresPage() {
   }
 
   useEffect(() => {
-    loadVendedores()
-  }, [])
-
+    const timer = setTimeout(() => {
+      loadData()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search, fStatusFilter])
 
   if (isAuthLoading) {
     return <AppShell><div className="p-8"><Skeleton className="h-40 w-full" /></div></AppShell>
@@ -73,7 +78,7 @@ export default function VendedoresPage() {
   const handleSaveVendedor = async (vendedor: Vendedor) => {
     try {
       await saveVendedor(vendedor)
-      await loadVendedores()
+      await loadData()
       toast.success(editingVendedor ? "Vendedor atualizado" : "Vendedor cadastrado")
       setEditingVendedor(null)
       setShowForm(false)
@@ -94,7 +99,7 @@ export default function VendedoresPage() {
     
     try {
       await toggleVendedorActive(id)
-      await loadVendedores()
+      await loadData()
       toast.success("Status Atualizado!", {
         description: `O vendedor(a) ${nome} foi ${actionState} no sistema com sucesso.`,
       })
@@ -134,55 +139,49 @@ export default function VendedoresPage() {
         </div>
 
         {/* KPI Filter Cards */}
-        {(() => {
-          const totalAtivos = vendedoresList.filter(v => v.ativo !== false).length;
-          const totalInativos = vendedoresList.filter(v => v.ativo === false).length;
-          return (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Card
-                className={`bg-gradient-to-br from-card to-card/50 border-border/50 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'todos' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-                onClick={() => setFStatusFilter('todos')}
-              >
-                <CardContent className="p-5 flex flex-col gap-1">
-                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Users className="size-4 text-primary" />
-                    Total de Vendedores
-                  </p>
-                  <h2 className="text-2xl font-bold text-foreground">{vendedoresList.length}</h2>
-                  <p className="text-xs text-muted-foreground font-medium">Equipe comercial</p>
-                </CardContent>
-              </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card
+            className={`bg-gradient-to-br from-card to-card/50 border-border/50 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'todos' ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
+            onClick={() => setFStatusFilter('todos')}
+          >
+            <CardContent className="p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Users className="size-4 text-primary" />
+                Total de Vendedores
+              </p>
+              <h2 className="text-2xl font-bold text-foreground">{kpis.total}</h2>
+              <p className="text-xs text-muted-foreground font-medium">Equipe comercial</p>
+            </CardContent>
+          </Card>
 
-              <Card
-                className={`bg-gradient-to-br from-emerald-50 to-background dark:from-emerald-950/20 dark:to-background border-emerald-100 dark:border-emerald-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'ativo' ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-                onClick={() => setFStatusFilter(fStatusFilter === 'ativo' ? 'todos' : 'ativo')}
-              >
-                <CardContent className="p-5 flex flex-col gap-1">
-                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
-                    <UserCheck className="size-4" />
-                    Ativos
-                  </p>
-                  <h2 className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{totalAtivos}</h2>
-                  <p className="text-xs text-emerald-500 font-medium">Vendendo ativamente</p>
-                </CardContent>
-              </Card>
+          <Card
+            className={`bg-gradient-to-br from-emerald-50 to-background dark:from-emerald-950/20 dark:to-background border-emerald-100 dark:border-emerald-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'ativo' ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
+            onClick={() => setFStatusFilter('ativo')}
+          >
+            <CardContent className="p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                <UserCheck className="size-4" />
+                Ativos
+              </p>
+              <h2 className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{kpis.ativos}</h2>
+              <p className="text-xs text-emerald-500 font-medium">Vendendo ativamente</p>
+            </CardContent>
+          </Card>
 
-              <Card
-                className={`bg-gradient-to-br from-red-50 to-background dark:from-red-950/20 dark:to-background border-red-100 dark:border-red-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'inativo' ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-                onClick={() => setFStatusFilter(fStatusFilter === 'inativo' ? 'todos' : 'inativo')}
-              >
-                <CardContent className="p-5 flex flex-col gap-1">
-                  <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
-                    <UserX className="size-4" />
-                    Pausados
-                  </p>
-                  <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{totalInativos}</h2>
-                  <p className="text-xs text-red-500 font-medium">Operações suspensas</p>
-                </CardContent>
-              </Card>
-            </div>
-          );
-        })()}
+          <Card
+            className={`bg-gradient-to-br from-red-50 to-background dark:from-red-950/20 dark:to-background border-red-100 dark:border-red-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatusFilter === 'inativo' ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
+            onClick={() => setFStatusFilter('inativo')}
+          >
+            <CardContent className="p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2">
+                <UserX className="size-4" />
+                Pausados
+              </p>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{kpis.pausados}</h2>
+              <p className="text-xs text-red-500 font-medium">Operações suspensas</p>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Form Dialog */}
         {showForm && (
@@ -273,14 +272,7 @@ export default function VendedoresPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {vendedoresList.filter(v => {
-                  const term = search.toLowerCase();
-                  const matchSearch = !search || v.nome.toLowerCase().includes(term) || v.email.toLowerCase().includes(term);
-                  if (!matchSearch) return false;
-                  if (fStatusFilter === 'ativo') return v.ativo !== false;
-                  if (fStatusFilter === 'inativo') return v.ativo === false;
-                  return true;
-                }).map((vendedor) => {
+                {vendedoresList.map((vendedor) => {
                   const isActive = vendedor.ativo !== false;
                   return (
                     <tr key={vendedor.id} className={`hover:bg-muted/30 transition-colors ${!isActive ? "opacity-60 bg-muted/50" : ""}`}>
