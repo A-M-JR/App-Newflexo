@@ -13,10 +13,10 @@ export async function getDashboardMetrics(vendedorId?: number) {
   const quarentaDiasAtras = new Date()
   quarentaDiasAtras.setDate(quarentaDiasAtras.getDate() - 40)
 
-  // Consultas paralelas rápidas para os KPIs (Top Cards)
+  // Consultas paraleias rápidas para os KPIs (Top Cards)
   const [
     totalReceitaAggr,
-    ativosFilter,
+    statusEntregue,
     totalOrcamentosCont,
     clientesInativosCount,
     clientesInativosList
@@ -26,8 +26,16 @@ export async function getDashboardMetrics(vendedorId?: number) {
       where: whereVendedorPeds
     }),
     
-    // Para 'ativos' precisamos da string exata ou ID, vamos assumir que o ID do 'em_producao'
-    prisma.status.findFirst({ where: { modulo: 'pedido', nome: 'Em Produção' } }),
+    // Busca o status de 'Entregue' para poder excluí-lo dos ativos
+    prisma.status.findFirst({ 
+      where: { 
+        modulo: 'pedido', 
+        OR: [
+          { nome: { contains: 'Entregue', mode: 'insensitive' } },
+          { nome: { contains: 'Entrega', mode: 'insensitive' } },
+        ]
+      } 
+    }),
 
     // Conta apenas orçamentos "enviados" (aguardando aprovação do cliente = statusId 4)
     prisma.orcamento.count({
@@ -53,12 +61,12 @@ export async function getDashboardMetrics(vendedorId?: number) {
     })
   ])
 
-  let ativosCount = 0
-  if (ativosFilter) {
-    ativosCount = await prisma.pedido.count({
-      where: { ...whereVendedorPeds, statusId: ativosFilter.id }
-    })
+  // Pedidos Ativos = todos MENOS os entregues
+  const whereAtivos: any = { ...whereVendedorPeds }
+  if (statusEntregue) {
+    whereAtivos.statusId = { not: statusEntregue.id }
   }
+  const ativosCount = await prisma.pedido.count({ where: whereAtivos })
 
   // Obter Chart Data - Últimos 6 meses
   const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
