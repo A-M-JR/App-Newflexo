@@ -32,7 +32,7 @@ export function EtiquetaDetailDialog({
       <DialogContent className="max-w-7xl p-0 border-0 shadow-2xl overflow-hidden bg-background">
         
         {/* Modern Gradient Header */}
-        <div className="relative h-24 bg-gradient-to-r from-primary/95 to-primary p-6 flex items-center justify-between overflow-hidden">
+        <div className="relative h-24 bg-gradient-to-r from-primary/95 to-primary p-6 pr-14 flex items-center justify-between overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
             <Box className="size-32 rotate-12 text-white" />
           </div>

@@ -8,11 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Save, Building2, MapPin, Contact, FileText, Factory } from "lucide-react"
-import {
-  formatCurrency,
-  formatStatus,
-  getStatusColor,
-} from "@/lib/mock-data"
+import { formatCurrency } from "@/lib/mock-data"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { getClienteById, saveCliente } from "@/lib/actions/clientes"
 import Link from "next/link"
 import { use, useState, useEffect } from "react"
@@ -75,6 +72,7 @@ export default function ClienteDetailPage({
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     getClienteById(Number(id)).then(data => {
@@ -211,6 +209,7 @@ export default function ClienteDetailPage({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSaving) return
     const newErrors: Record<string, string> = {}
 
     if (!formData.razaoSocial) newErrors.razaoSocial = "Razão Social é obrigatória"
@@ -225,6 +224,7 @@ export default function ClienteDetailPage({
       return
     }
 
+    setIsSaving(true)
     try {
       await saveCliente({ id: Number(id), ...formData })
       toast.success("Cliente atualizado com sucesso!", {
@@ -235,6 +235,8 @@ export default function ClienteDetailPage({
     } catch (error) {
       console.error(error)
       toast.error("Erro ao atualizar o cliente no banco de dados.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -262,9 +264,13 @@ export default function ClienteDetailPage({
             <Button type="button" variant="ghost" asChild>
               <Link href="/clientes">Cancelar</Link>
             </Button>
-            <Button type="submit" className="bg-primary text-primary-foreground shadow-sm hover:scale-[1.02] transition-transform">
-              <Save className="size-4 mr-2" />
-              Salvar Alterações
+            <Button type="submit" disabled={isSaving} className="bg-primary text-primary-foreground shadow-sm hover:scale-[1.02] transition-transform">
+              {isSaving ? "Salvando..." : (
+                <>
+                  <Save className="size-4 mr-2" />
+                  Salvar Alterações
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -420,14 +426,12 @@ export default function ClienteDetailPage({
                         <div className="flex flex-col gap-1">
                           <span className="text-sm font-medium group-hover:text-primary transition-colors">{orc.numero}</span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            {orc.criadoEm}
+                            {orc.criadoEm ? new Date(orc.criadoEm).toLocaleDateString('pt-BR') : 'N/D'}
                           </span>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
                           <span className="text-sm font-bold text-foreground">{formatCurrency(orc.totalGeral)}</span>
-                          <Badge variant="outline" className={`${getStatusColor(orc.status)} text-[10px] shadow-none`}>
-                            {formatStatus(orc.status)}
-                          </Badge>
+                          <StatusBadge statusObj={orc.statusObj} fallback={orc.status} />
                         </div>
                       </Link>
                     ))}
@@ -460,9 +464,7 @@ export default function ClienteDetailPage({
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
                           <span className="text-sm font-bold text-foreground">{formatCurrency(ped.totalGeral)}</span>
-                          <Badge variant="outline" className={`${getStatusColor(ped.status)} text-[10px] shadow-none`}>
-                            {formatStatus(ped.status)}
-                          </Badge>
+                          <StatusBadge statusObj={ped.statusObj} fallback={ped.status} />
                         </div>
                       </Link>
                     ))}

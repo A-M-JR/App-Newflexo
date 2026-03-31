@@ -51,24 +51,118 @@ function mapStatusIdToStr(nome: string) {
   return map[nome] || 'em_analise'
 }
 
-export async function getPedidos() {
+export async function getPedidos(params: {
+  page?: number
+  limit?: number
+  search?: string
+  status?: string
+  dataInicio?: string
+  dataFim?: string
+  vendedorId?: number
+  apenasSla?: boolean
+} = {}) {
   noStore()
-  const dbPedidos = await prisma.pedido.findMany({
-    orderBy: { id: "desc" },
-    include: {
-      cliente: true,
-      vendedor: true,
-      statusObj: true,
-      itens: true
-    }
-  })
   
-  return dbPedidos.map(p => ({
+  const page = params.page || 1
+  const limit = params.limit || 20
+  
+  const where: any = {}
+
+  if (params.search) {
+    where.OR = [
+      { numero: { contains: params.search, mode: "insensitive" } },
+      { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
+      { vendedor: { nome: { contains: params.search, mode: "insensitive" } } },
+    ]
+  }
+
+  const statusEmAnalise = await getOrCreateStatus('em_analise')
+  const statusEmProducao = await getOrCreateStatus('em_producao')
+  const statusSeparacao = await getOrCreateStatus('separacao')
+  const statusEntregue = await getOrCreateStatus('entregue')
+
+  if (params.status) {
+    if (params.status === 'em_analise') where.statusId = statusEmAnalise
+    else if (params.status === 'em_producao') where.statusId = statusEmProducao
+    else if (params.status === 'separacao') where.statusId = statusSeparacao
+    else if (params.status === 'entregue') where.statusId = statusEntregue
+  }
+
+  if (params.vendedorId) {
+    where.vendedorId = params.vendedorId
+  }
+
+  if (params.dataInicio || params.dataFim) {
+    where.criadoEm = {}
+    if (params.dataInicio) where.criadoEm.gte = new Date(params.dataInicio)
+    // Add 1 day to end date to include the entire day
+    if (params.dataFim) {
+      const ends = new Date(params.dataFim)
+      ends.setDate(ends.getDate() + 1)
+      where.criadoEm.lt = ends
+    }
+  }
+
+  const [total, emAnalise, emProducao, separacao, entregue, totalValorObj, dbPedidos] = await prisma.$transaction([
+    prisma.pedido.count({ where: { ...where, statusId: undefined } }), // base global ignorando o status filtrado
+    prisma.pedido.count({ where: { ...where, statusId: statusEmAnalise } }),
+    prisma.pedido.count({ where: { ...where, statusId: statusEmProducao } }),
+    prisma.pedido.count({ where: { ...where, statusId: statusSeparacao } }),
+    prisma.pedido.count({ where: { ...where, statusId: statusEntregue } }),
+    prisma.pedido.aggregate({
+      _sum: { totalGeral: true },
+      where: { ...where, statusId: undefined }
+    }),
+    prisma.pedido.findMany({
+      where,
+      orderBy: { id: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        cliente: true,
+        vendedor: true,
+        statusObj: true,
+      }
+    })
+  ])
+  
+  let pedidos = dbPedidos.map(p => ({
     ...p,
     status: mapStatusIdToStr(p.statusObj?.nome || ''),
     criadoEm: p.criadoEm.toISOString(),
     atualizadoEm: p.atualizadoEm.toISOString(),
   }))
+
+  if (params.apenasSla) {
+    pedidos = pedidos.filter((p: any) => {
+      if (p.status === 'entregue') return false
+      const parts = p.prazoEntrega.split('/')
+      if (parts.length === 3) {
+        const [d, m, y] = parts
+        const prazoDate = new Date(Number(y), Number(m) - 1, Number(d))
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const diffDays = Math.ceil((prazoDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        return diffDays <= 3
+      }
+      return false
+    })
+  }
+  
+  return {
+    data: pedidos,
+    total,
+    page,
+    totalPages: Math.ceil((params.status ? pedidos.length : total) / limit), // simplificacao pro length local no status filter match
+    kpis: {
+      total,
+      emAnalise,
+      emProducao,
+      separacao,
+      entregue,
+      totalValor: totalValorObj._sum.totalGeral || 0
+    }
+  }
 }
 
 export async function getPedidoById(id: number) {

@@ -111,6 +111,7 @@ function NovoClienteContent() {
 
     // Erros simples
     const [errors, setErrors] = useState<Record<string, string>>({})
+    const [isSaving, setIsSaving] = useState(false)
 
     // Busca de CNPJ via BrasilAPI
     const fetchCNPJ = async (cnpj: string) => {
@@ -210,6 +211,7 @@ function NovoClienteContent() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (isSaving) return
         const newErrors: Record<string, string> = {}
 
         // Validação mock
@@ -225,6 +227,7 @@ function NovoClienteContent() {
             return
         }
 
+        setIsSaving(true)
         try {
             await saveCliente(formData)
             toast.success("Cliente salvo com sucesso!", {
@@ -235,6 +238,8 @@ function NovoClienteContent() {
         } catch (error) {
             console.error(error)
             toast.error("Erro ao salvar o cliente no banco de dados.")
+        } finally {
+            setIsSaving(false)
         }
     }
 
@@ -261,9 +266,13 @@ function NovoClienteContent() {
                         <Button type="button" variant="ghost" asChild>
                             <Link href="/clientes">Cancelar</Link>
                         </Button>
-                        <Button type="submit" className="bg-primary text-primary-foreground shadow-sm hover:scale-[1.02] transition-transform">
-                            <Save className="size-4 mr-2" />
-                            Salvar Cliente
+                        <Button type="submit" disabled={isSaving} className="bg-primary text-primary-foreground shadow-sm hover:scale-[1.02] transition-transform">
+                            {isSaving ? "Salvando..." : (
+                                <>
+                                    <Save className="size-4 mr-2" />
+                                    Salvar Cliente
+                                </>
+                            )}
                         </Button>
                     </div>
                 </div>

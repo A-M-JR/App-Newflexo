@@ -4,25 +4,93 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 import { Orcamento } from "@/lib/types"
 
-export async function getOrcamentos() {
+export async function getOrcamentos(params: {
+  page?: number
+  limit?: number
+  search?: string
+  status?: string
+  dataInicio?: string
+  dataFim?: string
+  vendedorId?: number
+} = {}) {
   noStore()
-  const dbOrcs = await prisma.orcamento.findMany({
-    orderBy: { id: "desc" },
-    include: {
-      cliente: true,
-      vendedor: true,
-      statusObj: true,
-      itens: true,
-      pedidos: true
-    }
-  })
   
-  return dbOrcs.map(o => ({
-    ...o,
-    status: o.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (o.statusObj?.nome?.toLowerCase() || 'rascunho'),
-    criadoEm: o.criadoEm.toISOString(),
-    atualizadoEm: o.atualizadoEm.toISOString(),
-  }))
+  const page = params.page || 1
+  const limit = params.limit || 20
+  
+  const where: any = {}
+
+  if (params.search) {
+    where.OR = [
+      { numero: { contains: params.search, mode: "insensitive" } },
+      { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
+    ]
+  }
+
+  if (params.status) {
+    if (params.status === 'rascunho') where.statusId = 1
+    else if (params.status === 'enviado') where.statusId = 4
+    else if (params.status === 'aprovado') where.statusId = 2
+    else if (params.status === 'recusado') where.statusId = 5
+  }
+
+  if (params.vendedorId) {
+    where.vendedorId = params.vendedorId
+  }
+
+  if (params.dataInicio || params.dataFim) {
+    where.criadoEm = {}
+    if (params.dataInicio) where.criadoEm.gte = new Date(params.dataInicio)
+    // Add 1 day to end date to include the entire day
+    if (params.dataFim) {
+      const ends = new Date(params.dataFim)
+      ends.setDate(ends.getDate() + 1)
+      where.criadoEm.lt = ends
+    }
+  }
+
+  const [total, totalValorObj, vigentes, aprovados, parados, dbOrcs] = await prisma.$transaction([
+    prisma.orcamento.count({ where }),
+    prisma.orcamento.aggregate({
+      _sum: { totalGeral: true },
+      where: { ...where, statusId: { not: 5 } } // recusado é 5
+    }),
+    prisma.orcamento.count({ where: { ...where, statusId: 4 } }), // enviado/vigente
+    prisma.orcamento.count({ where: { ...where, statusId: 2 } }), // aprovado
+    prisma.orcamento.count({ where: { ...where, statusId: { in: [1, 5] } } }), // rascunho(1) ou recusado(5)
+    prisma.orcamento.findMany({
+      where,
+      orderBy: { id: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        cliente: true,
+        vendedor: true,
+        statusObj: true,
+        _count: {
+          select: { itens: true }
+        }
+      }
+    })
+  ])
+  
+  return {
+    data: dbOrcs.map(o => ({
+      ...o,
+      status: o.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (o.statusObj?.nome?.toLowerCase() || 'rascunho'),
+      criadoEm: o.criadoEm.toISOString(),
+      atualizadoEm: o.atualizadoEm.toISOString(),
+    })),
+    total,
+    page,
+    totalPages: Math.ceil(total / limit),
+    kpis: {
+      totalValor: totalValorObj._sum.totalGeral || 0,
+      vigentes,
+      aprovados,
+      parados
+    }
+  }
 }
 
 export async function getOrcamentoById(id: number) {

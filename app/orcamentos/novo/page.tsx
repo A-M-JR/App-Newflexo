@@ -65,12 +65,13 @@ function NovoOrcamentoContent() {
   const [todosOrcamentos, setTodosOrcamentos] = useState<any[]>([])
   const [etiquetasList, setEtiquetasList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    Promise.all([getClientes(), getVendedores(), getOrcamentos(), getEtiquetas()]).then(([cls, vds, orcs, etqs]) => {
-      setClientes(cls)
+    Promise.all([getClientes({ limit: 1000 }), getVendedores(), getOrcamentos({ limit: 1000 }), getEtiquetas()]).then(([cls, vds, orcs, etqs]) => {
+      setClientes(cls.data || [])
       setVendedores(vds)
-      setTodosOrcamentos(orcs)
+      setTodosOrcamentos(orcs.data || [])
       setEtiquetasList(etqs)
       setLoading(false)
     })
@@ -178,6 +179,7 @@ function NovoOrcamentoContent() {
   }, 0)
 
   async function handleSalvar() {
+    if (isSaving) return
     if (!clienteId) {
       toast.error("Selecione um cliente.")
       return
@@ -191,6 +193,7 @@ function NovoOrcamentoContent() {
       return
     }
     
+    setIsSaving(true)
     try {
       await saveOrcamento({
         clienteId,
@@ -206,6 +209,8 @@ function NovoOrcamentoContent() {
     } catch (error) {
       console.error(error)
       toast.error("Falha ao salvar orçamento no banco de dados.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -563,8 +568,8 @@ function NovoOrcamentoContent() {
               </div>
 
               <div className="flex flex-col gap-2 mt-auto">
-                <Button onClick={handleSalvar} className="w-full h-12 text-base font-bold shadow-sm" size="lg">
-                  Salvar e Gerar Proposta
+                <Button onClick={handleSalvar} disabled={isSaving} className="w-full h-12 text-base font-bold shadow-sm" size="lg">
+                  {isSaving ? "Gerando..." : "Salvar e Gerar Proposta"}
                 </Button>
                 <Link href="/orcamentos" className="w-full">
                   <Button variant="outline" className="w-full border-border/50 hover:bg-muted/50">Cancelar Envio</Button>

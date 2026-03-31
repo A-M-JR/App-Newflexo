@@ -15,86 +15,65 @@ import {
 } from "@/components/ui/table"
 import { Search, Plus, Eye, Users, Clock, AlertTriangle, Building2 } from "lucide-react"
 import { getClientes } from "@/lib/actions/clientes"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination"
 
 export default function ClientesPage() {
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [fRetencao, setFRetencao] = useState<"todos" | "30d" | "60d">("todos")
+  const [page, setPage] = useState(1)
 
-  const { data: clientesList = [], isLoading: loading } = useDataQuery<any[]>({
-    key: 'clientes',
-    fetcher: getClientes
+  // Debounce simple
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1) // Reset page on new search
+    }, 500)
+    return () => clearTimeout(handler)
+  }, [search])
+
+  const { data: dbData, isLoading: loading } = useDataQuery<any>({
+    key: { type: 'clientes', page, search: debouncedSearch, filter: fRetencao },
+    fetcher: () => getClientes({ page, limit: 15, search: debouncedSearch })
   })
 
-  const KPIs = useMemo(() => {
-    const list = clientesList || []
-    let total = list.length;
-    let semCompra30 = 0;
-    let semCompra60 = 0;
-
-    const hoje = new Date();
-
-    list.forEach((c) => {
-      const pedidosDoCliente = c.pedidos || [];
-      let ultimaData: Date | null = null;
-
-      if (pedidosDoCliente.length > 0) {
-        const datas = pedidosDoCliente.map((p: any) => new Date(p.criadoEm).getTime());
-        ultimaData = new Date(Math.max(...datas));
-      }
-
-      if (ultimaData) {
-        const diffTime = hoje.getTime() - ultimaData.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays >= 60) {
-          semCompra60++;
-        } else if (diffDays >= 30) {
-          semCompra30++;
-        }
-      } else {
-        semCompra60++;
-      }
-    });
-
-    return { total, semCompra30, semCompra60 };
-  }, [clientesList]);
+  // We fallback to empty structures if null
+  const clientesList = dbData?.data || []
+  const KPIs = dbData?.kpis || { total: 0, semCompra30: 0, semCompra60: 0 }
+  const totalPages = dbData?.totalPages || 1
 
   const filtered = useMemo(() => {
     const list = clientesList || []
-    const hoje = new Date();
-    return list.filter((c) => {
-      const matchSearch =
-        c.razaoSocial.toLowerCase().includes(search.toLowerCase()) ||
-        c.cnpj.includes(search) ||
-        c.cidade.toLowerCase().includes(search.toLowerCase());
+    const hoje = new Date()
+    return list.filter((c: any) => {
+      if (fRetencao === "todos") return true
 
-      if (!matchSearch) return false;
-      if (fRetencao === "todos") return true;
-
-      const pedidosDoCliente = c.pedidos || [];
-      let ultimaData: Date | null = null;
-      if (pedidosDoCliente.length > 0) {
-        const datas = pedidosDoCliente.map((p: any) => new Date(p.criadoEm).getTime());
-        ultimaData = new Date(Math.max(...datas));
-      }
-
-      let diffDays = 0;
-      if (ultimaData) {
-        const diffTime = hoje.getTime() - ultimaData.getTime();
-        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      let diffDays = 0
+      if (c.ultimaCompra) {
+        const diffTime = hoje.getTime() - new Date(c.ultimaCompra).getTime()
+        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
       } else {
-        diffDays = 999;
+        diffDays = 999
       }
 
-      if (fRetencao === "60d") return diffDays >= 60;
-      if (fRetencao === "30d") return diffDays >= 30 && diffDays < 60;
+      if (fRetencao === "60d") return diffDays >= 60
+      if (fRetencao === "30d") return diffDays >= 30 && diffDays < 60
 
-      return true;
-    });
-  }, [search, fRetencao, clientesList]);
+      return true
+    })
+  }, [fRetencao, clientesList])
 
   return (
     <AppShell>
@@ -204,9 +183,9 @@ export default function ClientesPage() {
                     [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum cliente encontrado.</p></TableCell></TableRow>
-                  ) : filtered.map((cliente) => {
-                    const numOrcamentos = cliente.orcamentos?.length || 0
-                    const numPedidos = cliente.pedidos?.length || 0
+                  ) : filtered.map((cliente: any) => {
+                    const numOrcamentos = cliente._count?.orcamentos || 0
+                    const numPedidos = cliente._count?.pedidos || 0
                     return (
                       <TableRow key={cliente.id} className="group hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium text-foreground max-w-[200px] truncate">{cliente.razaoSocial}</TableCell>
@@ -232,6 +211,48 @@ export default function ClientesPage() {
                 </TableBody>
               </Table>
             </div>
+            
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="py-4 border-t border-border/50">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setPage(p => Math.max(1, p - 1))} 
+                        className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        aria-disabled={page === 1}
+                      />
+                    </PaginationItem>
+                    
+                    {Array.from({ length: totalPages }).map((_, i) => {
+                      const p = i + 1;
+                      // Logic to show limited page numbers (1, 2, 3, ... last)
+                      if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                        return (
+                          <PaginationItem key={p}>
+                            <PaginationLink className="cursor-pointer" isActive={page === p} onClick={() => setPage(p)}>
+                              {p}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      }
+                      if (p === 2 && page > 3) return <PaginationItem key={p}><PaginationEllipsis /></PaginationItem>;
+                      if (p === totalPages - 1 && page < totalPages - 2) return <PaginationItem key={p}><PaginationEllipsis /></PaginationItem>;
+                      return null;
+                    })}
+                    
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                        className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        aria-disabled={page === totalPages}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -273,7 +273,8 @@ export function AIChatPanel() {
                 // Opcional: Redirecionar para um dashboard se quiser
             }
             else if (name === 'consultar_clientes') {
-                const clientes = await getClientes()
+                const res = await getClientes({ limit: 100 })
+                const clientes = res.data
                 const filtrados = args.termo ? clientes.filter(c => c.razaoSocial.toLowerCase().includes(args.termo.toLowerCase()) || (c.cnpj && c.cnpj.includes(args.termo))) : clientes.slice(0, 5)
                 
                 let resposta = args.termo ? `Resultado da busca por "${args.termo}":\n\n` : `Últimos clientes cadastrados:\n\n`
@@ -311,7 +312,8 @@ export function AIChatPanel() {
                 }
             }
             else if (name === 'consultar_pedidos') {
-                let pedidos = await getPedidos()
+                const res = await getPedidos({ limit: 100 })
+                let pedidos = res.data
                 if (args.status) {
                     pedidos = pedidos.filter(p => p.status?.toLowerCase() === args.status.toLowerCase() || p.statusObj?.nome.toLowerCase().includes(args.status.toLowerCase()))
                 }
@@ -332,7 +334,8 @@ export function AIChatPanel() {
                 })
             }
             else if (name === 'consultar_orcamentos') {
-                const orcs = await getOrcamentos()
+                const res = await getOrcamentos({ limit: 100 })
+                const orcs = res.data
                 const topOrcs = orcs.slice(0, 3) 
 
                 let resposta = `Últimos orçamentos emitidos:\n\n`

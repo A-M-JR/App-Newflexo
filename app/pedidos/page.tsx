@@ -13,90 +13,84 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard, Filter } from "lucide-react"
-import { formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
+import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard } from "lucide-react"
+import { formatCurrency } from "@/lib/mock-data"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidos } from "@/lib/actions/pedidos"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DatePickerWithRange } from "@/components/ui/date-picker-with-range"
+import { DateRange } from "react-day-picker"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination"
 
 export default function PedidosPage() {
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [fStatus, setFStatus] = useState("")
   const [fSlaOnly, setFSlaOnly] = useState(false)
-  const [fDataOrder, setFDataOrder] = useState("") 
-
-  const { data: pedidosList = [], isLoading: loading } = useDataQuery<any[]>({
-    key: 'pedidos',
-    fetcher: getPedidos
-  })
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+  const [page, setPage] = useState(1)
 
   const { isVendedor, vendedor } = useAuth()
 
-  // Filter by current user if vendedor, show all if admin
-  const userPedidos = useMemo(() => {
-    const list = pedidosList || []
-    return isVendedor && vendedor ? list.filter((p: any) => p.vendedorId === vendedor.id) : list
-  }, [isVendedor, vendedor, pedidosList])
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search)
+      setPage(1)
+    }, 500)
+    return () => clearTimeout(handler)
+  }, [search])
 
-  const filtered = useMemo(() => {
-    let result = userPedidos.filter((p: any) => {
-      const cliente = p.cliente
-      const term = search.toLowerCase()
+  const apiParams = useMemo(() => {
+    return {
+      type: 'pedidos',
+      page,
+      limit: 15,
+      search: debouncedSearch,
+      status: fStatus || undefined,
+      apenasSla: fSlaOnly,
+      dataInicio: dateRange?.from?.toISOString(),
+      dataFim: dateRange?.to?.toISOString(),
+      vendedorId: isVendedor ? vendedor?.id : undefined
+    }
+  }, [page, debouncedSearch, fStatus, fSlaOnly, dateRange, isVendedor, vendedor])
 
-      const matchSearch = p.numero.toLowerCase().includes(term) ||
-        (cliente?.razaoSocial || "").toLowerCase().includes(term) ||
-        (p.vendedor?.nome || "").toLowerCase().includes(term)
-
-      const matchStatus = fStatus ? p.status === fStatus : true
-
-      let matchDate = true
-      if (fDataOrder === "mesAtual" || fDataOrder === "mesAnterior") {
-        const itemDate = new Date(p.prazoEntrega.split('/').reverse().join('-'))
-        const now = new Date()
-        const isCurrentMonth = itemDate.getMonth() === now.getMonth() && itemDate.getFullYear() === now.getFullYear()
-
-        let isLastMonth = false
-        if (now.getMonth() === 0) {
-          isLastMonth = itemDate.getMonth() === 11 && itemDate.getFullYear() === now.getFullYear() - 1
-        } else {
-          isLastMonth = itemDate.getMonth() === now.getMonth() - 1 && itemDate.getFullYear() === now.getFullYear()
-        }
-
-        if (fDataOrder === "mesAtual" && !isCurrentMonth) matchDate = false
-        if (fDataOrder === "mesAnterior" && !isLastMonth) matchDate = false
-      }
-
-      return matchSearch && matchStatus && matchDate
+  const { data: dbData, isLoading: loading } = useDataQuery<any>({
+    key: apiParams,
+    fetcher: () => getPedidos({ 
+      page, 
+      limit: 15, 
+      search: debouncedSearch,
+      status: fStatus || undefined,
+      apenasSla: fSlaOnly,
+      dataInicio: dateRange?.from?.toISOString(),
+      dataFim: dateRange?.to?.toISOString(),
+      vendedorId: isVendedor ? vendedor?.id : undefined
     })
+  })
 
-    if (fSlaOnly) {
-      result = result.filter((p: any) => {
-        if (p.status === 'entregue') return false
-        const [d, m, y] = p.prazoEntrega.split('/')
-        const prazoDate = new Date(Number(y), Number(m) - 1, Number(d))
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const diffDays = Math.ceil((prazoDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        return diffDays <= 3
-      })
-    }
-
-    if (fDataOrder === "recente") {
-      result = result.sort((a: any, b: any) => new Date(b.prazoEntrega.split('/').reverse().join('-')).getTime() - new Date(a.prazoEntrega.split('/').reverse().join('-')).getTime())
-    } else if (fDataOrder === "antigo") {
-      result = result.sort((a: any, b: any) => new Date(a.prazoEntrega.split('/').reverse().join('-')).getTime() - new Date(b.prazoEntrega.split('/').reverse().join('-')).getTime())
-    }
-
-    return result
-  }, [userPedidos, search, fStatus, fSlaOnly, fDataOrder])
+  const pedidosList = dbData?.data || []
+  const KPIs = dbData?.kpis || { totalValor: 0, emAnalise: 0, emProducao: 0, separacao: 0, entregue: 0 }
+  const totalPages = dbData?.totalPages || 1
 
   const getSlaStatus = (prazo: string, status: string) => {
-    if (status === 'entregue') return { class: '', icon: null, text: 'Entregue', urgent: false }
+    if (status === 'entregue') return { class: '', icon: null, text: 'Entregue', urgent: false, isLate: false }
 
-    const [d, m, y] = prazo.split('/')
+    const parts = prazo.split('/')
+    if (parts.length !== 3) return { class: '', icon: null, text: 'Prazo inválido', urgent: false, isLate: false }
+    
+    const [d, m, y] = parts
     const prazoDate = new Date(Number(y), Number(m) - 1, Number(d))
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -112,23 +106,21 @@ export default function PedidosPage() {
     return { class: '', icon: null, text: 'No prazo', urgent: false, isLate: false }
   }
 
-  const KPIs = useMemo(() => {
-    let totalValor = 0;
-    let emAnalise = 0;
-    let emProducao = 0;
-    let atrasados = 0;
+  const handleStatusFilter = (status: string) => {
+    if (fStatus === status) {
+      setFStatus('')
+    } else {
+      setFStatus(status)
+      setFSlaOnly(false)
+    }
+    setPage(1)
+  }
 
-    filtered.forEach((p: any) => {
-      totalValor += p.totalGeral;
-      if (p.status === 'em_analise') emAnalise++;
-      if (p.status === 'em_producao' || p.status === 'separacao') emProducao++;
-
-      const sla = getSlaStatus(p.prazoEntrega, p.status)
-      if (sla.urgent) atrasados++;
-    })
-
-    return { totalValor, emAnalise, emProducao, atrasados }
-  }, [filtered])
+  const handleSlaFilter = () => {
+    setFSlaOnly(!fSlaOnly)
+    setFStatus('')
+    setPage(1)
+  }
 
   return (
     <AppShell>
@@ -143,45 +135,45 @@ export default function PedidosPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card
             className={`bg-gradient-to-br from-card to-card/50 border-border/50 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${!fStatus && !fSlaOnly ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-            onClick={() => { setFStatus(''); setFSlaOnly(false) }}
+            onClick={() => { setFStatus(''); setFSlaOnly(false); setPage(1) }}
           >
             <div className="absolute -right-4 -top-4 p-3 opacity-5 pointer-events-none"><LayoutDashboard className="size-24" /></div>
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-muted-foreground flex items-center gap-2"><LayoutDashboard className="size-4 text-primary" />Valor Total</p>
-              <h2 className="text-2xl font-bold block truncate">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-32" /> : formatCurrency(KPIs.totalValor)}</h2>
-              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mt-1">{fDataOrder || 'Todos os períodos'}</p>
+              <h2 className="text-2xl font-bold block truncate">{loading && !dbData ? <Skeleton className="h-8 w-32" /> : formatCurrency(KPIs.totalValor)}</h2>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mt-1">{dateRange?.from ? 'Período Filtrado' : 'Todos os períodos'}</p>
             </CardContent>
           </Card>
 
           <Card
             className={`bg-gradient-to-br from-blue-50 to-background dark:from-blue-950/20 dark:to-background border-blue-100 dark:border-blue-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatus === 'em_analise' && !fSlaOnly ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-            onClick={() => { setFStatus(fStatus === 'em_analise' ? '' : 'em_analise'); setFSlaOnly(false) }}
+            onClick={() => handleStatusFilter('em_analise')}
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2"><PackageOpen className="size-4" />Em Análise</p>
-              <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-300">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.emAnalise}</h2>
+              <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.emAnalise}</h2>
               <p className="text-xs text-blue-500 font-medium">Aguardando OP</p>
             </CardContent>
           </Card>
 
           <Card
             className={`bg-gradient-to-br from-purple-50 to-background dark:from-purple-950/20 dark:to-background border-purple-100 dark:border-purple-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fStatus === 'em_producao' && !fSlaOnly ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-            onClick={() => { setFStatus(fStatus === 'em_producao' ? '' : 'em_producao'); setFSlaOnly(false) }}
+            onClick={() => handleStatusFilter('em_producao')}
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-purple-600 dark:text-purple-400 flex items-center gap-2"><Factory className="size-4" />Em Produção</p>
-              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.emProducao}</h2>
+              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.emProducao}</h2>
               <p className="text-xs text-purple-500 font-medium">Fábrica e Separação</p>
             </CardContent>
           </Card>
 
           <Card
             className={`bg-gradient-to-br from-red-50 to-background dark:from-red-950/20 dark:to-background border-red-100 dark:border-red-900 shadow-sm relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98] ${fSlaOnly ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-background' : 'opacity-70 hover:opacity-100'}`}
-            onClick={() => { setFSlaOnly(!fSlaOnly); setFStatus('') }}
+            onClick={handleSlaFilter}
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2"><Truck className="size-4" />Alerta de SLA</p>
-              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.atrasados}</h2>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : 'SLA'}</h2>
               <p className="text-xs text-red-500 font-medium">Atrasados ou Urgentes</p>
             </CardContent>
           </Card>
@@ -199,23 +191,21 @@ export default function PedidosPage() {
               />
             </div>
             <div className="flex items-center gap-3 overflow-x-auto pb-1 md:pb-0">
-              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fStatus} onChange={e => setFStatus(e.target.value)}>
+              <DatePickerWithRange 
+                date={dateRange}
+                setDate={(date) => {
+                  setDateRange(date)
+                  setPage(1)
+                }}
+                className="w-full md:w-auto"
+              />
+              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fStatus} onChange={e => handleStatusFilter(e.target.value)}>
                 <option value="">Todos Status</option>
                 <option value="em_analise">Em Análise</option>
                 <option value="em_producao">Em Produção</option>
                 <option value="separacao">Separação</option>
                 <option value="entregue">Entregue</option>
               </select>
-              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fDataOrder} onChange={e => setFDataOrder(e.target.value)}>
-                <option value="">Período Todos</option>
-                <option value="mesAtual">Mês Atual</option>
-                <option value="mesAnterior">Mês Anterior</option>
-                <option value="recente">Recentes</option>
-                <option value="antigo">Antigos</option>
-              </select>
-              {(fStatus || fSlaOnly || search || fDataOrder) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFStatus(""); setFSlaOnly(false); setSearch(""); setFDataOrder("") }} className="h-8 px-2 text-xs">Limpar</Button>
-              )}
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -223,11 +213,11 @@ export default function PedidosPage() {
               <Table>
                 <TableHeader><TableRow><TableHead>Pedido</TableHead><TableHead>Cliente</TableHead><TableHead className="hidden lg:table-cell">Vendedor</TableHead><TableHead className="hidden md:table-cell">Prazo SLA</TableHead><TableHead className="text-right">Status</TableHead><TableHead className="text-right pr-6">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {loading && pedidosList?.length === 0 ? (
+                  {loading && !dbData ? (
                     [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
-                  ) : filtered.length === 0 ? (
+                  ) : pedidosList.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum pedido encontrado.</p></TableCell></TableRow>
-                  ) : filtered.map((ped: any) => {
+                  ) : pedidosList.map((ped: any) => {
                     const sla = getSlaStatus(ped.prazoEntrega, ped.status)
                     return (
                       <TableRow key={ped.id} className={`hover:bg-muted/10 transition-colors border-border/30 bg-card ${sla.class}`}>
@@ -237,7 +227,7 @@ export default function PedidosPage() {
                         <TableCell className="hidden md:table-cell"><div className="flex flex-col gap-1"><span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground"><Clock className="size-3.5 text-muted-foreground" />{ped.prazoEntrega}</span>{sla.urgent && (
                           <span className={`flex items-center gap-1 text-[10px] font-bold ${sla.isLate ? 'text-red-600' : 'text-orange-600'}`}>{sla.icon}{sla.text}</span>
                         )}</div></TableCell>
-                        <TableCell className="text-right"><Badge variant="outline" className={`${getStatusColor(ped.status)} font-medium`}>{formatStatus(ped.status)}</Badge></TableCell>
+                        <TableCell className="text-right"><StatusBadge statusObj={ped.statusObj} fallback={ped.status} /></TableCell>
                         <TableCell className="text-right pr-6"><Link href={`/pedidos/${ped.id}`}><Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button></Link></TableCell>
                       </TableRow>
                     )
@@ -245,6 +235,47 @@ export default function PedidosPage() {
                 </TableBody>
               </Table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="py-4 border-t border-border/50">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setPage(p => Math.max(1, p - 1))} 
+                        className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        aria-disabled={page === 1}
+                      />
+                    </PaginationItem>
+                    
+                    {Array.from({ length: totalPages }).map((_, i) => {
+                      const p = i + 1;
+                      if (p === 1 || p === totalPages || (p >= page - 1 && p <= page + 1)) {
+                        return (
+                          <PaginationItem key={p}>
+                            <PaginationLink className="cursor-pointer" isActive={page === p} onClick={() => setPage(p)}>
+                              {p}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      }
+                      if (p === 2 && page > 3) return <PaginationItem key={p}><PaginationEllipsis /></PaginationItem>;
+                      if (p === totalPages - 1 && page < totalPages - 2) return <PaginationItem key={p}><PaginationEllipsis /></PaginationItem>;
+                      return null;
+                    })}
+                    
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                        className={page === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        aria-disabled={page === totalPages}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

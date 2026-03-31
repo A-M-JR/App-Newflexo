@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 
 // Cache global em memória (não persiste após F5, mas persiste entre trocas de abas)
 const globalCache: Record<string, { data: any; timestamp: number }> = {}
@@ -9,7 +9,7 @@ export function clearDataCache() {
 }
 
 interface UseDataQueryOptions<T> {
-  key: string
+  key: string | any[] | object
   fetcher: () => Promise<T>
   refetchInterval?: number
   enabled?: boolean
@@ -21,15 +21,23 @@ export function useDataQuery<T>({
   refetchInterval = 0,
   enabled = true 
 }: UseDataQueryOptions<T>) {
-  const [data, setData] = useState<T | null>(globalCache[key]?.data || null)
-  const [isLoading, setIsLoading] = useState(!globalCache[key])
+  const cacheKey = typeof key === 'string' ? key : JSON.stringify(key)
+  const [data, setData] = useState<T | null>(globalCache[cacheKey]?.data || null)
+  const [isLoading, setIsLoading] = useState(!globalCache[cacheKey])
   const [error, setError] = useState<Error | null>(null)
+
+  const fetcherRef = useRef(fetcher)
+  
+  // Mantém sempre a última versão da função `fetcher` sem disparar side effects.
+  useEffect(() => {
+    fetcherRef.current = fetcher
+  }, [fetcher])
 
   const fetchData = useCallback(async (isSilent = false) => {
     if (!isSilent) setIsLoading(true)
     try {
-      const result = await fetcher()
-      globalCache[key] = { data: result, timestamp: Date.now() }
+      const result = await fetcherRef.current()
+      globalCache[cacheKey] = { data: result, timestamp: Date.now() }
       setData(result)
       setError(null)
     } catch (err) {
@@ -37,13 +45,13 @@ export function useDataQuery<T>({
     } finally {
       setIsLoading(false)
     }
-  }, [key, fetcher])
+  }, [cacheKey])
 
   useEffect(() => {
     if (enabled) {
       // Se já temos no cache, carregamos instantaneamente
-      if (globalCache[key]) {
-        setData(globalCache[key].data)
+      if (globalCache[cacheKey]) {
+        setData(globalCache[cacheKey].data)
         setIsLoading(false)
         // Atualiza em background mesmo se tiver cache
         fetchData(true)
@@ -51,7 +59,7 @@ export function useDataQuery<T>({
         fetchData()
       }
     }
-  }, [enabled, key, fetchData])
+  }, [enabled, cacheKey, fetchData])
 
   // Refetch opcional
   useEffect(() => {

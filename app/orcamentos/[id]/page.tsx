@@ -19,11 +19,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown } from "lucide-react"
-import {
-  formatCurrency,
-  formatStatus,
-  getStatusColor,
-} from "@/lib/mock-data"
+import { formatCurrency } from "@/lib/mock-data"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus } from "@/lib/actions/orcamentos"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
 import Link from "next/link"
@@ -44,6 +41,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const [itens, setItens] = useState<any[]>([])
   
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [etiquetasList, setEtiquetasList] = useState<any[]>([])
   const [openCatalogo, setOpenCatalogo] = useState(false)
 
@@ -154,6 +152,8 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   }
 
   async function handleSalvarEdicao() {
+    if (isSaving) return
+    setIsSaving(true)
     try {
       await saveOrcamento({
         id: orcamento.id,
@@ -172,6 +172,8 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     } catch (err) {
       console.error(err)
       toast.error("Erro ao salvar alterações no banco.")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -231,12 +233,10 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
                   Proposta #{orcamento.numero}
                 </h1>
-                <Badge variant="secondary" className={`${getStatusColor(status)} shadow-sm px-3 py-1 text-xs uppercase tracking-wider`}>
-                  {formatStatus(status)}
-                </Badge>
+                <StatusBadge statusObj={orcamento.statusObj} fallback={status} />
               </div>
               <p className="text-xs text-muted-foreground mt-1 font-mono">
-                Criado em {orcamento.criadoEm} | Editado em {orcamento.atualizadoEm}
+                Criado em {orcamento.criadoEm ? new Date(orcamento.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Editado em {orcamento.atualizadoEm ? new Date(orcamento.atualizadoEm).toLocaleDateString('pt-BR') : 'N/D'}
               </p>
             </div>
           </div>
@@ -253,9 +253,9 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                 Editar Proposta
               </Button>
             ) : (
-              <Button onClick={handleSalvarEdicao} className="bg-green-600 hover:bg-green-700 text-white">
+              <Button onClick={handleSalvarEdicao} disabled={isSaving} className="bg-green-600 hover:bg-green-700 text-white">
                 <Save className="size-4 mr-2" />
-                Salvar Alterações
+                {isSaving ? "Salvando..." : "Salvar Alterações"}
               </Button>
             )}
 
@@ -616,8 +616,8 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
               <div className="flex flex-col gap-2 mt-auto">
                 {isEditing && (
-                  <Button onClick={handleSalvarEdicao} className="w-full h-12 text-base font-bold shadow-sm bg-green-600 hover:bg-green-700 text-white" size="lg">
-                    Salvar Alterações
+                  <Button onClick={handleSalvarEdicao} disabled={isSaving} className="w-full h-12 text-base font-bold shadow-sm bg-green-600 hover:bg-green-700 text-white" size="lg">
+                    {isSaving ? "Salvando..." : "Salvar Alterações"}
                   </Button>
                 )}
               </div>

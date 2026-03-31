@@ -14,10 +14,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Search, Eye, Clock, Users, FileText, Factory, ArrowUpRight, DollarSign } from "lucide-react"
-import { formatCurrency, formatStatus, getStatusColor } from "@/lib/mock-data"
-import { getPedidos } from "@/lib/actions/pedidos"
-import { getOrcamentos } from "@/lib/actions/orcamentos"
-import { getClientes } from "@/lib/actions/clientes"
+import { formatCurrency } from "@/lib/mock-data"
+import { StatusBadge } from "@/components/ui/status-badge"
+import { getDashboardMetrics } from "@/lib/actions/dashboard"
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
@@ -30,35 +29,20 @@ function DashboardContent() {
   const [search, setSearch] = useState("")
   const { isVendedor, vendedor } = useAuth()
 
-  // Buscas individuais com cache e revalidação em background
-  const { data: pedidosList = [], isLoading: loadingPedidos } = useDataQuery<any[]>({
-    key: 'pedidos',
-    fetcher: getPedidos
+  // Busca a métrica otimizada já contando e fatiada pelo backend
+  const { data: dashData, isLoading: loadingDash } = useDataQuery<any>({
+    key: `dashboard-stats-${isVendedor ? vendedor?.id : 'admin'}`,
+    fetcher: () => getDashboardMetrics(isVendedor ? vendedor?.id : undefined)
   })
 
-  const { data: clientesList = [], isLoading: loadingClientes } = useDataQuery<any[]>({
-    key: 'clientes',
-    fetcher: getClientes
-  })
-
-  const { data: orcamentosList = [], isLoading: loadingOrcamentos } = useDataQuery<any[]>({
-    key: 'orcamentos',
-    fetcher: getOrcamentos
-  })
-
-  const loading = loadingPedidos && (pedidosList?.length === 0)
-
-  // Filter by current user if vendedor, show all if admin
-  const userPedidos = useMemo(() => {
-    const list = pedidosList || []
-    return isVendedor && vendedor ? list.filter((p) => p.vendedorId === vendedor.id) : list
-  }, [pedidosList, isVendedor, vendedor])
+  const loading = loadingDash
 
   const filtered = useMemo(() => {
-    return userPedidos.filter((p) => {
+    if (!dashData?.recentes) return []
+    const term = search.toLowerCase()
+    return dashData.recentes.filter((p: any) => {
       const cliente = p.cliente
       const vend = p.vendedor
-      const term = search.toLowerCase()
       return (
         p.numero.toLowerCase().includes(term) ||
         (cliente?.razaoSocial || "").toLowerCase().includes(term) ||
@@ -66,54 +50,14 @@ function DashboardContent() {
         (vend?.nome || "").toLowerCase().includes(term)
       )
     })
-  }, [userPedidos, search])
+  }, [dashData, search])
 
-  // Basic Metrics
-  const totalReceita = userPedidos.reduce((acc, ped) => acc + (ped.totalGeral || 0), 0)
-  const ativos = userPedidos.filter(p => p.status === 'em_producao').length
-  const totalOrcamentos = (orcamentosList || []).length
-
-  // Clientes Inativos (+40 dias sem compra)
-  const quarentaDiasAtras = new Date()
-  quarentaDiasAtras.setDate(quarentaDiasAtras.getDate() - 40)
-
-  const clientesInativos = (clientesList || []).filter(c => {
-    if (!c.ultimaCompra) return false
-    const dataUltimaCompra = new Date(c.ultimaCompra)
-    return dataUltimaCompra < quarentaDiasAtras
-  })
-
-  // Cálculo Dinâmico do Gráfico
-  const dynamicChartData = useMemo(() => {
-    if (loadingPedidos || loadingOrcamentos) return []
-    const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    const baseDate = new Date()
-    const result = []
-
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
-      const monthNum = d.getMonth()
-      const yearNum = d.getFullYear()
-
-      const orcsMes = (orcamentosList || []).filter(o => {
-        const dObj = new Date(o.criadoEm)
-        const belongsToSeller = !isVendedor || (vendedor && o.vendedorId === vendedor.id)
-        return dObj.getMonth() === monthNum && dObj.getFullYear() === yearNum && belongsToSeller
-      }).length
-
-      const pedsMes = userPedidos.filter(p => {
-        const dObj = new Date(p.criadoEm)
-        return dObj.getMonth() === monthNum && dObj.getFullYear() === yearNum
-      }).length
-
-      result.push({
-        name: monthsNames[monthNum],
-        orcamentos: orcsMes,
-        conversoes: pedsMes
-      })
-    }
-    return result
-  }, [orcamentosList, userPedidos, isVendedor, vendedor, loadingPedidos, loadingOrcamentos])
+  const totalReceita = dashData?.kpis?.totalReceita || 0
+  const ativos = dashData?.kpis?.ativos || 0
+  const totalOrcamentos = dashData?.kpis?.totalOrcamentos || 0
+  const clientesInativosCount = dashData?.kpis?.clientesInativos || 0
+  const clientesInativosList = dashData?.clientesInativosList || []
+  const dynamicChartData = dashData?.chartData || []
 
   const renderChart = useMemo(() => (
     <ResponsiveContainer width="100%" height="100%">
@@ -140,7 +84,7 @@ function DashboardContent() {
     </ResponsiveContainer>
   ), [dynamicChartData])
 
-  if (loading && pedidosList?.length === 0) {
+  if (loading && !dashData) {
     return <DashboardSkeleton />
   }
 
@@ -159,8 +103,8 @@ function DashboardContent() {
         <Card className="shadow-sm border-border/50">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
-              <CardTitle>Todos os Pedidos</CardTitle>
-              <CardDescription>Busque e gerencie a lista completa de pedidos</CardDescription>
+              <CardTitle>Últimos Pedidos</CardTitle>
+              <CardDescription>Gerencie seus pedidos mais recentes da fábrica</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
@@ -189,7 +133,7 @@ function DashboardContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {loadingPedidos && pedidosList?.length === 0 ? (
+                  {loading && !dashData ? (
                     [1,2,3,4,5].map(i => (
                       <TableRow key={i}>
                         <TableCell colSpan={7}><Skeleton className="h-12 w-full" /></TableCell>
@@ -197,7 +141,7 @@ function DashboardContent() {
                     ))
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">Nenhum pedido encontrado.</TableCell></TableRow>
-                  ) : filtered.map((ped) => {
+                  ) : filtered.map((ped: any) => {
                     const cliente = ped.cliente
                     return (
                       <TableRow key={ped.id} className="group hover:bg-muted/30 transition-colors">
@@ -209,7 +153,7 @@ function DashboardContent() {
                         </TableCell>
                         <TableCell className="text-right font-semibold text-foreground">{formatCurrency(ped.totalGeral)}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="secondary" className={`${getStatusColor(ped.status)} shadow-none`}>{formatStatus(ped.status)}</Badge>
+                          <StatusBadge statusObj={(ped as any).statusObj} fallback={ped.status} />
                         </TableCell>
                         <TableCell className="text-right">
                           <Link href={`/pedidos/${ped.id}`}>
@@ -236,7 +180,7 @@ function DashboardContent() {
                 <div className="p-2 bg-primary/10 rounded-full"><DollarSign className="size-4 text-primary" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loadingPedidos && pedidosList?.length === 0 ? <Skeleton className="h-8 w-24" /> : formatCurrency(totalReceita)}</div>
+                <div className="text-2xl font-bold">{loading && !dashData ? <Skeleton className="h-8 w-24" /> : formatCurrency(totalReceita)}</div>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <ArrowUpRight className="size-3 text-emerald-500" /><span className="text-emerald-500 font-medium">+14.2%</span> no período
                 </p>
@@ -249,7 +193,7 @@ function DashboardContent() {
                 <div className="p-2 bg-blue-500/10 rounded-full"><Factory className="size-4 text-blue-500" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loadingPedidos && pedidosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : ativos}</div>
+                <div className="text-2xl font-bold">{loading && !dashData ? <Skeleton className="h-8 w-12" /> : ativos}</div>
                 <p className="text-xs text-muted-foreground mt-1">Produzindo atualmente</p>
               </CardContent>
             </Card>
@@ -260,7 +204,7 @@ function DashboardContent() {
                 <div className="p-2 bg-amber-500/10 rounded-full"><FileText className="size-4 text-amber-500" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loadingOrcamentos && orcamentosList?.length === 0 ? <Skeleton className="h-8 w-12" /> : totalOrcamentos}</div>
+                <div className="text-2xl font-bold">{loading && !dashData ? <Skeleton className="h-8 w-12" /> : totalOrcamentos}</div>
                 <p className="text-xs text-muted-foreground mt-1">Aguardando aprovação</p>
               </CardContent>
             </Card>
@@ -271,7 +215,7 @@ function DashboardContent() {
                 <div className="p-2 bg-orange-500/10 rounded-full"><Users className="size-4 text-orange-500" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">{loadingClientes && clientesList?.length === 0 ? <Skeleton className="h-8 w-20" /> : `${clientesInativos.length} clientes`}</div>
+                <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">{loading && !dashData ? <Skeleton className="h-8 w-20" /> : `${clientesInativosCount} clientes`}</div>
                 <p className="text-xs text-muted-foreground mt-1">Sem comprar há +40 dias</p>
               </CardContent>
             </Card>
@@ -293,9 +237,9 @@ function DashboardContent() {
               </CardHeader>
               <CardContent className="flex-1 overflow-auto pt-4 max-h-[300px]">
                 <div className="space-y-4 pr-2">
-                  {loadingClientes && clientesList?.length === 0 ? (
+                  {loading && !dashData ? (
                     [1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)
-                  ) : clientesInativos.length > 0 ? clientesInativos.map((cliente) => {
+                  ) : clientesInativosList.length > 0 ? clientesInativosList.map((cliente: any) => {
                     const dataCompra = new Date(cliente.ultimaCompra!)
                     const diasInt = Math.floor((new Date().getTime() - dataCompra.getTime()) / (1000 * 3600 * 24))
                     return (

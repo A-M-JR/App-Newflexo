@@ -12,7 +12,7 @@ import { toast } from "sonner"
 
 interface VendedorFormDialogProps {
   vendedor: Vendedor | null
-  onSave: (vendedor: Vendedor) => void
+  onSave: (vendedor: Vendedor) => Promise<void> | void
   onClose: () => void
 }
 
@@ -33,14 +33,18 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
   const [comissao, setComissao] = useState(vendedor?.comissao.toString() || "5")
   const [regiao, setRegiao] = useState(vendedor?.regiao || "")
   const [ativo, setAtivo] = useState(vendedor?.ativo !== false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
 
+    setIsSubmitting(true)
     if (!nome || !email || !telefone || !regiao) {
       toast.error("Formulário Incompleto", {
         description: "Por favor, preencha todos os campos obrigatórios (*)."
       })
+      setIsSubmitting(false)
       return
     }
 
@@ -55,7 +59,11 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
       ativo,
     }
 
-    onSave(newVendedor)
+    try {
+      await onSave(newVendedor)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -158,11 +166,11 @@ export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDi
           </div>
 
           <div className="flex gap-3 justify-end pt-4 border-t border-border/50">
-            <Button type="button" variant="outline" onClick={onClose} className="hover:bg-muted/50">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="hover:bg-muted/50">
               Cancelar
             </Button>
-            <Button type="submit" className="min-w-[120px] shadow-sm">
-              {vendedor ? "Atualizar Ficha" : "Salvar Vendedor"}
+            <Button type="submit" disabled={isSubmitting} className="min-w-[120px] shadow-sm">
+              {isSubmitting ? "Salvando..." : (vendedor ? "Atualizar Ficha" : "Salvar Vendedor")}
             </Button>
           </div>
         </form>

@@ -15,11 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus } from "lucide-react"
-import {
-  formatCurrency,
-  formatStatus,
-  getStatusColor,
-} from "@/lib/mock-data"
+import { formatCurrency } from "@/lib/mock-data"
+import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidoById, updatePedidoStatus } from "@/lib/actions/pedidos"
 import Link from "next/link"
 import { use, useState, useEffect } from "react"
@@ -137,12 +134,10 @@ export default function PedidoDetailPage({
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">
                   {pedido.numero}
                 </h1>
-                <Badge variant="secondary" className={getStatusColor(currentStatus)}>
-                  {formatStatus(currentStatus)}
-                </Badge>
+                <StatusBadge statusObj={pedido.statusObj} fallback={currentStatus} />
               </div>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Criado em {pedido.criadoEm} | Orcamento: {pedido.orcamentoId}
+                Criado em {pedido.criadoEm ? new Date(pedido.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Orcamento: {pedido.orcamentoId}
               </p>
             </div>
           </div>

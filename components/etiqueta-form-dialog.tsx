@@ -64,7 +64,10 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
   // Fetch real clientes using useDataQuery
   const { data: dbClientes = [], isLoading: loadingClientes } = useDataQuery<Cliente[]>({
     key: 'clientes',
-    fetcher: getClientes,
+    fetcher: async () => {
+      const res = await getClientes({ limit: 1000 })
+      return res.data || []
+    },
     enabled: open // Only fetch when dialog is open
   })
 
@@ -177,7 +180,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] md:max-w-4xl lg:max-w-5xl p-0 border-0 shadow-2xl overflow-hidden bg-background">
         
-        <div className="relative h-20 bg-gradient-to-r from-primary/90 to-primary p-6 flex flex-col justify-center overflow-hidden">
+        <div className="relative h-20 bg-gradient-to-r from-primary/90 to-primary p-6 pr-14 flex flex-col justify-center overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
             <Layers className="size-32 rotate-12" />
           </div>

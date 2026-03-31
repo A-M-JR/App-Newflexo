@@ -73,6 +73,7 @@ function NovoPedidoForm() {
 
     const handleEfetivar = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (isSubmitting) return
         setIsSubmitting(true)
 
         try {

@@ -13,7 +13,7 @@ import { toast } from "sonner"
 interface UsuarioFormDialogProps {
   usuario: User | null
   vendedores: Vendedor[]
-  onSave: (usuario: User) => void
+  onSave: (usuario: User) => Promise<void> | void
   onClose: () => void
 }
 
@@ -24,14 +24,19 @@ export function UsuarioFormDialog({ usuario, vendedores, onSave, onClose }: Usua
   const [role, setRole] = useState<"admin" | "vendedor">(usuario?.role || "vendedor")
   const [vendedorId, setVendedorId] = useState<number | "">(usuario?.vendedorId || "")
   const [ativo, setAtivo] = useState(usuario?.ativo !== false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
 
     if (!nome || !email) {
       toast.warning("Campos Obrigatórios", {
         description: "Por favor, preencha o nome e o email."
       })
+      setIsSubmitting(false)
       return
     }
 
@@ -39,6 +44,7 @@ export function UsuarioFormDialog({ usuario, vendedores, onSave, onClose }: Usua
       toast.warning("Senha Obrigatória", {
         description: "A senha é obrigatória para novos usuários."
       })
+      setIsSubmitting(false)
       return
     }
 
@@ -52,7 +58,11 @@ export function UsuarioFormDialog({ usuario, vendedores, onSave, onClose }: Usua
       ativo,
     }
 
-    onSave(newUsuario)
+    try {
+      await onSave(newUsuario)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -154,11 +164,11 @@ export function UsuarioFormDialog({ usuario, vendedores, onSave, onClose }: Usua
           </div>
 
           <div className="flex gap-3 justify-end pt-4 border-t border-border/50">
-            <Button type="button" variant="outline" onClick={onClose} className="hover:bg-muted/50">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting} className="hover:bg-muted/50">
               Cancelar
             </Button>
-            <Button type="submit" className="min-w-[120px] shadow-sm">
-              {usuario ? "Salvar Alterações" : "Criar Usuário"}
+            <Button type="submit" disabled={isSubmitting} className="min-w-[120px] shadow-sm">
+              {isSubmitting ? "Salvando..." : (usuario ? "Salvar Alterações" : "Criar Usuário")}
             </Button>
           </div>
         </form>

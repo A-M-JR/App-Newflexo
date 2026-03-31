@@ -382,10 +382,12 @@ export function formatCurrency(value: number): string {
 export function formatStatus(status: string): string {
   const map: Record<string, string> = {
     rascunho: "Rascunho",
+    em_analise: "Em Análise",
     enviado: "Enviado",
     aprovado: "Aprovado",
     recusado: "Recusado",
-    em_producao: "Em Producao",
+    em_producao: "Em Produção",
+    separacao: "Em Separação",
     faturado: "Faturado",
     entregue: "Entregue",
     cancelado: "Cancelado",
@@ -395,14 +397,16 @@ export function formatStatus(status: string): string {
 
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
-    rascunho: "bg-muted text-muted-foreground",
-    enviado: "bg-blue-100 text-blue-800",
-    aprovado: "bg-emerald-100 text-emerald-800",
-    recusado: "bg-red-100 text-red-800",
-    em_producao: "bg-amber-100 text-amber-800",
-    faturado: "bg-emerald-100 text-emerald-800",
-    entregue: "bg-teal-100 text-teal-800",
-    cancelado: "bg-red-100 text-red-800",
+    rascunho: "bg-muted/50 text-muted-foreground border-border/50 border",
+    em_analise: "bg-violet-500/10 text-violet-700 border-violet-500/20 border dark:text-violet-400",
+    enviado: "bg-blue-500/10 text-blue-700 border-blue-500/20 border dark:text-blue-400",
+    aprovado: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 border dark:text-emerald-400",
+    recusado: "bg-red-500/10 text-red-700 border-red-500/20 border dark:text-red-400",
+    em_producao: "bg-amber-500/10 text-amber-700 border-amber-500/20 border dark:text-amber-400",
+    separacao: "bg-purple-500/10 text-purple-700 border-purple-500/20 border dark:text-purple-400",
+    faturado: "bg-emerald-500/10 text-emerald-700 border-emerald-500/20 border dark:text-emerald-400",
+    entregue: "bg-teal-500/10 text-teal-700 border-teal-500/20 border dark:text-teal-400",
+    cancelado: "bg-red-500/10 text-red-700 border-red-500/20 border dark:text-red-400",
   }
-  return map[status] || "bg-muted text-muted-foreground"
+  return map[status] || "bg-muted/50 text-muted-foreground border-border/50 border"
 }
