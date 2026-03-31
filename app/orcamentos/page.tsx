@@ -116,7 +116,7 @@ export default function OrcamentosPage() {
             <div className="absolute top-0 right-0 p-3 opacity-5 pointer-events-none"><TrendingUp className="size-16" /></div>
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-muted-foreground flex items-center gap-2"><TrendingUp className="size-4 text-primary" />Valor Total</p>
-              <h2 className="text-2xl font-bold block truncate">{loading && !dbData ? <Skeleton className="h-8 w-32" /> : formatCurrency(KPIs.totalValor)}</h2>
+              <h2 className="text-2xl font-bold block truncate">{loading && !dbData ? "..." : formatCurrency(KPIs.totalValor)}</h2>
             </CardContent>
           </Card>
 
@@ -126,7 +126,7 @@ export default function OrcamentosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400 flex items-center gap-2"><Clock className="size-4" />Vigentes</p>
-              <h2 className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.vigentes}</h2>
+              <h2 className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{loading && !dbData ? "..." : KPIs.vigentes}</h2>
               <p className="text-xs text-indigo-500 font-medium">Aguardando</p>
             </CardContent>
           </Card>
@@ -137,7 +137,7 @@ export default function OrcamentosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-2"><CheckCircle2 className="size-4" />Aprovados</p>
-              <h2 className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.aprovados}</h2>
+              <h2 className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{loading && !dbData ? "..." : KPIs.aprovados}</h2>
               <p className="text-xs text-emerald-500 font-medium">Ganhos recentes</p>
             </CardContent>
           </Card>
@@ -148,7 +148,7 @@ export default function OrcamentosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-rose-600 dark:text-rose-400 flex items-center gap-2"><AlertCircle className="size-4" />Parados</p>
-              <h2 className="text-2xl font-bold text-rose-700 dark:text-rose-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.parados}</h2>
+              <h2 className="text-2xl font-bold text-rose-700 dark:text-rose-300">{loading && !dbData ? "..." : KPIs.parados}</h2>
               <p className="text-xs text-rose-500 font-medium">Rascunho/Recusado</p>
             </CardContent>
           </Card>
@@ -189,7 +189,7 @@ export default function OrcamentosPage() {
                 <TableHeader><TableRow><TableHead>Orçamento</TableHead><TableHead>Cliente</TableHead><TableHead className="hidden sm:table-cell text-center">Itens</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-right pr-6">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {loading && !dbData ? (
-                    [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
+                    <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
                   ) : orcamentosList.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum orçamento encontrado.</p></TableCell></TableRow>
                   ) : orcamentosList.map((orc: any) => (

@@ -180,7 +180,7 @@ function DashboardContent() {
                 <div className="p-2 bg-primary/10 rounded-full"><DollarSign className="size-4 text-primary" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loading && !dashData ? <Skeleton className="h-8 w-24" /> : formatCurrency(totalReceita)}</div>
+                <div className="text-2xl font-bold">{loading && !dashData ? "..." : formatCurrency(totalReceita)}</div>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <ArrowUpRight className="size-3 text-emerald-500" /><span className="text-emerald-500 font-medium">+14.2%</span> no período
                 </p>
@@ -193,7 +193,7 @@ function DashboardContent() {
                 <div className="p-2 bg-blue-500/10 rounded-full"><Factory className="size-4 text-blue-500" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loading && !dashData ? <Skeleton className="h-8 w-12" /> : ativos}</div>
+                <div className="text-2xl font-bold">{loading && !dashData ? "..." : ativos}</div>
                 <p className="text-xs text-muted-foreground mt-1">Produzindo atualmente</p>
               </CardContent>
             </Card>
@@ -204,7 +204,7 @@ function DashboardContent() {
                 <div className="p-2 bg-amber-500/10 rounded-full"><FileText className="size-4 text-amber-500" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loading && !dashData ? <Skeleton className="h-8 w-12" /> : totalOrcamentos}</div>
+                <div className="text-2xl font-bold">{loading && !dashData ? "..." : totalOrcamentos}</div>
                 <p className="text-xs text-muted-foreground mt-1">Aguardando aprovação</p>
               </CardContent>
             </Card>
@@ -215,7 +215,7 @@ function DashboardContent() {
                 <div className="p-2 bg-orange-500/10 rounded-full"><Users className="size-4 text-orange-500" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">{loading && !dashData ? <Skeleton className="h-8 w-20" /> : `${clientesInativosCount} clientes`}</div>
+                <div className="text-2xl font-bold text-orange-600 dark:text-orange-500">{loading && !dashData ? "..." : `${clientesInativosCount} clientes`}</div>
                 <p className="text-xs text-muted-foreground mt-1">Sem comprar há +40 dias</p>
               </CardContent>
             </Card>
@@ -238,7 +238,7 @@ function DashboardContent() {
               <CardContent className="flex-1 overflow-auto pt-4 max-h-[300px]">
                 <div className="space-y-4 pr-2">
                   {loading && !dashData ? (
-                    [1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)
+                    <div className="flex justify-center items-center py-6 text-muted-foreground gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div> Carregando clientes inativos...</div>
                   ) : clientesInativosList.length > 0 ? clientesInativosList.map((cliente: any) => {
                     const dataCompra = new Date(cliente.ultimaCompra!)
                     const diasInt = Math.floor((new Date().getTime() - dataCompra.getTime()) / (1000 * 3600 * 24))

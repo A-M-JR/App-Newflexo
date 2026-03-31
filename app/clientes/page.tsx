@@ -107,7 +107,7 @@ export default function ClientesPage() {
                 <Users className="size-4 text-primary" />
                 Total de Clientes
               </p>
-              <h2 className="text-2xl font-bold block truncate text-foreground">{loading && clientesList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.total}</h2>
+              <h2 className="text-2xl font-bold block truncate text-foreground">{loading && clientesList?.length === 0 ? "..." : KPIs.total}</h2>
               <p className="text-xs text-muted-foreground font-medium mt-1">Base Ativa Cadastrada</p>
             </CardContent>
           </Card>
@@ -121,7 +121,7 @@ export default function ClientesPage() {
                 <Clock className="size-4" />
                 Alerta de Retenção
               </p>
-              <h2 className="text-2xl font-bold text-amber-700 dark:text-amber-300">{loading && clientesList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.semCompra30}</h2>
+              <h2 className="text-2xl font-bold text-amber-700 dark:text-amber-300">{loading && clientesList?.length === 0 ? "..." : KPIs.semCompra30}</h2>
               <p className="text-xs text-amber-500 font-medium">+30 dias sem compras</p>
             </CardContent>
           </Card>
@@ -135,7 +135,7 @@ export default function ClientesPage() {
                 <AlertTriangle className="size-4" />
                 Risco Evasão
               </p>
-              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && clientesList?.length === 0 ? <Skeleton className="h-8 w-12" /> : KPIs.semCompra60}</h2>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && clientesList?.length === 0 ? "..." : KPIs.semCompra60}</h2>
               <p className="text-xs text-red-500 font-medium">+60 dias sem movimentação</p>
             </CardContent>
           </Card>
@@ -180,7 +180,7 @@ export default function ClientesPage() {
                 </TableHeader>
                 <TableBody>
                   {loading && clientesList?.length === 0 ? (
-                    [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
+                    <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum cliente encontrado.</p></TableCell></TableRow>
                   ) : filtered.map((cliente: any) => {

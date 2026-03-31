@@ -49,13 +49,14 @@ export function useDataQuery<T>({
 
   useEffect(() => {
     if (enabled) {
-      // Se já temos no cache, carregamos instantaneamente
       if (globalCache[cacheKey]) {
-        setData(globalCache[cacheKey].data)
+        if (data !== globalCache[cacheKey].data) {
+          setData(globalCache[cacheKey].data)
+        }
         setIsLoading(false)
-        // Atualiza em background mesmo se tiver cache
         fetchData(true)
       } else {
+        // Quando a chave muda, NÃO defina null. Mantém o dado anterior e apenas liga o loading state.
         fetchData()
       }
     }

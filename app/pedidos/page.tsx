@@ -140,7 +140,7 @@ export default function PedidosPage() {
             <div className="absolute -right-4 -top-4 p-3 opacity-5 pointer-events-none"><LayoutDashboard className="size-24" /></div>
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-muted-foreground flex items-center gap-2"><LayoutDashboard className="size-4 text-primary" />Valor Total</p>
-              <h2 className="text-2xl font-bold block truncate">{loading && !dbData ? <Skeleton className="h-8 w-32" /> : formatCurrency(KPIs.totalValor)}</h2>
+              <h2 className="text-2xl font-bold block truncate">{loading && !dbData ? "..." : formatCurrency(KPIs.totalValor)}</h2>
               <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mt-1">{dateRange?.from ? 'Período Filtrado' : 'Todos os períodos'}</p>
             </CardContent>
           </Card>
@@ -151,7 +151,7 @@ export default function PedidosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-blue-600 dark:text-blue-400 flex items-center gap-2"><PackageOpen className="size-4" />Em Análise</p>
-              <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.emAnalise}</h2>
+              <h2 className="text-2xl font-bold text-blue-700 dark:text-blue-300">{loading && !dbData ? "..." : KPIs.emAnalise}</h2>
               <p className="text-xs text-blue-500 font-medium">Aguardando OP</p>
             </CardContent>
           </Card>
@@ -162,7 +162,7 @@ export default function PedidosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-purple-600 dark:text-purple-400 flex items-center gap-2"><Factory className="size-4" />Em Produção</p>
-              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : KPIs.emProducao}</h2>
+              <h2 className="text-2xl font-bold text-purple-700 dark:text-purple-300">{loading && !dbData ? "..." : KPIs.emProducao}</h2>
               <p className="text-xs text-purple-500 font-medium">Fábrica e Separação</p>
             </CardContent>
           </Card>
@@ -173,7 +173,7 @@ export default function PedidosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2"><Truck className="size-4" />Alerta de SLA</p>
-              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && !dbData ? <Skeleton className="h-8 w-12" /> : 'SLA'}</h2>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && !dbData ? "..." : 'SLA'}</h2>
               <p className="text-xs text-red-500 font-medium">Atrasados ou Urgentes</p>
             </CardContent>
           </Card>
@@ -214,7 +214,7 @@ export default function PedidosPage() {
                 <TableHeader><TableRow><TableHead>Pedido</TableHead><TableHead>Cliente</TableHead><TableHead className="hidden lg:table-cell">Vendedor</TableHead><TableHead className="hidden md:table-cell">Prazo SLA</TableHead><TableHead className="text-right">Status</TableHead><TableHead className="text-right pr-6">Ações</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {loading && !dbData ? (
-                    [1,2,3,4,5].map(i => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-12 w-full" /></TableCell></TableRow>)
+                    <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
                   ) : pedidosList.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum pedido encontrado.</p></TableCell></TableRow>
                   ) : pedidosList.map((ped: any) => {
