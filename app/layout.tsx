@@ -10,11 +10,33 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" })
 
 export const metadata: Metadata = {
-  title: 'Newflexo - Gestao de Pedidos',
-  description: 'Sistema de gestao de pedidos para grafica de rotulos e etiquetas Newflexo.',
+  metadataBase: new URL('https://www.alvarobueno.com.br'),
+  title: 'Newflexo - Gestão de Pedidos',
+  description: 'Sistema de gestão de pedidos para gráfica de rótulos e etiquetas Newflexo.',
   icons: {
     icon: '/icon-32x32.png',
     apple: '/logo_quadrada.png',
+  },
+  openGraph: {
+    title: 'Newflexo - Gestão de Pedidos',
+    description: 'Sistema de gestão de pedidos para gráfica de rótulos e etiquetas Newflexo.',
+    url: 'https://www.alvarobueno.com.br',
+    siteName: 'Newflexo',
+    images: [
+      {
+        url: '/logo_quadrada.png',
+        width: 1000,
+        height: 1000,
+      },
+    ],
+    locale: 'pt_BR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Newflexo - Gestão de Pedidos',
+    description: 'Sistema de gestão de pedidos para gráfica de rótulos e etiquetas Newflexo.',
+    images: ['/logo_quadrada.png'],
   },
 }
 
