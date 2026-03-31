@@ -125,7 +125,7 @@ function NovoOrcamentoContent() {
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId)
   const historicoOrcamentos = clienteId ? todosOrcamentos.filter(o => o.clienteId === clienteId) : []
-  const itensAnteriores = historicoOrcamentos.flatMap((o) => o.itens)
+  const itensAnteriores = historicoOrcamentos.flatMap((o) => o.itens || [])
 
   // Auto-expand repurchase section when customer with history is selected
   const handleClienteChange = (id: string) => {

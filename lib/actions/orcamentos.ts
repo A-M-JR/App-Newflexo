@@ -67,6 +67,7 @@ export async function getOrcamentos(params: {
         cliente: true,
         vendedor: true,
         statusObj: true,
+        itens: true,
         _count: {
           select: { itens: true }
         }
