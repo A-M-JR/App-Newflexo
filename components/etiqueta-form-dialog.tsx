@@ -65,7 +65,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
   const { data: dbClientes = [], isLoading: loadingClientes } = useDataQuery<Cliente[]>({
     key: 'clientes',
     fetcher: async () => {
-      const res = await getClientes({ limit: 1000 })
+      const res = await getClientes({ limit: 100, mode: 'dropdown' })
       return res.data || []
     },
     enabled: open // Only fetch when dialog is open

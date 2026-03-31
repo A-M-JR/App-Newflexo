@@ -68,7 +68,7 @@ function NovoOrcamentoContent() {
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    Promise.all([getClientes({ limit: 1000 }), getVendedores(), getOrcamentos({ limit: 50 }), getEtiquetas()]).then(([cls, vds, orcs, etqs]) => {
+    Promise.all([getClientes({ limit: 100, mode: 'dropdown' }), getVendedores(), getOrcamentos({ limit: 50, mode: 'history' }), getEtiquetas()]).then(([cls, vds, orcs, etqs]) => {
       setClientes(cls.data || [])
       setVendedores(vds)
       setTodosOrcamentos(orcs.data || [])

@@ -12,11 +12,13 @@ export async function getOrcamentos(params: {
   dataInicio?: string
   dataFim?: string
   vendedorId?: number
+  mode?: 'full' | 'history'
 } = {}) {
   noStore()
   
   const page = params.page || 1
   const limit = params.limit || 20
+  const mode = params.mode || 'full'
   
   const where: any = {}
 
@@ -47,6 +49,20 @@ export async function getOrcamentos(params: {
       ends.setDate(ends.getDate() + 1)
       where.criadoEm.lt = ends
     }
+  }
+
+  if (mode === 'history') {
+    const dbOrcs = await prisma.orcamento.findMany({
+      where,
+      orderBy: { id: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        clienteId: true,
+        itens: true,
+      }
+    })
+    return { data: dbOrcs, total: dbOrcs.length, page: 1, totalPages: 1, kpis: null }
   }
 
   const [total, totalValorObj, vigentes, aprovados, parados, dbOrcs] = await prisma.$transaction([

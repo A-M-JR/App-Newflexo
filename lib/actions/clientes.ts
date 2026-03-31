@@ -7,12 +7,14 @@ export async function getClientes(params: {
   page?: number
   limit?: number
   search?: string
+  mode?: 'full' | 'dropdown'
 } = {}) {
   noStore()
   
   const page = params.page || 1
   const limit = params.limit || 20
   const search = params.search || ""
+  const mode = params.mode || 'full'
 
   const where = search ? {
     OR: [
@@ -21,6 +23,16 @@ export async function getClientes(params: {
       { cidade: { contains: search, mode: "insensitive" as const } },
     ]
   } : {}
+
+  if (mode === 'dropdown') {
+    const dbClientes = await prisma.cliente.findMany({
+      where,
+      orderBy: { razaoSocial: "asc" },
+      take: limit,
+      select: { id: true, razaoSocial: true, cnpj: true, endereco: true, cidade: true, estado: true }
+    })
+    return { data: dbClientes, total: dbClientes.length, page: 1, totalPages: 1 }
+  }
 
   const hoje = new Date()
   const trintaDiasAtras = new Date(hoje.getTime() - (30 * 24 * 60 * 60 * 1000))
@@ -47,9 +59,7 @@ export async function getClientes(params: {
       skip: (page - 1) * limit,
       take: limit,
       include: {
-        _count: {
-          select: { orcamentos: true, pedidos: true }
-        }
+        _count: { select: { orcamentos: true, pedidos: true } }
       }
     })
   ])
