@@ -61,9 +61,9 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
   const [selectedAplicacoes, setSelectedAplicacoes] = useState<string[]>([])
   const [loadingAutoCode, setLoadingAutoCode] = useState(false)
 
-  // Fetch real clientes using useDataQuery
-  const { data: dbClientes = [], isLoading: loadingClientes } = useDataQuery<Cliente[]>({
-    key: 'clientes',
+  // Fetch real clientes using useDataQuery (mode dropdown = só id + nome, sem campos extras)
+  const { data: dbClientes = [], isLoading: loadingClientes } = useDataQuery<any[]>({
+    key: 'clientes-dropdown',
     fetcher: async () => {
       const res = await getClientes({ limit: 100, mode: 'dropdown' })
       return res.data || []

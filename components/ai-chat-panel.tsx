@@ -273,15 +273,15 @@ export function AIChatPanel() {
                 // Opcional: Redirecionar para um dashboard se quiser
             }
             else if (name === 'consultar_clientes') {
-                const res = await getClientes({ limit: 100 })
+                const res = await getClientes({ limit: 100, mode: 'full' })
                 const clientes = res.data
-                const filtrados = args.termo ? clientes.filter(c => c.razaoSocial.toLowerCase().includes(args.termo.toLowerCase()) || (c.cnpj && c.cnpj.includes(args.termo))) : clientes.slice(0, 5)
+                const filtrados = args.termo ? clientes.filter((c: any) => c.razaoSocial.toLowerCase().includes(args.termo.toLowerCase()) || (c.cnpj && c.cnpj.includes(args.termo))) : clientes.slice(0, 5)
                 
                 let resposta = args.termo ? `Resultado da busca por "${args.termo}":\n\n` : `Últimos clientes cadastrados:\n\n`
                 if (filtrados.length === 0) {
                     resposta = `Nenhum cliente encontrado com o termo "${args.termo}".`
                 } else {
-                    filtrados.forEach(c => {
+                    filtrados.forEach((c: any) => {
                         resposta += `🏢 **${c.razaoSocial}**\nCNPJ: ${c.cnpj || 'ND'}\nContato: ${c.telefone || 'N/A'}\nStatus: ${c.ativo ? '🟢 Ativo' : '🔴 Inativo'}\n---\n`
                     })
                 }
@@ -334,7 +334,7 @@ export function AIChatPanel() {
                 })
             }
             else if (name === 'consultar_orcamentos') {
-                const res = await getOrcamentos({ limit: 100 })
+                const res = await getOrcamentos({ limit: 100, mode: 'full' })
                 const orcs = res.data
                 const topOrcs = orcs.slice(0, 3) 
 
@@ -342,7 +342,7 @@ export function AIChatPanel() {
                 if (topOrcs.length === 0) {
                     resposta = `Nenhum orçamento encontrado.`
                 } else {
-                    topOrcs.forEach(o => {
+                    topOrcs.forEach((o: any) => {
                         resposta += `📄 **${o.numero}** | R$ ${o.totalGeral}\nCliente: ${o.cliente?.razaoSocial}\nCriado em: ${new Date(o.criadoEm).toLocaleDateString()}\n---\n`
                     })
                 }

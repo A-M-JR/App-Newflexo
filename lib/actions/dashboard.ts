@@ -29,26 +29,23 @@ export async function getDashboardMetrics(vendedorId?: number) {
     // Para 'ativos' precisamos da string exata ou ID, vamos assumir que o ID do 'em_producao'
     prisma.status.findFirst({ where: { modulo: 'pedido', nome: 'Em Produção' } }),
 
+    // Conta apenas orçamentos "enviados" (aguardando aprovação do cliente = statusId 4)
     prisma.orcamento.count({
-      where: whereVendedorOrcs
+      where: { ...whereVendedorOrcs, statusId: 4 }
     }),
 
+    // Conta apenas clientes que JÁ compraram mas estão há +40 dias sem atividade
+    // (exclui quem nunca comprou — ultimaCompra = null)
     prisma.cliente.count({
       where: {
-        OR: [
-          { ultimaCompra: { lt: quarentaDiasAtras } },
-          { ultimaCompra: null }
-        ]
+        ultimaCompra: { lt: quarentaDiasAtras, not: null }
       }
     }),
     
     // Pegar apenas os primeiros 15 p/ a UI
     prisma.cliente.findMany({
       where: {
-        OR: [
-          { ultimaCompra: { lt: quarentaDiasAtras } },
-          { ultimaCompra: null }
-        ]
+        ultimaCompra: { lt: quarentaDiasAtras, not: null }
       },
       take: 15,
       orderBy: { ultimaCompra: 'asc' },
