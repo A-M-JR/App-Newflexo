@@ -184,25 +184,46 @@ export async function updatePedidoStatus(id: number, statusId: number) {
 export async function savePedido(data: any) {
   const { id, itens, ...rest } = data
   
+  if (!itens || !Array.isArray(itens)) {
+    console.error("savePedido: itens is missing or not an array", data)
+    throw new Error("Os itens do pedido são obrigatórios.")
+  }
+  
+  let numero = rest.numero
+  if (!id && !numero) {
+    const lastPed = await prisma.pedido.findFirst({
+      orderBy: { id: 'desc' },
+      select: { id: true }
+    })
+    const nextId = (lastPed?.id || 0) + 1
+    numero = `PED-${new Date().getFullYear()}-${nextId.toString().padStart(4, '0')}`
+  }
+
+  let statusId = rest.statusId ? Number(rest.statusId) : null
+  if (!statusId) {
+    const { getOrCreateStatus } = await import("./status")
+    statusId = await getOrCreateStatus('em_analise')
+  }
+
   const prismaData = {
-    numero: rest.numero,
+    numero: String(numero || ""),
     orcamentoId: rest.orcamentoId ? Number(rest.orcamentoId) : null,
     clienteId: Number(rest.clienteId),
     vendedorId: Number(rest.vendedorId),
-    statusId: Number(rest.statusId),
-    sentidoSaidaRolo: rest.sentidoSaidaRolo,
-    tipoTubete: rest.tipoTubete,
-    gapEntreEtiquetas: rest.gapEntreEtiquetas,
-    numeroPistas: Number(rest.numeroPistas),
-    observacoesEmbalagem: rest.observacoesEmbalagem,
-    observacoesFaturamento: rest.observacoesFaturamento,
-    prazoEntrega: rest.prazoEntrega,
-    formaPagamento: rest.formaPagamento,
-    nomeVendedor: rest.nomeVendedor,
-    nomeComprador: rest.nomeComprador,
-    frete: rest.frete,
-    observacoesGerais: rest.observacoesGerais,
-    totalGeral: Number(rest.totalGeral),
+    statusId: Number(statusId),
+    sentidoSaidaRolo: rest.sentidoSaidaRolo || "Ext 0º",
+    tipoTubete: rest.tipoTubete || "76",
+    gapEntreEtiquetas: rest.gapEntreEtiquetas || "3mm",
+    numeroPistas: Number(rest.numeroPistas) || 1,
+    observacoesEmbalagem: rest.observacoesEmbalagem || "",
+    observacoesFaturamento: rest.observacoesFaturamento || "",
+    prazoEntrega: rest.prazoEntrega || "15 dias",
+    formaPagamento: rest.formaPagamento || "A combinar",
+    nomeVendedor: rest.nomeVendedor || "",
+    nomeComprador: rest.nomeComprador || "",
+    frete: rest.frete || "FOB",
+    observacoesGerais: rest.observacoesGerais || "",
+    totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
     ativo: true,
   }
 
@@ -211,14 +232,18 @@ export async function savePedido(data: any) {
       data: {
         ...prismaData,
         itens: {
-          create: itens.map((it: any) => ({
-            etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
-            descricao: it.descricao,
-            quantidade: Number(it.quantidade),
-            unidade: it.unidade,
-            precoUnitario: Number(it.precoUnitario),
-            total: Number(it.total)
-          }))
+          create: itens.map((it: any) => {
+            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
+            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            return {
+              etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+              descricao: it.descricao,
+              quantidade: qty,
+              unidade: it.unidade,
+              precoUnitario: price,
+              total: Number(it.total) || (qty * price)
+            }
+          })
         }
       }
     })
@@ -232,14 +257,18 @@ export async function savePedido(data: any) {
         ...prismaData,
         itens: {
           deleteMany: {},
-          create: itens.map((it: any) => ({
-            etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
-            descricao: it.descricao,
-            quantidade: Number(it.quantidade),
-            unidade: it.unidade,
-            precoUnitario: Number(it.precoUnitario),
-            total: Number(it.total)
-          }))
+          create: itens.map((it: any) => {
+            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
+            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            return {
+              etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+              descricao: it.descricao,
+              quantidade: qty,
+              unidade: it.unidade,
+              precoUnitario: price,
+              total: Number(it.total) || (qty * price)
+            }
+          })
         }
       }
     })
