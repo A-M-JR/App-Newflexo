@@ -102,7 +102,7 @@ function NovoPedidoForm() {
                 total: i.total
             }))
 
-            const resp = await savePedido(pedidoData, reqItens)
+            const resp = await savePedido({ ...pedidoData, itens: reqItens })
             toast.success("Pedido criado com sucesso!", {
                 description: `Orçamento ${orcamento.numero} foi efetivado. Número: ${resp.numero}`
             })
