@@ -140,6 +140,7 @@ export async function getOrcamentoById(id: number) {
   if (!orcamento) return null
   return {
     ...orcamento,
+    status: orcamento.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (orcamento.statusObj?.nome?.toLowerCase() || 'rascunho'),
     criadoEm: orcamento.criadoEm.toISOString(),
     atualizadoEm: orcamento.atualizadoEm.toISOString(),
   }
@@ -164,14 +165,29 @@ export async function deleteOrcamento(id: number) {
 
 export async function saveOrcamento(data: any) {
   const { id, itens, ...rest } = data
+
+  if (!itens || !Array.isArray(itens)) {
+    console.error("saveOrcamento: itens is missing or not an array", data)
+    throw new Error("Os itens do orçamento são obrigatórios.")
+  }
   
+  let numero = rest.numero
+  if (!id && !numero) {
+    const lastOrc = await prisma.orcamento.findFirst({
+      orderBy: { id: 'desc' },
+      select: { id: true }
+    })
+    const nextId = (lastOrc?.id || 0) + 1
+    numero = `ORC-${new Date().getFullYear()}-${nextId.toString().padStart(4, '0')}`
+  }
+
   const prismaData = {
-    numero: rest.numero,
+    numero: String(numero || ""),
     clienteId: Number(rest.clienteId),
     vendedorId: Number(rest.vendedorId),
-    statusId: Number(rest.statusId),
-    observacoes: rest.observacoes,
-    totalGeral: Number(rest.totalGeral),
+    statusId: (rest.statusId && !isNaN(Number(rest.statusId))) ? Number(rest.statusId) : 1, // 1 = Pendente
+    observacoes: rest.observacoes || "",
+    totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
     ativo: true,
   }
 
@@ -180,14 +196,18 @@ export async function saveOrcamento(data: any) {
       data: {
         ...prismaData,
         itens: {
-          create: itens.map((it: any) => ({
-            etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
-            descricao: it.descricao,
-            quantidade: Number(it.quantidade),
-            unidade: it.unidade,
-            precoUnitario: Number(it.precoUnitario),
-            total: Number(it.total)
-          }))
+          create: itens.map((it: any) => {
+            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
+            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            return {
+              etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+              descricao: it.descricao,
+              quantidade: qty,
+              unidade: it.unidade,
+              precoUnitario: price,
+              total: Number(it.total) || (qty * price)
+            }
+          })
         }
       }
     })
@@ -200,14 +220,18 @@ export async function saveOrcamento(data: any) {
         ...prismaData,
         itens: {
           deleteMany: {},
-          create: itens.map((it: any) => ({
-            etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
-            descricao: it.descricao,
-            quantidade: Number(it.quantidade),
-            unidade: it.unidade,
-            precoUnitario: Number(it.precoUnitario),
-            total: Number(it.total)
-          }))
+          create: itens.map((it: any) => {
+            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
+            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            return {
+              etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+              descricao: it.descricao,
+              quantidade: qty,
+              unidade: it.unidade,
+              precoUnitario: price,
+              total: Number(it.total) || (qty * price)
+            }
+          })
         }
       }
     })
