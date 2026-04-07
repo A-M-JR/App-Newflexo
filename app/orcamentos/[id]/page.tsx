@@ -181,8 +181,15 @@ function OrcamentoDetailContent({ id }: { id: string }) {
         numero: orcamento.numero,
         totalGeral,
         observacoes,
-        statusStr: status
-      }, itens)
+        statusStr: status,
+        itens: itens.map(it => ({
+          ...it,
+          quantidade: typeof it.quantidade === 'string' ? parseFloat(String(it.quantidade).replace(',','.')) || 0 : it.quantidade,
+          precoUnitario: typeof it.precoUnitario === 'string' ? parseFloat(String(it.precoUnitario).replace(',','.')) || 0 : it.precoUnitario,
+          total: (typeof it.quantidade === 'string' ? parseFloat(String(it.quantidade).replace(',','.')) || 0 : it.quantidade) * 
+                 (typeof it.precoUnitario === 'string' ? parseFloat(String(it.precoUnitario).replace(',','.')) || 0 : it.precoUnitario)
+        }))
+      })
       
       setIsEditing(false)
       toast.success("Orçamento atualizado!", {
