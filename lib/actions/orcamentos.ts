@@ -146,12 +146,35 @@ export async function getOrcamentoById(id: number) {
   }
 }
 
-export async function updateOrcamentoStatus(id: number, statusId: string | number) {
+export async function updateOrcamentoStatus(id: number, statusIdent: string | number) {
+  let statusId = Number(statusIdent)
+  
+  if (isNaN(statusId)) {
+    // Mapeamento de nomes amigáveis para IDs do Banco (baseado no seed.sql)
+    const s = String(statusIdent).toLowerCase()
+    if (s === 'rascunho' || s === 'pendente') statusId = 1
+    else if (s === 'aprovado') statusId = 2
+    else if (s === 'enviado') statusId = 4
+    else if (s === 'recusado') statusId = 5
+    else {
+      // Busca dinâmica se não for um dos padrões
+      const found = await prisma.status.findFirst({
+        where: { 
+          modulo: 'orcamento',
+          nome: { contains: s, mode: 'insensitive' }
+        }
+      })
+      if (found) statusId = found.id
+      else statusId = 1 // Fallback para pendente
+    }
+  }
+
   const updated = await prisma.orcamento.update({
     where: { id },
-    data: { statusId: Number(statusId) }
+    data: { statusId }
   })
   revalidatePath("/orcamentos")
+  revalidatePath(`/orcamentos/${id}`)
   return updated
 }
 
@@ -181,11 +204,21 @@ export async function saveOrcamento(data: any) {
     numero = `ORC-${new Date().getFullYear()}-${nextId.toString().padStart(4, '0')}`
   }
 
+  let finalStatusId = (rest.statusId && !isNaN(Number(rest.statusId))) ? Number(rest.statusId) : null
+  
+  if (!finalStatusId && rest.statusStr) {
+    const s = String(rest.statusStr).toLowerCase()
+    if (s === 'rascunho' || s === 'pendente') finalStatusId = 1
+    else if (s === 'aprovado') finalStatusId = 2
+    else if (s === 'enviado') finalStatusId = 4
+    else if (s === 'recusado') finalStatusId = 5
+  }
+
   const prismaData = {
     numero: String(numero || ""),
     clienteId: Number(rest.clienteId),
     vendedorId: Number(rest.vendedorId),
-    statusId: (rest.statusId && !isNaN(Number(rest.statusId))) ? Number(rest.statusId) : 1, // 1 = Pendente
+    statusId: finalStatusId || 1, // Default para 1 (Pendente)
     observacoes: rest.observacoes || "",
     totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
     ativo: true,
