@@ -199,8 +199,15 @@ function NovoOrcamentoContent() {
         clienteId,
         vendedorId,
         observacoes,
-        totalGeral
-      }, itens)
+        totalGeral,
+        itens: itens.map(it => ({
+          ...it,
+          quantidade: typeof it.quantidade === 'string' ? parseFloat(it.quantidade.replace(',','.')) || 0 : it.quantidade,
+          precoUnitario: typeof it.precoUnitario === 'string' ? parseFloat(it.precoUnitario.replace(',','.')) || 0 : it.precoUnitario,
+          total: (typeof it.quantidade === 'string' ? parseFloat(it.quantidade.replace(',','.')) || 0 : it.quantidade) * 
+                 (typeof it.precoUnitario === 'string' ? parseFloat(it.precoUnitario.replace(',','.')) || 0 : it.precoUnitario)
+        }))
+      })
 
       toast.success("Orcamento salvo com sucesso!", {
         description: `Total: ${formatCurrency(totalGeral)}`,
