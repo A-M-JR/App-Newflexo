@@ -167,7 +167,13 @@ export async function getPedidoById(id: number) {
   }
 }
 
-export async function updatePedidoStatus(id: number, statusId: number) {
+export async function updatePedidoStatus(id: number, statusIdent: string | number) {
+  let statusId = Number(statusIdent)
+  
+  if (isNaN(statusId)) {
+    statusId = await getOrCreateStatus(String(statusIdent))
+  }
+
   const updated = await prisma.pedido.update({
     where: { id },
     data: { statusId },
