@@ -17,6 +17,7 @@ interface FormaPagamento {
   id: number
   nome: string
   ativo: boolean
+  quantidadeParcelas: number
 }
 
 export default function FormasPagamentoPage() {
@@ -27,6 +28,7 @@ export default function FormasPagamentoPage() {
   const [editingForma, setEditingForma] = useState<FormaPagamento | null>(null)
   const [search, setSearch] = useState("")
   const [nome, setNome] = useState("")
+  const [quantidadeParcelas, setQuantidadeParcelas] = useState(1)
   const [isSaving, setIsSaving] = useState(false)
   const [deleteWarning, setDeleteWarning] = useState<FormaPagamento | null>(null)
 
@@ -71,7 +73,8 @@ export default function FormasPagamentoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           nome, 
-          ativo: editingForma ? editingForma.ativo : true 
+          ativo: editingForma ? editingForma.ativo : true,
+          quantidadeParcelas: Number(quantidadeParcelas) || 1
         })
       })
 
@@ -85,6 +88,7 @@ export default function FormasPagamentoPage() {
       setShowForm(false)
       setEditingForma(null)
       setNome("")
+      setQuantidadeParcelas(1)
       loadData()
     } catch (error: any) {
       toast.error(error.message)
@@ -157,6 +161,7 @@ export default function FormasPagamentoPage() {
             onClick={() => {
               setEditingForma(null)
               setNome("")
+              setQuantidadeParcelas(1)
               setShowForm(true)
             }}
             size="lg"
@@ -184,6 +189,7 @@ export default function FormasPagamentoPage() {
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
                   <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Nome</th>
+                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Parcelas</th>
                   <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ações</th>
                 </tr>
@@ -199,6 +205,9 @@ export default function FormasPagamentoPage() {
                   <tr key={forma.id} className={`hover:bg-muted/30 transition-colors ${!forma.ativo ? "opacity-60" : ""}`}>
                     <td className="px-6 py-4">
                       <span className="text-sm font-semibold text-foreground">{forma.nome}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-sm text-muted-foreground">{forma.quantidadeParcelas || 1}x</span>
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <div className="flex items-center gap-2">
@@ -216,6 +225,7 @@ export default function FormasPagamentoPage() {
                           onClick={() => {
                             setEditingForma(forma)
                             setNome(forma.nome)
+                            setQuantidadeParcelas(forma.quantidadeParcelas || 1)
                             setShowForm(true)
                           }}
                           className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
@@ -258,15 +268,27 @@ export default function FormasPagamentoPage() {
             </DialogHeader>
             <form onSubmit={handleSave}>
               <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nome">Nome da Forma</Label>
-                  <Input
-                    id="nome"
-                    placeholder="Ex: 30/60/90 Dias"
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    autoFocus
-                  />
+                <div className="gap-4 flex">
+                  <div className="space-y-2 flex-grow">
+                    <Label htmlFor="nome">Nome da Forma</Label>
+                    <Input
+                      id="nome"
+                      placeholder="Ex: 30/60/90 Dias"
+                      value={nome}
+                      onChange={(e) => setNome(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-2 w-24">
+                    <Label htmlFor="parcelas">Parcelas</Label>
+                    <Input
+                      id="parcelas"
+                      type="number"
+                      min="1"
+                      value={quantidadeParcelas}
+                      onChange={(e) => setQuantidadeParcelas(Number(e.target.value))}
+                    />
+                  </div>
                 </div>
               </div>
               <DialogFooter>

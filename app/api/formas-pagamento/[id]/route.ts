@@ -13,7 +13,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const now = new Date();
     await prisma.$executeRaw`
       UPDATE "FormaPagamento" 
-      SET nome = ${data.nome}, ativo = ${data.ativo !== undefined ? data.ativo : true}, "updatedAt" = ${now}
+      SET nome = ${data.nome}, ativo = ${data.ativo !== undefined ? data.ativo : true}, "quantidadeParcelas" = ${data.quantidadeParcelas !== undefined ? data.quantidadeParcelas : 1}, "updatedAt" = ${now}
       WHERE id = ${Number(id)}
     `
 

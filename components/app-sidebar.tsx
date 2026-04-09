@@ -110,6 +110,29 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 )
               })}
+
+              {/* Botão de Comissões Adicional Pós-Catálogo */}
+              {(isAdmin || currentUser?.vendedorId) && (
+                <SidebarMenuItem className="px-2 mt-2 pt-2 border-t border-sidebar-border/30">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/comissoes")}
+                    tooltip="Cálculo de Comissões"
+                    className={`
+                      my-0.5 h-10 transition-all duration-200 
+                      ${pathname.startsWith("/comissoes")
+                        ? "bg-primary text-primary-foreground font-bold shadow-md hover:bg-primary/90"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      }
+                    `}
+                  >
+                    <Link href="/comissoes" className="flex items-center gap-3">
+                      <CreditCard className="size-[18px]" />
+                      <span>Comissões</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

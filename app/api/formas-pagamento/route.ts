@@ -23,8 +23,8 @@ export async function POST(req: Request) {
     // Usando raw SQL para inserção devido a cache do Prisma
     const now = new Date();
     await prisma.$executeRaw`
-      INSERT INTO "FormaPagamento" (nome, ativo, "criadoEm", "updatedAt")
-      VALUES (${data.nome}, ${data.ativo !== undefined ? data.ativo : true}, ${now}, ${now})
+      INSERT INTO "FormaPagamento" (nome, ativo, "quantidadeParcelas", "criadoEm", "updatedAt")
+      VALUES (${data.nome}, ${data.ativo !== undefined ? data.ativo : true}, ${data.quantidadeParcelas || 1}, ${now}, ${now})
     `
     
     const created = await prisma.$queryRaw`

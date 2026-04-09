@@ -241,8 +241,9 @@ model MovimentacaoCredito {
 model FormaPagamento {
   id         Int         @id @default(autoincrement())
   nome       String      @unique
-  ativo      Boolean     @default(true)
-  criadoEm   DateTime    @default(now())
+  ativo              Boolean     @default(true)
+  quantidadeParcelas Int         @default(1)
+  criadoEm           DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   orcamentos Orcamento[]
   pedidos    Pedido[]
