@@ -131,6 +131,8 @@ export async function getOrcamentoById(id: number) {
       cliente: true,
       vendedor: true,
       statusObj: true,
+      formaPagamentoObj: true,
+      pedidos: true,
       itens: {
         include: { etiqueta: true }
       }
@@ -143,6 +145,7 @@ export async function getOrcamentoById(id: number) {
     status: orcamento.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (orcamento.statusObj?.nome?.toLowerCase() || 'rascunho'),
     criadoEm: orcamento.criadoEm.toISOString(),
     atualizadoEm: orcamento.atualizadoEm.toISOString(),
+    prazoEntrega: orcamento.prazoEntrega ? orcamento.prazoEntrega.toISOString() : null,
   }
 }
 
@@ -171,11 +174,25 @@ export async function updateOrcamentoStatus(id: number, statusIdent: string | nu
 
   const updated = await prisma.orcamento.update({
     where: { id },
-    data: { statusId }
+    data: { statusId },
+    include: {
+      cliente: true,
+      vendedor: true,
+      statusObj: true,
+      itens: {
+        include: { etiqueta: true }
+      }
+    }
   })
   revalidatePath("/orcamentos")
   revalidatePath(`/orcamentos/${id}`)
-  return updated
+  
+  return {
+    ...updated,
+    status: updated.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (updated.statusObj?.nome?.toLowerCase() || 'rascunho'),
+    criadoEm: updated.criadoEm.toISOString(),
+    atualizadoEm: updated.atualizadoEm.toISOString(),
+  }
 }
 
 export async function deleteOrcamento(id: number) {
@@ -214,38 +231,109 @@ export async function saveOrcamento(data: any) {
     else if (s === 'recusado') finalStatusId = 5
   }
 
+  const totalGeral = isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral)
+
+  // Regra de Bonificação Automática: Se o total for zero, força o status Bonificação
+  if (totalGeral === 0) {
+    const bonif = await prisma.status.findFirst({
+      where: { modulo: 'orcamento', nome: { contains: 'Bonificação', mode: 'insensitive' } }
+    })
+    if (bonif) {
+      finalStatusId = bonif.id
+    } else {
+      const count = await prisma.status.count({ where: { modulo: 'orcamento' } })
+      const created = await prisma.status.create({
+        data: {
+          nome: 'Bonificação',
+          modulo: 'orcamento',
+          ordem: count + 1,
+          cor: '#ed64a6' // Pink/Destaque
+        }
+      })
+      finalStatusId = created.id
+    }
+  }
+
   const prismaData = {
     numero: String(numero || ""),
     clienteId: Number(rest.clienteId),
     vendedorId: Number(rest.vendedorId),
     statusId: finalStatusId || 1, // Default para 1 (Pendente)
+    formaPagamentoId: rest.formaPagamentoId ? Number(rest.formaPagamentoId) : null,
     observacoes: rest.observacoes || "",
-    totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
+    prazoEntrega: rest.prazoEntrega ? new Date(rest.prazoEntrega) : null,
+    totalGeral: totalGeral,
+    descontoCredito: isNaN(Number(rest.descontoCredito)) ? 0 : Number(rest.descontoCredito),
     ativo: true,
   }
 
   if (!id) {
-    const created = await prisma.orcamento.create({
-      data: {
-        ...prismaData,
-        itens: {
-          create: itens.map((it: any) => {
-            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
-            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
-            return {
-              etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
-              descricao: it.descricao,
-              quantidade: qty,
-              unidade: it.unidade,
-              precoUnitario: price,
-              total: Number(it.total) || (qty * price)
-            }
-          })
+    const created = await prisma.$transaction(async (tx) => {
+      // Criação via ORM (pode falhar se o cache estiver muito ruim, mas vamos tentar primeiro com campos escalares)
+      // Se falhar o descontoCredito, o erro será capturado.
+      const orc = await (tx.orcamento as any).create({
+        data: {
+          ...prismaData,
+          itens: {
+            create: itens.map((it: any) => {
+              const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
+              const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+              return {
+                etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
+                descricao: it.descricao,
+                quantidade: qty,
+                quantidadeCredito: Number(it.quantidadeCredito) || 0,
+                unidade: it.unidade,
+                precoUnitario: price,
+                total: Number(it.total) || ((qty - (Number(it.quantidadeCredito) || 0)) * price),
+                observacao: it.observacao || ""
+              }
+            })
+          }
+        },
+        include: {
+          cliente: true,
+          vendedor: true,
+          statusObj: true,
+          formaPagamentoObj: true,
+          itens: {
+            include: { etiqueta: true }
+          }
         }
+      })
+
+      // Lógica de Débito de Créditos (Valor)
+      if (prismaData.descontoCredito > 0) {
+        await tx.$executeRaw`
+          INSERT INTO "MovimentacaoCredito" ("clienteId", tipo, operacao, quantidade, descricao, "orcamentoId", "criadoEm")
+          VALUES (${prismaData.clienteId}, 'VALOR', 'DEBITO', ${prismaData.descontoCredito}, ${`Desconto no Orçamento ${orc.numero}`}, ${orc.id}, ${new Date()})
+        `
+        await tx.$executeRaw`
+          UPDATE "Cliente" SET "saldoCreditoValor" = "saldoCreditoValor" - ${prismaData.descontoCredito} WHERE id = ${prismaData.clienteId}
+        `
       }
+
+      // Lógica de Débito de Créditos (Etiquetas)
+      const etiquetasCredito = itens.reduce((sum: number, it: any) => sum + (Number(it.quantidadeCredito) || 0), 0)
+      if (etiquetasCredito > 0) {
+        await tx.$executeRaw`
+          INSERT INTO "MovimentacaoCredito" ("clienteId", tipo, operacao, quantidade, descricao, "orcamentoId", "criadoEm")
+          VALUES (${prismaData.clienteId}, 'ETIQUETA', 'DEBITO', ${etiquetasCredito}, ${`Uso de saldo de etiquetas no Orçamento ${orc.numero}`}, ${orc.id}, ${new Date()})
+        `
+        await tx.$executeRaw`
+          UPDATE "Cliente" SET "saldoCreditoEtiquetas" = "saldoCreditoEtiquetas" - ${etiquetasCredito} WHERE id = ${prismaData.clienteId}
+        `
+      }
+
+      return orc
     })
     revalidatePath("/orcamentos")
-    return created
+    return {
+      ...created,
+      status: created.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (created.statusObj?.nome?.toLowerCase() || 'rascunho'),
+      criadoEm: created.criadoEm.toISOString(),
+      atualizadoEm: created.atualizadoEm.toISOString(),
+    }
   } else {
     const updated = await prisma.orcamento.update({
       where: { id: Number(id) },
@@ -260,16 +348,33 @@ export async function saveOrcamento(data: any) {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,
               quantidade: qty,
+              quantidadeCredito: Number(it.quantidadeCredito) || 0,
               unidade: it.unidade,
               precoUnitario: price,
-              total: Number(it.total) || (qty * price)
+              total: Number(it.total) || ((qty - (Number(it.quantidadeCredito) || 0)) * price),
+              observacao: it.observacao || ""
             }
           })
+        }
+      },
+      include: {
+        cliente: true,
+        vendedor: true,
+        statusObj: true,
+        formaPagamentoObj: true,
+        itens: {
+          include: { etiqueta: true }
         }
       }
     })
     revalidatePath("/orcamentos")
     revalidatePath(`/orcamentos/${id}`)
-    return updated
+    
+    return {
+      ...updated,
+      status: updated.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (updated.statusObj?.nome?.toLowerCase() || 'rascunho'),
+      criadoEm: updated.criadoEm.toISOString(),
+      atualizadoEm: updated.atualizadoEm.toISOString(),
+    }
   }
 }

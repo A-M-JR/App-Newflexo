@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  CreditCard,
 } from "lucide-react"
 import {
   Sidebar,
@@ -187,6 +188,25 @@ export function AppSidebar() {
                     <Link href="/vendedores" className="flex items-center gap-3">
                       <UserCog className={`size-[18px] ${pathname.startsWith("/vendedores") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Vendedores</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem className="px-2">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname.startsWith("/formas-pagamento")}
+                    tooltip="Formas de Pagamento"
+                    className={`
+                      my-0.5 h-10 transition-all duration-200 
+                      ${pathname.startsWith("/formas-pagamento")
+                        ? "bg-primary/10 text-primary font-medium hover:bg-primary/15 hover:text-primary shadow-sm"
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      }
+                    `}
+                  >
+                    <Link href="/formas-pagamento" className="flex items-center gap-3">
+                      <CreditCard className={`size-[18px] ${pathname.startsWith("/formas-pagamento") ? "text-primary fill-primary/10" : ""}`} />
+                      <span>Formas de Pagto</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

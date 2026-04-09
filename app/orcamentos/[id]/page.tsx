@@ -18,17 +18,19 @@ import {
 } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown } from "lucide-react"
+import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus } from "@/lib/actions/orcamentos"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { use, useState, useEffect } from "react"
 import { PDFDownloadQuotationButton } from "@/components/pdf-download-quotation-button"
 
 function OrcamentoDetailContent({ id }: { id: string }) {
+  const router = useRouter()
   const [orcamento, setOrcamento] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -43,6 +45,9 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [etiquetasList, setEtiquetasList] = useState<any[]>([])
+  const [formasPagamento, setFormasPagamento] = useState<any[]>([])
+  const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
+  const [prazoEntrega, setPrazoEntrega] = useState("")
   const [openCatalogo, setOpenCatalogo] = useState(false)
 
   // Status mapping for the visual steps
@@ -70,8 +75,12 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     if (nextStep) {
       setIsUpdatingStatus(true)
       try {
-        await updateOrcamentoStatus(orcamento.id, nextStep)
-        setStatus(nextStep);
+        const updated = await updateOrcamentoStatus(orcamento.id, nextStep)
+        if (updated) {
+          setOrcamento(updated)
+          setStatus(updated.status)
+          router.refresh()
+        }
         toast.success("Status Atualizado!", {
           description: `O orçamento avançou para: ${steps[currentStepIndex + 1].label}`
         })
@@ -89,8 +98,12 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     if (prevStep) {
       setIsUpdatingStatus(true)
       try {
-        await updateOrcamentoStatus(orcamento.id, prevStep)
-        setStatus(prevStep);
+        const updated = await updateOrcamentoStatus(orcamento.id, prevStep)
+        if (updated) {
+          setOrcamento(updated)
+          setStatus(updated.status)
+          router.refresh()
+        }
         toast.success("Status Revertido!", {
           description: `O orçamento voltou para: ${steps[currentStepIndex - 1].label}`
         })
@@ -106,8 +119,12 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const handleRejectStatus = async () => {
     setIsUpdatingStatus(true)
     try {
-      await updateOrcamentoStatus(orcamento.id, 'recusado')
-      setStatus('recusado')
+      const updated = await updateOrcamentoStatus(orcamento.id, 'recusado')
+      if (updated) {
+        setOrcamento(updated)
+        setStatus(updated.status)
+        router.refresh()
+      }
       toast.success("Orçamento sinalizado como recusado.")
     } catch {
       toast.error("Erro ao alterar o status do orçamento.")
@@ -119,15 +136,19 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   useEffect(() => {
     Promise.all([
       getOrcamentoById(Number(id)),
-      getEtiquetas()
-    ]).then(([data, etqs]) => {
+      getEtiquetas(),
+      fetch("/api/formas-pagamento").then(res => res.json())
+    ]).then(([data, etqs, formas]) => {
       if (data) {
         setOrcamento(data)
         setStatus(data.status)
         setObservacoes(data.observacoes || "")
+        setFormaPagamentoId(data.formaPagamentoId?.toString() || "")
+        setPrazoEntrega(data.prazoEntrega ? new Date(data.prazoEntrega).toISOString().split('T')[0] : "")
         setItens(data.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
       }
       setEtiquetasList(etqs)
+      setFormasPagamento(formas || [])
       setLoading(false)
     })
   }, [id])
@@ -174,22 +195,35 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     if (isSaving) return
     setIsSaving(true)
     try {
-      await saveOrcamento({
+      const updatedOrcamento = await saveOrcamento({
         id: orcamento.id,
         clienteId: orcamento.clienteId,
         vendedorId: orcamento.vendedorId,
         numero: orcamento.numero,
         totalGeral,
         observacoes,
+        prazoEntrega,
+        formaPagamentoId: formaPagamentoId ? Number(formaPagamentoId) : null,
         statusStr: status,
         itens: itens.map(it => ({
-          ...it,
+          etiquetaId: it.etiquetaId,
+          descricao: it.descricao,
+          unidade: it.unidade,
+          observacao: it.observacao || "",
           quantidade: typeof it.quantidade === 'string' ? parseFloat(String(it.quantidade).replace(',','.')) || 0 : it.quantidade,
           precoUnitario: typeof it.precoUnitario === 'string' ? parseFloat(String(it.precoUnitario).replace(',','.')) || 0 : it.precoUnitario,
           total: (typeof it.quantidade === 'string' ? parseFloat(String(it.quantidade).replace(',','.')) || 0 : it.quantidade) * 
                  (typeof it.precoUnitario === 'string' ? parseFloat(String(it.precoUnitario).replace(',','.')) || 0 : it.precoUnitario)
         }))
       })
+      
+      if (updatedOrcamento) {
+        setOrcamento(updatedOrcamento)
+        setItens(updatedOrcamento.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
+        setObservacoes(updatedOrcamento.observacoes || "")
+        // Pequena espera antes do refresh para garantir que o estado local propagou
+        setTimeout(() => router.refresh(), 100)
+      }
       
       setIsEditing(false)
       toast.success("Orçamento atualizado!", {
@@ -228,6 +262,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     
     setItens([...itens, { 
       id: nextId, 
+      etiquetaId: etq.id,
       descricao, 
       quantidade: 1, 
       unidade: "unid", 
@@ -264,6 +299,11 @@ function OrcamentoDetailContent({ id }: { id: string }) {
               <p className="text-xs text-muted-foreground mt-1 font-mono">
                 Criado em {orcamento.criadoEm ? new Date(orcamento.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Editado em {orcamento.atualizadoEm ? new Date(orcamento.atualizadoEm).toLocaleDateString('pt-BR') : 'N/D'}
               </p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/20 text-[10px] uppercase font-bold px-2 py-0">
+                  Prazo: {prazoEntrega ? new Date(prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}
+                </Badge>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 relative z-10">
@@ -506,12 +546,19 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-5 mt-2">
                       <div className="md:col-span-12">
                         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição do Produto</Label>
-                        <Textarea
-                          rows={2}
-                          value={item.descricao}
-                          onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
-                          className="bg-muted/10 font-medium resize-none border-border/50 focus-visible:ring-primary/50 text-sm py-3"
-                        />
+                        <div className="relative">
+                          <Textarea
+                            rows={2}
+                            value={item.descricao}
+                            onChange={(e) => atualizarItem(item.id, "descricao", e.target.value)}
+                            className="bg-muted/10 font-medium resize-none border-border/50 focus-visible:ring-primary/50 text-sm py-3"
+                          />
+                          {item.quantidadeCredito > 0 && (
+                            <Badge className="absolute -top-2 right-2 bg-blue-500 hover:bg-blue-600 text-[9px] h-4">
+                              Bonificação Ativa
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
                       <div className="md:col-span-3">
@@ -585,8 +632,15 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                           {item.quantidade.toLocaleString("pt-BR")}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-[13px]">{item.unidade}</TableCell>
-                        <TableCell className="text-foreground whitespace-pre-line text-[13px]">
-                          {item.descricao}
+                        <TableCell className="text-foreground whitespace-pre-line text-[13px] relative">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium">{item.descricao}</span>
+                            {item.quantidadeCredito > 0 && (
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase tracking-tighter bg-blue-50 w-fit px-1.5 rounded border border-blue-200">
+                                <Sparkles className="size-3" /> Bonificado: {item.quantidadeCredito.toLocaleString()} un
+                              </div>
+                            )}
+                          </div>
                           {item.observacao && (
                             <span className="block mt-1 text-xs text-muted-foreground italic">
                               Obs: {item.observacao}
@@ -613,20 +667,65 @@ function OrcamentoDetailContent({ id }: { id: string }) {
             <CardHeader className="bg-muted/20 border-b border-border/50 pb-3">
               <CardTitle className="text-base text-foreground font-semibold">Condições Gerais e Observações</CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
-              {isEditing ? (
-                <Textarea
-                  rows={4}
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  placeholder="Ex: Condição de pagamento 30/60 dias..."
-                  className="bg-muted/10 border-border/50 resize-none font-medium h-full min-h-[120px]"
-                />
-              ) : (
-                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line p-1">
-                  {observacoes || "Nenhuma observação geral adicionada na proposta."}
-                </p>
-              )}
+            <CardContent className="pt-4 flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <CreditCard className="size-4 text-primary" />
+                  Forma de Pagamento Padronizada
+                </Label>
+                {isEditing ? (
+                  <Select value={formaPagamentoId} onValueChange={setFormaPagamentoId}>
+                    <SelectTrigger className="bg-muted/10 border-border/50">
+                      <SelectValue placeholder="Selecione uma forma de pagamento..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formasPagamento.filter((f: any) => f.ativo).map((f: any) => (
+                        <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="text-sm font-medium p-2 bg-primary/5 rounded border border-primary/10 inline-flex items-center gap-2">
+                    {formasPagamento.find((f: any) => f.id === Number(formaPagamentoId))?.nome || "Não informada"}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 border-t border-border/50 pt-4">
+                <Label className="text-sm font-semibold">Instruções e Observações Comerciais</Label>
+                {isEditing ? (
+                  <Textarea
+                    rows={4}
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    placeholder="Ex: Condição de pagamento 30/60 dias..."
+                    className="bg-muted/10 border-border/50 resize-none font-medium min-h-[120px]"
+                  />
+                ) : (
+                  <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line p-1">
+                    {observacoes || "Nenhuma observação geral adicionada na proposta."}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2 border-t border-border/50 pt-4">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Calculator className="size-4 text-primary" />
+                  Prazo de Entrega
+                </Label>
+                {isEditing ? (
+                  <Input 
+                    type="date"
+                    value={prazoEntrega}
+                    onChange={(e) => setPrazoEntrega(e.target.value)}
+                    className="bg-muted/10 border-border/50 h-10 font-medium"
+                  />
+                ) : (
+                  <div className="text-sm font-medium p-2 bg-blue-500/5 rounded border border-blue-500/10 text-blue-700 inline-flex items-center gap-2">
+                    {prazoEntrega ? new Date(prazoEntrega).toLocaleDateString('pt-BR') : "A definir"}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 

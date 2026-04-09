@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { AIConfig, Empresa, AIUsage } from "@/lib/types"
+import { unstable_noStore as noStore } from "next/cache"
 
 // Mapping Prisma Empresa to Frontend Empresa
 function mapPrismaToEmpresa(dbEmpresa: any): Empresa {
@@ -44,6 +45,7 @@ function mapEmpresaToPrisma(empresa: Partial<Empresa>) {
 }
 
 export async function getEmpresa(): Promise<Empresa> {
+  noStore()
   try {
     let dbEmpresa = await prisma.empresa.findFirst()
     if (!dbEmpresa) {

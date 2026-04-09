@@ -149,7 +149,10 @@ function DashboardContent() {
                         <TableCell className="text-foreground max-w-[200px] truncate font-medium">{cliente?.razaoSocial || "-"}</TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{ped.vendedor?.nome || '-'}</TableCell>
                         <TableCell className="hidden lg:table-cell">
-                          <span className="flex items-center gap-1.5 text-sm text-muted-foreground"><Clock className="size-3" />{ped.prazoEntrega}</span>
+                          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Clock className="size-3" />
+                            {ped.prazoEntrega ? new Date(ped.prazoEntrega).toLocaleDateString('pt-BR') : 'N/D'}
+                          </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold text-foreground">{formatCurrency(ped.totalGeral)}</TableCell>
                         <TableCell className="text-center">

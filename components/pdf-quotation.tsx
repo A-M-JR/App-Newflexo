@@ -107,7 +107,14 @@ export function PDFQuotation({ orcamento, cliente, vendedor }: PDFQuotationProps
           <tbody>
             {orcamento.itens.map((item, index) => (
               <tr key={index} className="border border-gray-300">
-                <td className="p-2 text-gray-900">{item.descricao}</td>
+                <td className="p-2 text-gray-900 border border-gray-300">
+                  <div className="whitespace-pre-line">{item.descricao}</div>
+                  {item.observacao && (
+                    <div className="text-xs text-red-600 font-bold italic mt-1 border-l-2 border-red-200 pl-2 ml-1">
+                      OBS: {item.observacao}
+                    </div>
+                  )}
+                </td>
                 <td className="p-2 text-center text-gray-900">{item.quantidade.toLocaleString('pt-BR')}</td>
                 <td className="p-2 text-center text-gray-900">{item.unidade}</td>
                 <td className="p-2 text-right text-gray-900">

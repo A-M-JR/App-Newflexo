@@ -38,6 +38,9 @@ export interface Cliente {
   criadoEm: string
   updatedAt?: string
   ultimaCompra?: string | null
+  saldoCreditoValor: number
+  saldoCreditoEtiquetas: number
+  itensExclusivos?: any[]
 }
 
 export interface Etiqueta {
@@ -69,9 +72,11 @@ export interface ItemOrcamento {
   etiquetaId?: number
   descricao: string
   quantidade: number
+  quantidadeCredito: number
   unidade: string
   precoUnitario: number
   total: number
+  observacao?: string
 }
 
 export interface Orcamento {
@@ -86,6 +91,9 @@ export interface Orcamento {
   criadoEm: string
   atualizadoEm: string
   totalGeral: number
+  descontoCredito: number
+  formaPagamentoId?: number
+  formaPagamentoObj?: { id: number, nome: string }
   dataEmissao?: string
   dataValidade?: string
   desconto?: number
@@ -99,9 +107,11 @@ export interface ItemPedido {
   etiquetaId?: number
   descricao: string
   quantidade: number
+  quantidadeCredito: number
   unidade: string
   precoUnitario: number
   total: number
+  observacao?: string
 }
 
 export interface Pedido {
@@ -128,6 +138,8 @@ export interface Pedido {
   criadoEm: string
   atualizadoEm: string
   totalGeral: number
+  formaPagamentoId?: number
+  formaPagamentoObj?: { id: number, nome: string }
   dataEmissao?: string
   dataEntrega?: string
   prioridade?: string

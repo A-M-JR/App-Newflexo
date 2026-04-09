@@ -15,6 +15,7 @@ import { Suspense, useState, useEffect } from "react"
 import { formatCurrency } from "@/lib/mock-data"
 import { getOrcamentoById } from "@/lib/actions/orcamentos"
 import { savePedido } from "@/lib/actions/pedidos"
+import { CreditCard } from "lucide-react"
 
 function NovoPedidoForm() {
     const searchParams = useSearchParams()
@@ -23,16 +24,26 @@ function NovoPedidoForm() {
 
     const [orcamento, setOrcamento] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [formasPagamento, setFormasPagamento] = useState<any[]>([])
+    const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
 
     useEffect(() => {
-        if (orcamentoId) {
-            getOrcamentoById(Number(orcamentoId)).then((data) => {
+        Promise.all([
+            orcamentoId ? getOrcamentoById(Number(orcamentoId)) : Promise.resolve(null),
+            fetch("/api/formas-pagamento").then(res => res.json())
+        ]).then(([data, formas]) => {
+            if (data) {
                 setOrcamento(data)
-                setLoading(false)
-            }).catch(() => setLoading(false))
-        } else {
+                if (data.prazoEntrega) {
+                    setPrazoEntrega(new Date(data.prazoEntrega).toISOString().split('T')[0])
+                }
+                if (data.formaPagamentoId) {
+                    setFormaPagamentoId(data.formaPagamentoId.toString())
+                }
+            }
+            setFormasPagamento(formas || [])
             setLoading(false)
-        }
+        }).catch(() => setLoading(false))
     }, [orcamentoId])
 
     const cliente = orcamento?.cliente
@@ -44,7 +55,11 @@ function NovoPedidoForm() {
     const [numeroPistas, setNumeroPistas] = useState("1")
     const [gapEntreEtiquetas, setGapEntreEtiquetas] = useState("3mm")
 
-    const [prazoEntrega, setPrazoEntrega] = useState("15 Dias Úteis")
+    const [prazoEntrega, setPrazoEntrega] = useState(() => {
+        const d = new Date()
+        d.setDate(d.getDate() + 15)
+        return d.toISOString().split('T')[0]
+    })
     const [formaPagamento, setFormaPagamento] = useState("30/60 Dias")
     const [frete, setFrete] = useState("FOB")
     const [comprador, setComprador] = useState("")
@@ -86,7 +101,8 @@ function NovoPedidoForm() {
                 gapEntreEtiquetas,
                 numeroPistas,
                 prazoEntrega,
-                formaPagamento,
+                formaPagamento, // Keep for backward compatibility/legacy
+                formaPagamentoId: formaPagamentoId ? Number(formaPagamentoId) : null,
                 nomeVendedor: vendedor?.nome,
                 nomeComprador: comprador,
                 frete,
@@ -99,7 +115,8 @@ function NovoPedidoForm() {
                 quantidade: i.quantidade,
                 unidade: i.unidade,
                 precoUnitario: i.precoUnitario,
-                total: i.total
+                total: i.total,
+                observacao: i.observacao || ""
             }))
 
             const resp = await savePedido({ ...pedidoData, itens: reqItens })
@@ -164,12 +181,35 @@ function NovoPedidoForm() {
                     </CardHeader>
                     <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-2">
-                            <Label htmlFor="formaPagamento">Forma de Pagamento</Label>
-                            <Input id="formaPagamento" value={formaPagamento} onChange={e => setFormaPagamento(e.target.value)} placeholder="Ex: 30/60/90 Dias" required />
+                            <Label htmlFor="formaPagamento" className="flex items-center gap-1.5">
+                                <CreditCard className="size-3.5 text-primary" />
+                                Forma de Pagamento
+                            </Label>
+                            <Select value={formaPagamentoId} onValueChange={(val) => {
+                                setFormaPagamentoId(val)
+                                // Sincroniza o texto legado para manter coerência
+                                const selected = formasPagamento.find(f => f.id.toString() === val)
+                                if (selected) setFormaPagamento(selected.nome)
+                            }}>
+                                <SelectTrigger id="formaPagamento">
+                                    <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {formasPagamento.filter(f => f.ativo).map(f => (
+                                        <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="prazoEntrega">Prazo de Entrega</Label>
-                            <Input id="prazoEntrega" value={prazoEntrega} onChange={e => setPrazoEntrega(e.target.value)} placeholder="Ex: 15 Dias" required />
+                            <Input 
+                                id="prazoEntrega" 
+                                type="date"
+                                value={prazoEntrega} 
+                                onChange={e => setPrazoEntrega(e.target.value)} 
+                                required 
+                            />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="frete">Tipo de Frete</Label>

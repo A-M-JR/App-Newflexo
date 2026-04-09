@@ -14,11 +14,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus } from "lucide-react"
+import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidoById, updatePedidoStatus } from "@/lib/actions/pedidos"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { use, useState, useEffect } from "react"
 import { PDFDownloadButton } from "@/components/pdf-download-button"
 import { PDFProductionOrderButton } from "@/components/pdf-production-order-button"
@@ -31,6 +32,7 @@ export default function PedidoDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = use(params)
+  const router = useRouter()
   
   const [pedido, setPedido] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -105,8 +107,10 @@ export default function PedidoDetailPage({
     if (nextStep) {
       setIsUpdatingStatus(true)
       try {
-        await updatePedidoStatus(pedido.id, nextStep)
+        const updated = await updatePedidoStatus(pedido.id, nextStep)
+        setPedido(updated)
         setCurrentStatus(nextStep as Pedido['status']);
+        router.refresh()
         toast.success("Status Atualizado!", {
           description: `O pedido agora está na fase: ${steps[currentStepIndex + 1].label}`
         })
@@ -124,8 +128,10 @@ export default function PedidoDetailPage({
     if (prevStep) {
       setIsUpdatingStatus(true)
       try {
-        await updatePedidoStatus(pedido.id, prevStep)
+        const updated = await updatePedidoStatus(pedido.id, prevStep)
+        setPedido(updated)
         setCurrentStatus(prevStep as Pedido['status']);
+        router.refresh()
         toast.success("Status Revertido!", {
           description: `O pedido voltou para a fase: ${steps[currentStepIndex - 1].label}`
         })
@@ -293,7 +299,7 @@ export default function PedidoDetailPage({
                       <div className="mt-4 pt-4 border-t border-amber-200 dark:border-amber-800/50 flex justify-between">
                         <div>
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Prazo Acordado</span>
-                          <span className="text-sm font-black text-foreground">{pedido.prazoEntrega}</span>
+                          <span className="text-sm font-black text-foreground">{pedido.prazoEntrega ? new Date(pedido.prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}</span>
                         </div>
                         <div className="text-right">
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Tipo de Frete</span>
@@ -314,8 +320,9 @@ export default function PedidoDetailPage({
             <CardContent className="pt-6 flex-1 flex flex-col gap-5">
               <div>
                 <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Forma de Pagamento</h4>
-                <div className="bg-background border border-border/60 rounded-lg p-3 text-sm font-medium shadow-sm">
-                  {pedido.formaPagamento}
+                <div className="bg-background border border-border/60 rounded-lg p-3 text-sm font-medium shadow-sm flex items-center gap-2">
+                  <CreditCard className="size-4 text-primary" />
+                  {pedido.formaPagamentoObj?.nome || pedido.formaPagamento}
                 </div>
               </div>
               <Separator />
@@ -386,6 +393,11 @@ export default function PedidoDetailPage({
                       <TableCell className="text-muted-foreground">{item.unidade}</TableCell>
                       <TableCell className="text-foreground whitespace-pre-line">
                         {item.descricao}
+                        {item.observacao && (
+                          <span className="block mt-1 text-xs text-muted-foreground italic">
+                            Obs: {item.observacao}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right text-foreground">
                         {formatCurrency(item.precoUnitario)}

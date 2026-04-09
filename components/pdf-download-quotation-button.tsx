@@ -115,7 +115,10 @@ export function PDFDownloadQuotationButton({
       doc.setFont('helvetica', 'normal')
       doc.text(`${empresaData.razaoSocial}`, margin, y + 16)
       doc.text(`CNPJ: ${empresaData.cnpj}`, margin, y + 20)
-      doc.text(`Contato: ${empresaData.telefone} | ${empresaData.email}`, margin, y + 24)
+      
+      const contactTel = vendedor?.telefone || empresaData.telefone
+      const contactEmail = vendedor?.email || empresaData.email
+      doc.text(`Contato: ${contactTel} | ${contactEmail}`, margin, y + 24)
 
       // Informações do Documento (direita)
       doc.setFontSize(10)
@@ -181,6 +184,7 @@ export function PDFDownloadQuotationButton({
       const comerciais = [
         { label: 'Vendedor Responsável:', value: vendedor?.nome || 'N/D' },
         { label: 'Validade da Proposta:', value: '15 Dias Corridos' },
+        { label: 'Forma de Pagamento:', value: orcamento.formaPagamentoObj?.nome || 'Conforme Notas' },
       ]
 
       comerciais.forEach(c => {
@@ -229,7 +233,8 @@ export function PDFDownloadQuotationButton({
 
       orcamento.itens.forEach((item, idx) => {
         const descLines = doc.splitTextToSize(item.descricao, cols.desc.w)
-        const rowH = Math.max(10, descLines.length * 4 + 4)
+        const obsLinesCount = item.observacao ? doc.splitTextToSize(`OBS: ${item.observacao}`, cols.desc.w - 2).length : 0
+        const rowH = Math.max(10, (descLines.length + obsLinesCount) * 4 + 7)
 
         if (y + rowH > pageH - 50) {
           doc.addPage()
@@ -250,6 +255,17 @@ export function PDFDownloadQuotationButton({
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(8)
         doc.text(descLines, cols.desc.x, y + 4)
+
+        // Observação do Item - Destacada com fundo sutil ou borda
+        if (item.observacao && item.observacao.trim() !== '') {
+          const obsTop = y + 4 + (descLines.length * 4)
+          const obsLines = doc.splitTextToSize(`OBS: ${item.observacao}`, cols.desc.w - 2)
+          
+          doc.setFont('helvetica', 'bolditalic')
+          doc.setFontSize(7.5)
+          doc.setTextColor(180, 0, 0) // Vermelho escuro para destaque
+          doc.text(obsLines, cols.desc.x + 1, obsTop)
+        }
 
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...TEXT_MUTED)

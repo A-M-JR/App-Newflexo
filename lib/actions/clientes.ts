@@ -44,60 +44,25 @@ export async function getClientes(params: {
   
   const stats = counts[0] || { total_global: 0, sem_compra_30: 0, sem_compra_60: 0, total_filtrado: 0 }
 
-  // 2. Busca dos dados da página (FindMany ainda é ideal para tipagem e includes automáticos)
-  const where: any = {}
-  if (search) {
-    where.OR = [
-      { razaoSocial: { contains: search, mode: "insensitive" } },
-      { cnpj: { contains: search, mode: "insensitive" } },
-      { cidade: { contains: search, mode: "insensitive" } },
-    ]
-  }
+  // 2. Busca dos dados da página via Raw SQL para evitar problemas de cache do Prisma com novos campos
+  const limitNum = Number(limit)
+  const offsetNum = (Number(page) - 1) * limitNum
 
-  if (filter === '30d') {
-    where.OR = [
-      { ultimaCompra: { lt: trintaDiasAtras, gte: sessentaDiasAtras } },
-      { AND: [ { ultimaCompra: null }, { criadoEm: { lt: trintaDiasAtras, gte: sessentaDiasAtras } } ] }
-    ]
-  } else if (filter === '60d') {
-     const retentionFilter = {
-      OR: [
-        { ultimaCompra: { lt: sessentaDiasAtras } },
-        { AND: [ { ultimaCompra: null }, { criadoEm: { lt: sessentaDiasAtras } } ] }
-      ]
-    }
-    if (search) {
-       const searchFilter = { OR: where.OR }
-       delete where.OR
-       where.AND = [searchFilter, retentionFilter]
-    } else {
-       where.OR = retentionFilter.OR
-    }
-  }
-
-  if (mode === 'dropdown') {
-    const dbClientes = await prisma.cliente.findMany({
-      where,
-      orderBy: { razaoSocial: "asc" },
-      take: limit,
-      select: { id: true, razaoSocial: true, cnpj: true, endereco: true, cidade: true, estado: true }
-    })
-    return { data: dbClientes, total: stats.total_filtrado, page: 1, totalPages: 1 }
-  }
-
-  const dbClientes = await prisma.cliente.findMany({
-    where,
-    orderBy: { razaoSocial: "asc" },
-    skip: (page - 1) * limit,
-    take: limit,
-    include: {
-      _count: { select: { orcamentos: true, pedidos: true } }
-    }
-  })
+  const dbClientes: any[] = await prisma.$queryRaw`
+    SELECT c.*, 
+      (SELECT COUNT(*)::int FROM "Orcamento" o WHERE o."clienteId" = c.id) as orcamentos_count,
+      (SELECT COUNT(*)::int FROM "Pedido" p WHERE p."clienteId" = c.id) as pedidos_count
+    FROM "Cliente" c
+    WHERE ("razaoSocial" ILIKE ${searchPattern} OR "cnpj" ILIKE ${searchPattern} OR "cidade" ILIKE ${searchPattern})
+    AND ${filterSql}
+    ORDER BY "razaoSocial" ASC
+    LIMIT ${limitNum} OFFSET ${offsetNum}
+  `
   
   return {
     data: dbClientes.map((c: any) => ({
       ...c,
+      _count: { orcamentos: c.orcamentos_count, pedidos: c.pedidos_count },
       criadoEm: c.criadoEm.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
       ultimaCompra: c.ultimaCompra ? c.ultimaCompra.toISOString() : null,
@@ -115,23 +80,37 @@ export async function getClientes(params: {
 
 export async function getClienteById(id: number) {
   noStore()
-  const cliente = await prisma.cliente.findUnique({
-    where: { id },
-    include: {
-      orcamentos: {
-        include: { statusObj: true },
-        orderBy: { id: 'desc' }
-      },
-      pedidos: {
-        include: { statusObj: true },
-        orderBy: { id: 'desc' }
-      }
-    }
+  // Busca via Raw SQL para garantir que pegamos os campos novos (nomeFantasia, etc)
+  const results = await prisma.$queryRaw`
+    SELECT * FROM "Cliente" WHERE id = ${id}
+  ` as any[]
+
+  if (results.length === 0) return null
+  const cliente = results[0]
+
+  // Busca orçamentos e pedidos separadamente (fallback total para Raw SQL/Selective ORM)
+  const orcamentos = await prisma.orcamento.findMany({
+    where: { clienteId: id },
+    include: { statusObj: true },
+    orderBy: { id: 'desc' }
   })
-  
-  if (!cliente) return null
+
+  const pedidos = await prisma.pedido.findMany({
+    where: { clienteId: id },
+    include: { statusObj: true },
+    orderBy: { id: 'desc' }
+  })
+
+  // Falback para itens exclusivos via raw query devido a cache do Prisma
+  const itensExclusivos = await prisma.$queryRaw`
+    SELECT * FROM "ItemExclusivoCliente" WHERE "clienteId" = ${id}
+  ` as any[]
+
   return {
     ...cliente,
+    itensExclusivos,
+    orcamentos,
+    pedidos,
     criadoEm: cliente.criadoEm.toISOString(),
     updatedAt: cliente.updatedAt.toISOString(),
     ultimaCompra: cliente.ultimaCompra ? cliente.ultimaCompra.toISOString() : null,
@@ -146,12 +125,15 @@ export async function saveCliente(data: any) {
     finalEndereco = `${finalEndereco}, ${numero}`
   }
 
-  const prismaData = {
+  const prismaData: any = {
     razaoSocial: rest.razaoSocial,
+    nomeFantasia: rest.nomeFantasia || null,
     cnpj: rest.cnpj,
     ie: rest.ie || null,
     email: rest.email || null,
     telefone: rest.telefone || "",
+    compradorNome: rest.compradorNome || null,
+    compradorTelefone: rest.compradorTelefone || null,
     endereco: finalEndereco,
     cep: rest.cep || "",
     cidade: rest.cidade || "",
@@ -160,15 +142,79 @@ export async function saveCliente(data: any) {
     ativo: rest.ativo !== undefined ? rest.ativo : true,
   }
 
+  const itensExclusivos = rest.itensExclusivos || []
+
   if (!id) {
-    const created = await prisma.cliente.create({ data: prismaData })
+    const created = await prisma.$transaction(async (tx) => {
+      // Inserção manual do Cliente via raw SQL
+      const now = new Date()
+      await tx.$executeRaw`
+        INSERT INTO "Cliente" (
+          "razaoSocial", "nomeFantasia", cnpj, ie, email, telefone, 
+          "compradorNome", "compradorTelefone", endereco, cep, cidade, estado, 
+          observacoes, ativo, "saldoCreditoValor", "saldoCreditoEtiquetas", "criadoEm", "updatedAt"
+        )
+        VALUES (
+          ${prismaData.razaoSocial}, ${prismaData.nomeFantasia}, ${prismaData.cnpj}, ${prismaData.ie}, 
+          ${prismaData.email}, ${prismaData.telefone}, ${prismaData.compradorNome}, ${prismaData.compradorTelefone}, 
+          ${prismaData.endereco}, ${prismaData.cep}, ${prismaData.cidade}, ${prismaData.estado}, 
+          ${prismaData.observacoes}, ${prismaData.ativo}, 
+          ${rest.saldoCreditoValor || 0}, ${rest.saldoCreditoEtiquetas || 0}, ${now}, ${now}
+        )
+      `
+      
+      // Busca o ID gerado (Postgres)
+      const lastInsert = await tx.$queryRaw`SELECT id FROM "Cliente" ORDER BY id DESC LIMIT 1` as any[]
+      const newId = lastInsert[0].id
+
+      for (const it of itensExclusivos) {
+        await tx.$executeRaw`
+          INSERT INTO "ItemExclusivoCliente" ("clienteId", nome, descricao, preco)
+          VALUES (${newId}, ${it.nome}, ${it.descricao || null}, ${Number(it.preco) || 0})
+        `
+      }
+      return { id: newId }
+    })
     revalidatePath("/clientes")
     return created
   } else {
-    const updated = await prisma.cliente.update({
-      where: { id: Number(id) },
-      data: prismaData
+    const updated = await prisma.$transaction(async (tx) => {
+      // Usando executeRaw devido a cache do Prisma
+      await tx.$executeRaw`DELETE FROM "ItemExclusivoCliente" WHERE "clienteId" = ${Number(id)}`
+      
+      const now = new Date()
+      await tx.$executeRaw`
+        UPDATE "Cliente"
+        SET 
+          "razaoSocial" = ${prismaData.razaoSocial},
+          "nomeFantasia" = ${prismaData.nomeFantasia},
+          "cnpj" = ${prismaData.cnpj},
+          "ie" = ${prismaData.ie},
+          "email" = ${prismaData.email},
+          "telefone" = ${prismaData.telefone},
+          "compradorNome" = ${prismaData.compradorNome},
+          "compradorTelefone" = ${prismaData.compradorTelefone},
+          "endereco" = ${prismaData.endereco},
+          "cep" = ${prismaData.cep},
+          "cidade" = ${prismaData.cidade},
+          "estado" = ${prismaData.estado},
+          "observacoes" = ${prismaData.observacoes},
+          "ativo" = ${prismaData.ativo},
+          "saldoCreditoValor" = ${rest.saldoCreditoValor !== undefined ? rest.saldoCreditoValor : 0},
+          "saldoCreditoEtiquetas" = ${rest.saldoCreditoEtiquetas !== undefined ? rest.saldoCreditoEtiquetas : 0},
+          "updatedAt" = ${now}
+        WHERE id = ${Number(id)}
+      `
+
+      for (const it of itensExclusivos) {
+        await tx.$executeRaw`
+          INSERT INTO "ItemExclusivoCliente" ("clienteId", nome, descricao, preco)
+          VALUES (${Number(id)}, ${it.nome}, ${it.descricao || null}, ${Number(it.preco) || 0})
+        `
+      }
+      return { id: Number(id) }
     })
+    
     revalidatePath("/clientes")
     revalidatePath(`/clientes/${id}`)
     return updated

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Save, Building2, MapPin, Contact } from "lucide-react"
+import { ArrowLeft, Save, Building2, MapPin, Contact, UserCircle, Sparkles, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -58,16 +58,20 @@ function NovoClienteContent() {
     const searchParams = useSearchParams()
     const [formData, setFormData] = useState({
         razaoSocial: "",
+        nomeFantasia: "",
         cnpj: "",
         ie: "",
         telefone: "",
-        email: "", // novo campo
+        email: "",
+        compradorNome: "",
+        compradorTelefone: "",
         cep: "",
         endereco: "",
-        numero: "", // novo campo
+        numero: "",
         cidade: "",
         estado: "",
-        observacoes: ""
+        observacoes: "",
+        itensExclusivos: [] as { nome: string; preco: string; descricao?: string }[]
     })
 
     // 🤖 Automação via IA: Preenchimento proativo baseado na URL
@@ -127,14 +131,15 @@ function NovoClienteContent() {
             if (res.ok) {
                 setFormData(prev => ({
                     ...prev,
-                    razaoSocial: data.razao_social || data.nome_fantasia || prev.razaoSocial,
-                    cep: data.cep ? maskCEP(data.cep.toString()) : prev.cep,
-                    endereco: data.logradouro || prev.endereco,
-                    numero: data.numero || prev.numero,
-                    cidade: data.municipio || prev.cidade,
-                    estado: data.uf || prev.estado,
-                    telefone: data.ddd_telefone_1 ? maskPhone(data.ddd_telefone_1.toString()) : prev.telefone,
-                    email: data.email || prev.email,
+                razaoSocial: data.razao_social || data.nome_fantasia || prev.razaoSocial,
+                nomeFantasia: data.nome_fantasia || prev.nomeFantasia,
+                cep: data.cep ? maskCEP(data.cep.toString()) : prev.cep,
+                endereco: data.logradouro || prev.endereco,
+                numero: data.numero || prev.numero,
+                cidade: data.municipio || prev.cidade,
+                estado: data.uf || prev.estado,
+                telefone: data.ddd_telefone_1 ? maskPhone(data.ddd_telefone_1.toString()) : prev.telefone,
+                email: data.email || prev.email,
                 }))
                 // Limpa erros dos campos preenchidos
                 setErrors(prev => ({
@@ -192,7 +197,7 @@ function NovoClienteContent() {
                 fetchCNPJ(value)
             }
         }
-        if (name === "telefone") value = maskPhone(value)
+        if (name === "telefone" || name === "compradorTelefone") value = maskPhone(value)
         if (name === "cep") {
             value = maskCEP(value)
             // Se CEP estiver completo (9 chars com o traço), busca automático
@@ -296,7 +301,7 @@ function NovoClienteContent() {
                             </CardHeader>
                             <CardContent className="grid gap-4 sm:grid-cols-2">
                                 <div className="sm:col-span-2 space-y-2">
-                                    <Label htmlFor="razaoSocial" className={errors.razaoSocial ? "text-destructive" : ""}>Razão Social / Nome Fantasia *</Label>
+                                    <Label htmlFor="razaoSocial" className={errors.razaoSocial ? "text-destructive" : ""}>Razão Social *</Label>
                                     <Input
                                         id="razaoSocial"
                                         name="razaoSocial"
@@ -306,6 +311,18 @@ function NovoClienteContent() {
                                         placeholder="Ex: Industria e Comercio XYZ Ltda"
                                     />
                                     {errors.razaoSocial && <p className="text-xs text-destructive">{errors.razaoSocial}</p>}
+                                </div>
+
+                                <div className="sm:col-span-2 space-y-2">
+                                    <Label htmlFor="nomeFantasia">Nome Fantasia</Label>
+                                    <Input
+                                        id="nomeFantasia"
+                                        name="nomeFantasia"
+                                        value={formData.nomeFantasia}
+                                        onChange={handleChange}
+                                        className="bg-muted/30 focus-visible:bg-background"
+                                        placeholder="Ex: Newflexo Etiquetas"
+                                    />
                                 </div>
 
                                 <div className="space-y-2">
@@ -456,6 +473,114 @@ function NovoClienteContent() {
                                         placeholder="contato@empresa.com"
                                     />
                                 </div>
+
+                                <div className="pt-4 border-t border-border/50 space-y-4">
+                                    <div className="flex items-center gap-2 text-primary font-medium text-sm">
+                                        <UserCircle className="size-4" />
+                                        <h4>Contato Direto (Comprador)</h4>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="compradorNome">Nome do Comprador</Label>
+                                        <Input
+                                            id="compradorNome"
+                                            name="compradorNome"
+                                            value={formData.compradorNome}
+                                            onChange={handleChange}
+                                            className="bg-muted/30 focus-visible:bg-background"
+                                            placeholder="João Silva"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="compradorTelefone">Telefone do Comprador</Label>
+                                        <Input
+                                            id="compradorTelefone"
+                                            name="compradorTelefone"
+                                            value={formData.compradorTelefone}
+                                            onChange={handleChange}
+                                            maxLength={15}
+                                            className="bg-muted/30 focus-visible:bg-background"
+                                            placeholder="(00) 00000-0000"
+                                        />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Secao Itens Exclusivos */}
+                        <Card className="shadow-sm border-border/50">
+                            <CardHeader className="pb-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-primary font-medium">
+                                        <Sparkles className="size-4" />
+                                        <h3>Itens Exclusivos (Insumos)</h3>
+                                    </div>
+                                    <Button 
+                                        type="button" 
+                                        variant="outline" 
+                                        size="sm"
+                                        onClick={() => setFormData(prev => ({
+                                            ...prev,
+                                            itensExclusivos: [...prev.itensExclusivos, { nome: "", preco: "0" }]
+                                        }))}
+                                    >
+                                        <Plus className="size-4 mr-2" /> Adicionar
+                                    </Button>
+                                </div>
+                                <CardDescription>Ribbons, tubetes e outros materiais recorrentes deste cliente</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {formData.itensExclusivos.length === 0 ? (
+                                    <div className="text-center py-6 border-2 border-dashed rounded-lg text-muted-foreground text-sm">
+                                        Nenhum item exclusivo cadastrado.
+                                    </div>
+                                ) : (
+                                    formData.itensExclusivos.map((item, idx) => (
+                                        <div key={idx} className="grid grid-cols-12 gap-3 items-end p-3 rounded-lg bg-muted/20 border border-border/50">
+                                            <div className="col-span-7 space-y-1.5">
+                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Nome do Item</Label>
+                                                <Input 
+                                                    placeholder="Ex: Ribbon 110x74 Cera" 
+                                                    value={item.nome}
+                                                    onChange={(e) => {
+                                                        const newItens = [...formData.itensExclusivos];
+                                                        newItens[idx].nome = e.target.value;
+                                                        setFormData(prev => ({ ...prev, itensExclusivos: newItens }));
+                                                    }}
+                                                    className="h-8 text-sm"
+                                                />
+                                            </div>
+                                            <div className="col-span-3 space-y-1.5">
+                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Preço (R$)</Label>
+                                                <Input 
+                                                    type="number"
+                                                    step="0.01"
+                                                    placeholder="0.00" 
+                                                    value={item.preco}
+                                                    onChange={(e) => {
+                                                        const newItens = [...formData.itensExclusivos];
+                                                        newItens[idx].preco = e.target.value;
+                                                        setFormData(prev => ({ ...prev, itensExclusivos: newItens }));
+                                                    }}
+                                                    className="h-8 text-sm font-mono"
+                                                />
+                                            </div>
+                                            <div className="col-span-2 pb-0.5">
+                                                <Button 
+                                                    type="button" 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                    onClick={() => {
+                                                        const newItens = formData.itensExclusivos.filter((_, i) => i !== idx);
+                                                        setFormData(prev => ({ ...prev, itensExclusivos: newItens }));
+                                                    }}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </CardContent>
                         </Card>
 

@@ -84,14 +84,13 @@ export default function PedidosPage() {
   const KPIs = dbData?.kpis || { totalValor: 0, emAnalise: 0, emProducao: 0, separacao: 0, entregue: 0 }
   const totalPages = dbData?.totalPages || 1
 
-  const getSlaStatus = (prazo: string, status: string) => {
+  const getSlaStatus = (prazo: string | null, status: string) => {
     if (status === 'entregue') return { class: '', icon: null, text: 'Entregue', urgent: false, isLate: false }
+    if (!prazo) return { class: '', icon: null, text: 'Sem prazo', urgent: false, isLate: false }
 
-    const parts = prazo.split('/')
-    if (parts.length !== 3) return { class: '', icon: null, text: 'Prazo inválido', urgent: false, isLate: false }
+    const prazoDate = new Date(prazo)
+    if (isNaN(prazoDate.getTime())) return { class: '', icon: null, text: 'Prazo inválido', urgent: false, isLate: false }
     
-    const [d, m, y] = parts
-    const prazoDate = new Date(Number(y), Number(m) - 1, Number(d))
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
@@ -224,9 +223,19 @@ export default function PedidosPage() {
                         <TableCell><div className="flex flex-col"><span className="font-medium font-mono text-blue-500 text-[13px]">{ped.numero}</span><span className="text-[11px] font-medium text-muted-foreground">R$ {ped.totalGeral.toFixed(2)}</span></div></TableCell>
                         <TableCell><div className="font-medium text-[13px] text-foreground truncate">{ped.cliente?.razaoSocial}</div><div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {ped.cliente?.cnpj}</div></TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-[12px]">{ped.vendedor?.nome || "N/A"}</TableCell>
-                        <TableCell className="hidden md:table-cell"><div className="flex flex-col gap-1"><span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground"><Clock className="size-3.5 text-muted-foreground" />{ped.prazoEntrega}</span>{sla.urgent && (
-                          <span className={`flex items-center gap-1 text-[10px] font-bold ${sla.isLate ? 'text-red-600' : 'text-orange-600'}`}>{sla.icon}{sla.text}</span>
-                        )}</div></TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="flex flex-col gap-1">
+                            <span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
+                              <Clock className="size-3.5 text-muted-foreground" />
+                              {ped.prazoEntrega ? new Date(ped.prazoEntrega).toLocaleDateString('pt-BR') : 'N/D'}
+                            </span>
+                            {sla.urgent && (
+                              <span className={`flex items-center gap-1 text-[10px] font-bold ${sla.isLate ? 'text-red-600' : 'text-orange-600'}`}>
+                                {sla.icon}{sla.text}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right"><StatusBadge statusObj={ped.statusObj} fallback={ped.status} /></TableCell>
                         <TableCell className="text-right pr-6"><Link href={`/pedidos/${ped.id}`}><Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button></Link></TableCell>
                       </TableRow>

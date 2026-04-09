@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -17,12 +18,14 @@ import {
 } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check, CreditCard, Wallet, MinusCircle, AlertCircle } from "lucide-react"
 import { etiquetas, formatCurrency } from "@/lib/mock-data"
-import { getClientes } from "@/lib/actions/clientes"
+import { getClientes, getClienteById } from "@/lib/actions/clientes"
 import { getVendedores } from "@/lib/actions/vendedores"
 import { getOrcamentos, saveOrcamento } from "@/lib/actions/orcamentos"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -66,13 +69,31 @@ function NovoOrcamentoContent() {
   const [etiquetasList, setEtiquetasList] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [formasPagamento, setFormasPagamento] = useState<any[]>([])
+  const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
+  const [prazoEntrega, setPrazoEntrega] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 15)
+    return d.toISOString().split('T')[0]
+  })
+  
+  // Estados de Crédito
+  const [descontoCredito, setDescontoCredito] = useState<number>(0)
+  const [itensCreditoQtd, setItensCreditoQtd] = useState<Record<string, number>>({}) // id -> quantidade bonificada
 
   useEffect(() => {
-    Promise.all([getClientes({ limit: 100, mode: 'dropdown' }), getVendedores(), getOrcamentos({ limit: 50, mode: 'history' }), getEtiquetas()]).then(([cls, vds, orcs, etqs]) => {
+    Promise.all([
+      getClientes({ limit: 100, mode: 'full' }), // Mudado para 'full' para trazer itensExclusivos
+      getVendedores(), 
+      getOrcamentos({ limit: 50, mode: 'history' }), 
+      getEtiquetas(),
+      fetch("/api/formas-pagamento").then(res => res.json())
+    ]).then(([cls, vds, orcs, etqs, formas]) => {
       setClientes(cls.data || [])
       setVendedores(vds)
       setTodosOrcamentos(orcs.data || [])
       setEtiquetasList(etqs)
+      setFormasPagamento(formas || [])
       setLoading(false)
     })
   }, [])
@@ -128,15 +149,25 @@ function NovoOrcamentoContent() {
   const itensAnteriores = historicoOrcamentos.flatMap((o) => o.itens || [])
 
   // Auto-expand repurchase section when customer with history is selected
-  const handleClienteChange = (id: string) => {
+  const handleClienteChange = async (id: string) => {
     const numId = Number(id)
     setClienteId(numId)
+    
+    // Busca dados completos do cliente (especialmente itens exclusivos)
+    const fullCliente = await getClienteById(numId)
+    if (fullCliente) {
+      setClientes(prev => prev.map(c => c.id === numId ? fullCliente : c))
+    }
+
     const hasHistory = todosOrcamentos.filter(o => o.clienteId === numId).length > 0
     setShowRecompra(hasHistory)
   }
 
   // Sugestões de Etiquetas para o Cliente Selecionado
   const etiquetasSugeridas = clienteId ? etiquetasList.filter(e => e.clientesIds?.includes(Number(clienteId))) : []
+  
+  // Sugestões de Itens Exclusivos (Insumos) para o Cliente Selecionado
+  const itensExclusivosSugeridos = clienteSelecionado?.itensExclusivos || []
 
   function adicionarItem() {
     setItens([...itens, { id: Math.random().toString(36).substr(2, 9), descricao: "", quantidade: 1, unidade: "unid", precoUnitario: "", observacao: "" }])
@@ -148,6 +179,34 @@ function NovoOrcamentoContent() {
 
   function atualizarItem(id: string, field: keyof NovoItem, value: string | number) {
     setItens(itens.map(item => item.id === id ? { ...item, [field]: value } : item))
+  }
+
+  function atualizarCreditoItem(id: string, qtd: number) {
+    const item = itens.find(it => it.id === id)
+    if (!item) return
+
+    const qtdTotal = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade
+    
+    if (qtd < 0) qtd = 0
+    if (qtd > qtdTotal) {
+      qtd = qtdTotal
+      toast.warning("Bonificação limitada à quantidade total do item.")
+    }
+
+    // Validação de Saldo Global (considerando outros itens já bonificados)
+    const saldoDisponivel = (clienteSelecionado?.saldoCreditoEtiquetas ?? 0)
+    const outrosItensAbaixo = Object.entries(itensCreditoQtd)
+      .filter(([itemId]) => itemId !== id)
+      .reduce((sum, [, q]) => sum + q, 0)
+    
+    if (outrosItensAbaixo + qtd > saldoDisponivel) {
+      qtd = Math.max(0, saldoDisponivel - outrosItensAbaixo)
+      toast.error("Saldo de etiquetas insuficiente para este valor!", {
+        description: `Saldo restante após outros itens: ${qtd.toLocaleString()} un.`
+      })
+    }
+
+    setItensCreditoQtd(prev => ({ ...prev, [id]: qtd }))
   }
 
   function adicionarRecompra(descricao: string, precoUnitario: number | string) {
@@ -172,11 +231,29 @@ function NovoOrcamentoContent() {
     setOpenCatalogo(false)
   }
 
-  const totalGeral = itens.reduce((sum, item) => {
-    const qtd = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade
-    const preco = typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',','.')) || 0 : item.precoUnitario
-    return sum + qtd * preco
+  function adicionarItemExclusivo(item: any) {
+    setItens([...itens, { 
+      id: Math.random().toString(36).substr(2, 9), 
+      descricao: item.nome, 
+      quantidade: 1, 
+      unidade: "unid", 
+      precoUnitario: item.preco || 0, 
+      observacao: item.descricao || "Item exclusivo cadastrado"
+    }])
+    toast.success(`${item.nome} adicionado!`)
+  }
+
+  const totalGeralBruto = itens.reduce((sum, item) => {
+    const qtdBonificada = itensCreditoQtd[item.id] || 0
+    const qtdTotal = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade
+    const qtdCobrada = Math.max(0, qtdTotal - qtdBonificada)
+    const price = typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',','.')) || 0 : item.precoUnitario
+    return sum + (qtdCobrada * price)
   }, 0)
+
+  const totalGeral = Math.max(0, totalGeralBruto - descontoCredito)
+
+  const totalEtiquetasNoCredito = Object.values(itensCreditoQtd).reduce((sum, q) => sum + q, 0)
 
   async function handleSalvar() {
     if (isSaving) return
@@ -199,14 +276,26 @@ function NovoOrcamentoContent() {
         clienteId,
         vendedorId,
         observacoes,
+        formaPagamentoId: formaPagamentoId ? Number(formaPagamentoId) : null,
         totalGeral,
-        itens: itens.map(it => ({
-          ...it,
-          quantidade: typeof it.quantidade === 'string' ? parseFloat(it.quantidade.replace(',','.')) || 0 : it.quantidade,
-          precoUnitario: typeof it.precoUnitario === 'string' ? parseFloat(it.precoUnitario.replace(',','.')) || 0 : it.precoUnitario,
-          total: (typeof it.quantidade === 'string' ? parseFloat(it.quantidade.replace(',','.')) || 0 : it.quantidade) * 
-                 (typeof it.precoUnitario === 'string' ? parseFloat(it.precoUnitario.replace(',','.')) || 0 : it.precoUnitario)
-        }))
+        descontoCredito,
+        prazoEntrega,
+        etiquetasCredito: totalEtiquetasNoCredito,
+        itens: itens.map(it => {
+          const qCredito = itensCreditoQtd[it.id] || 0
+          const qtyTotal = typeof it.quantidade === 'string' ? parseFloat(it.quantidade.replace(',','.')) || 0 : it.quantidade
+          const price = typeof it.precoUnitario === 'string' ? parseFloat(it.precoUnitario.replace(',','.')) || 0 : it.precoUnitario
+          const itemTotal = (qtyTotal - qCredito) * price
+          
+          return {
+            ...it,
+            quantidade: qtyTotal,
+            quantidadeCredito: qCredito,
+            precoUnitario: price,
+            total: itemTotal,
+            observacao: qCredito > 0 ? `BONIFICADO: ${qCredito.toLocaleString()} un. ${it.observacao || ""}` : it.observacao
+          }
+        })
       })
 
       toast.success("Orcamento salvo com sucesso!", {
@@ -329,68 +418,154 @@ function NovoOrcamentoContent() {
                   </p>
                 </div>
               )}
+
+              <div className="space-y-2 pt-2">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Prazo de Entrega Estimado</Label>
+                <div className="relative">
+                  <Calculator className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground z-10" />
+                  <Input 
+                    type="date"
+                    value={prazoEntrega} 
+                    onChange={(e) => setPrazoEntrega(e.target.value)} 
+                    className="pl-9 h-10 bg-muted/30 border-border/50 focus-visible:ring-primary/50"
+                  />
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Seção Sugestões de Etiquetas do Cliente */}
-        {etiquetasSugeridas.length > 0 && (
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="size-4 text-amber-500" />
-              <h3 className="text-sm font-bold text-foreground">Matrizes Exclusivas Deste Cliente</h3>
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {etiquetasSugeridas.map(etq => (
-                <div
-                  key={etq.id}
-                  onClick={() => adicionarEtiquetaCatalogo(etq.id.toString())}
-                  className="min-w-[280px] max-w-[280px] border border-amber-200 bg-amber-50/50 hover:bg-amber-100/50 dark:border-amber-900/50 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 rounded-lg p-3 cursor-pointer transition-all shadow-sm group"
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-semibold text-sm text-amber-900 dark:text-amber-400 group-hover:underline truncate pr-2">
-                      {etq.nome}
-                    </span>
-                    <Badge variant="outline" className="text-[9px] bg-background shrink-0 border-amber-200">{etq.codigo}</Badge>
-                  </div>
-                  <p className="text-xs text-amber-700/80 dark:text-amber-500/80 line-clamp-1 mb-2">
-                    {etq.material} | {etq.largura}x{etq.altura}mm | {etq.numeroCores} Cor(es)
-                  </p>
-                  <Button variant="secondary" size="sm" className="w-full h-7 text-[10px] bg-amber-200/50 hover:bg-amber-300/50 text-amber-800 dark:bg-amber-800/50 dark:text-amber-200">
-                    <Plus className="size-3 mr-1" /> Adicionar ao Orçamento
+        {/* Central de Sugestões e Créditos (Compactada) */}
+        {clienteSelecionado && (
+          <div className="space-y-4">
+            {/* Barra de Créditos Compacta */}
+            {((clienteSelecionado.saldoCreditoValor ?? 0) > 0 || (clienteSelecionado.saldoCreditoEtiquetas ?? 0) > 0) && (
+              <div className="flex flex-wrap items-center gap-2 p-2 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs animate-in fade-in zoom-in-95">
+                <Wallet className="size-3.5 text-emerald-600" />
+                <span className="font-bold text-emerald-800 uppercase tracking-tight">Saldos:</span>
+                {(clienteSelecionado.saldoCreditoValor ?? 0) > 0 && (
+                  <Badge variant="outline" className="bg-emerald-100/50 text-emerald-700 border-emerald-200">
+                    Valor: {formatCurrency(clienteSelecionado.saldoCreditoValor)}
+                  </Badge>
+                )}
+                {(clienteSelecionado.saldoCreditoEtiquetas ?? 0) > 0 && (
+                  <Badge variant="outline" className="bg-blue-100/50 text-blue-700 border-blue-200">
+                    Etiquetas: {(clienteSelecionado.saldoCreditoEtiquetas ?? 0).toLocaleString()} un
+                  </Badge>
+                )}
+                {(clienteSelecionado.saldoCreditoValor ?? 0) > 0 && descontoCredito === 0 && (
+                  <Button 
+                    variant="link" 
+                    size="sm" 
+                    className="h-auto p-0 text-emerald-600 underline text-[10px] ml-auto font-bold"
+                    onClick={() => setDescontoCredito(clienteSelecionado.saldoCreditoValor ?? 0)}
+                  >
+                    Usar Saldo R$
                   </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                )}
+              </div>
+            )}
 
-        {/* Histórico de Recompra (Full Width se aberto) */}
-        {showRecompra && itensAnteriores.length > 0 && (
-          <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2">
-            <div className="flex items-center gap-2 mb-4">
-              <RotateCcw className="size-4 text-primary" />
-              <p className="text-sm font-bold text-foreground">Itens de Pedidos Anteriores (Recompra Rápida)</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-2">
-              {itensAnteriores.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex flex-col justify-between rounded-md border border-primary/20 bg-background/80 p-3 hover:bg-background hover:border-primary/50 transition-all cursor-pointer shadow-sm group"
-                  onClick={() => adicionarRecompra(item.descricao, item.precoUnitario)}
-                >
-                  <span className="text-xs text-foreground line-clamp-2 font-medium mb-2 group-hover:text-primary transition-colors">
-                    {item.descricao}
-                  </span>
-                  <div className="flex justify-between items-center mt-auto">
-                    <span className="text-[10px] text-muted-foreground uppercase">Adicionar</span>
-                    <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                      {formatCurrency(item.precoUnitario)}/{item.unidade}
-                    </span>
+            {/* Abas de Sugestões */}
+            {(etiquetasSugeridas.length > 0 || itensExclusivosSugeridos.length > 0 || (showRecompra && itensAnteriores.length > 0)) && (
+              <Tabs defaultValue={itensAnteriores.length > 0 ? "recompra" : "matrizes"} className="w-full">
+                <TabsList className="grid w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
+                  <TabsTrigger value="recompra" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensAnteriores.length === 0}>
+                    <RotateCcw className="size-3 mr-1.5" /> Histórico
+                  </TabsTrigger>
+                  <TabsTrigger value="matrizes" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={etiquetasSugeridas.length === 0}>
+                    <Sparkles className="size-3 mr-1.5" /> Matrizes
+                  </TabsTrigger>
+                  <TabsTrigger value="insumos" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensExclusivosSugeridos.length === 0}>
+                    <Plus className="size-3 mr-1.5" /> Insumos
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* Histórico Content */}
+                <TabsContent value="recompra" className="mt-0 outline-none">
+                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                    <ScrollArea className="h-44 pr-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {itensAnteriores.map((item, idx) => (
+                          <div
+                            key={idx}
+                            className="flex flex-col justify-between rounded-lg border border-primary/10 bg-background/60 p-2 hover:bg-background hover:border-primary/40 transition-all cursor-pointer shadow-sm group"
+                            onClick={() => adicionarRecompra(item.descricao, item.precoUnitario)}
+                          >
+                            <span className="text-[11px] leading-tight text-foreground line-clamp-2 font-medium mb-1">
+                              {item.descricao}
+                            </span>
+                            <div className="flex justify-between items-center mt-auto">
+                              <span className="text-[9px] text-muted-foreground uppercase font-bold">RECOMPRA</span>
+                              <span className="text-[10px] font-bold text-primary mr-1">
+                                {formatCurrency(item.precoUnitario)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   </div>
-                </div>
-              ))}
-            </div>
+                </TabsContent>
+
+                {/* Matrizes Content */}
+                <TabsContent value="matrizes" className="mt-0 outline-none">
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                    <ScrollArea className="h-44 pr-4">
+                      <div className="flex flex-wrap gap-2">
+                        {etiquetasSugeridas.map(etq => (
+                          <div
+                            key={etq.id}
+                            onClick={() => adicionarEtiquetaCatalogo(etq.id.toString())}
+                            className="w-[240px] border border-amber-200 bg-background hover:bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 rounded-lg p-2 cursor-pointer transition-all shadow-sm group"
+                          >
+                            <div className="flex justify-between items-start mb-1 gap-2">
+                              <span className="font-bold text-[11px] text-amber-900 dark:text-amber-400 group-hover:underline truncate">
+                                {etq.nome}
+                              </span>
+                              <Badge variant="outline" className="text-[8px] h-4 py-0 bg-background shrink-0 border-amber-200">{etq.codigo}</Badge>
+                            </div>
+                            <p className="text-[9px] text-amber-700/80 mb-1 line-clamp-1">
+                              {etq.material} • {etq.largura}x{etq.altura}mm
+                            </p>
+                            <Button variant="outline" size="sm" className="w-full h-6 text-[9px] bg-amber-100/50 hover:bg-amber-200/50 border-amber-200 text-amber-800">
+                              Adicionar Matriz
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </TabsContent>
+
+                {/* Insumos Content */}
+                <TabsContent value="insumos" className="mt-0 outline-none">
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                    <ScrollArea className="h-44 pr-4">
+                      <div className="flex flex-wrap gap-2">
+                        {itensExclusivosSugeridos.map((item: any, idx: number) => (
+                          <div
+                            key={idx}
+                            onClick={() => adicionarItemExclusivo(item)}
+                            className="w-[200px] border border-blue-200 bg-background hover:bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/20 rounded-lg p-2 cursor-pointer transition-all shadow-sm group"
+                          >
+                            <p className="font-bold text-[11px] text-blue-900 dark:text-blue-400 group-hover:underline truncate mb-1">
+                              {item.nome}
+                            </p>
+                            <p className="text-[10px] font-mono text-blue-700 mb-2">
+                              {formatCurrency(item.preco)}
+                            </p>
+                            <Button variant="outline" size="sm" className="w-full h-6 text-[9px] bg-blue-100/50 hover:bg-blue-200/50 border-blue-200 text-blue-800">
+                              Adicionar Insumo
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
           </div>
         )}
 
@@ -525,6 +700,45 @@ function NovoOrcamentoContent() {
                           placeholder="Ex: Adicionar tratamento corona, refile especial..."
                         />
                       </div>
+
+                      {(clienteSelecionado?.saldoCreditoEtiquetas ?? 0) > 0 && (
+                        <div className="md:col-span-12 pt-1 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 py-2 w-full sm:w-auto">
+                            <div className="flex flex-col gap-1.5 min-w-[120px]">
+                              <Label className="text-[10px] font-bold text-blue-700 uppercase">Bonificação Parcial</Label>
+                              <div className="relative">
+                                <Input 
+                                  type="number"
+                                  placeholder="0"
+                                  value={itensCreditoQtd[item.id] || ""}
+                                  onChange={(e) => atualizarCreditoItem(item.id, parseFloat(e.target.value) || 0)}
+                                  className={`h-8 text-xs bg-blue-50/50 border-blue-200 focus:border-blue-500 focus:ring-blue-500/20 pr-7 ${itensCreditoQtd[item.id] > 0 ? 'bg-blue-100/50 border-blue-400 font-bold text-blue-800' : ''}`}
+                                  disabled={!clienteSelecionado}
+                                />
+                                <div className="absolute right-2 top-1.5">
+                                  <Sparkles className={`size-3.5 transition-colors ${(itensCreditoQtd[item.id] || 0) > 0 ? 'text-blue-600' : 'text-blue-300'}`} />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex flex-col">
+                              <Label className="text-xs font-bold text-blue-700">Abatimento do Saldo</Label>
+                              <p className="text-[10px] text-muted-foreground italic">
+                                {(itensCreditoQtd[item.id] || 0) > 0 
+                                  ? `Cobrando apenas ${( (typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',','.')) || 0 : item.quantidade) - (itensCreditoQtd[item.id] || 0) ).toLocaleString()} un.`
+                                  : "Nenhuma bonificação aplicada"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {(itensCreditoQtd[item.id] || 0) > 0 && (
+                            <div className="flex items-center gap-2">
+                               <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-none text-[10px] py-1 px-2">PARCIALMENTE BONIFICADO</Badge>
+                               <p className="text-[10px] text-muted-foreground font-mono">-{ (itensCreditoQtd[item.id] || 0).toLocaleString() } un</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -538,14 +752,34 @@ function NovoOrcamentoContent() {
             <CardHeader className="bg-muted/20 border-b border-border/50 pb-3">
               <CardTitle className="text-base text-foreground font-semibold">Condições Gerais e Observações</CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
-              <Textarea
-                rows={4}
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Ex: Condição de pagamento 30/60 dias. Validade da proposta: 15 dias. Frete FOB..."
-                className="bg-muted/10 border-border/50 resize-none font-medium h-full"
-              />
+            <CardContent className="pt-4 flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <CreditCard className="size-4 text-primary" />
+                  Forma de Pagamento Padronizada
+                </Label>
+                <Select value={formaPagamentoId} onValueChange={setFormaPagamentoId}>
+                  <SelectTrigger className="bg-muted/10 border-border/50">
+                    <SelectValue placeholder="Selecione uma forma de pagamento..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formasPagamento.filter((f: any) => f.ativo).map((f: any) => (
+                      <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 border-t border-border/50 pt-4">
+                <Label className="text-sm font-semibold">Instruções e Observações Comerciais</Label>
+                <Textarea
+                  rows={4}
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  placeholder="Ex: Condição de pagamento 30/60 dias. Validade da proposta: 15 dias. Frete FOB..."
+                  className="bg-muted/10 border-border/50 resize-none font-medium h-full"
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -564,13 +798,52 @@ function NovoOrcamentoContent() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal Base</span>
-                    <span className="font-medium">{formatCurrency(totalGeral)}</span>
+                    <span className="font-medium">{formatCurrency(totalGeralBruto)}</span>
                   </div>
+                  {descontoCredito > 0 && (
+                    <div className="flex justify-between text-sm text-emerald-600 font-bold animate-in zoom-in-95">
+                      <span className="flex items-center gap-1"><MinusCircle className="size-3" /> Crédito Aplicado</span>
+                      <span>- {formatCurrency(descontoCredito)}</span>
+                    </div>
+                  )}
+                  {totalEtiquetasNoCredito > 0 && (
+                    <div className="flex justify-between text-[10px] text-blue-600 font-bold border-t border-blue-100 pt-1">
+                      <span>ITENS NO CRÉDITO</span>
+                      <span>{totalEtiquetasNoCredito.toLocaleString()} UN</span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="pt-4">
-                  <p className="text-[11px] text-muted-foreground uppercase font-semibold mb-1">Total Geral Aprovado</p>
-                  <p className="text-4xl font-black text-primary truncate">{formatCurrency(totalGeral)}</p>
+                <div className="pt-4 flex flex-col gap-2">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground uppercase font-semibold mb-1">Total Líquido</p>
+                      {totalGeral === 0 && (
+                        <Badge className="bg-pink-100 text-pink-700 hover:bg-pink-100 border-none text-[10px] mb-1 animate-pulse">
+                          ORÇAMENTO DE BONIFICAÇÃO
+                        </Badge>
+                      )}
+                      <p className="text-4xl font-black text-primary truncate">{formatCurrency(totalGeral)}</p>
+                    </div>
+                    {descontoCredito > 0 && (
+                      <Button variant="ghost" size="icon" onClick={() => setDescontoCredito(0)} className="text-muted-foreground size-8">
+                        <RotateCcw className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {clienteSelecionado && clienteSelecionado.saldoCreditoValor > 0 && (
+                     <div className="mt-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground mb-1 block">Abatimento Manual (R$)</Label>
+                        <Input 
+                          type="number" 
+                          max={clienteSelecionado.saldoCreditoValor}
+                          value={descontoCredito}
+                          onChange={(e) => setDescontoCredito(Math.min(clienteSelecionado.saldoCreditoValor, Number(e.target.value)))}
+                          className="h-8 text-xs bg-emerald-50 border-emerald-200"
+                        />
+                     </div>
+                  )}
                 </div>
               </div>
 

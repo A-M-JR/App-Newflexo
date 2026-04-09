@@ -15,8 +15,7 @@ export async function getAIContextSummary() {
     // 1. Pedidos e SLA (Atrasados)
     const pedidosAtrasados = pedidos.filter(p => {
         if (!p.prazoEntrega) return false
-        const [day, month, year] = p.prazoEntrega.split('/').map(Number)
-        const dataEntrega = new Date(year, month - 1, day)
+        const dataEntrega = new Date(p.prazoEntrega)
         return dataEntrega < today && p.statusObj?.nome !== 'Entregue' && p.statusObj?.nome !== 'Cancelado'
     })
 
@@ -60,7 +59,7 @@ export async function getAIContextSummary() {
         summary += `ALERTAS DE SLA (Pedidos Atrasados):\n`
         pedidosAtrasados.forEach(p => {
             const cli = p.cliente
-            summary += `- Pedido ${p.numero} - ${cli?.razaoSocial} (Prazo: ${p.prazoEntrega})\n`
+            summary += `- Pedido ${p.numero} - ${cli?.razaoSocial} (Prazo: ${p.prazoEntrega ? new Date(p.prazoEntrega).toLocaleDateString('pt-BR') : 'N/D'})\n`
         })
         summary += `\n`
     }

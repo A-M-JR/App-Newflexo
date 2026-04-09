@@ -12,6 +12,6 @@ export default defineConfig({
   },
   engine: "library",
   datasource: {
-    url: env("DATABASE_URL"),
+    url: env("DB_URL_OFFICIAL"),
   },
 });

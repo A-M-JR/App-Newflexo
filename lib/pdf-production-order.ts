@@ -160,7 +160,7 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         // Data Entrega e PCP
         drawBox(doc, mx + 150, y, w - 150, qH + 5, "DATA DE ENTREGA:");
         doc.setFontSize(9);
-        doc.text(pedido.prazoEntrega, mx + 152, y + 11);
+        doc.text(pedido.prazoEntrega ? new Date(pedido.prazoEntrega).toLocaleDateString('pt-BR') : "N/D", mx + 152, y + 11);
 
         drawBox(doc, mx + 150, y + qH + 5, w - 150, qH + 5, "PCP:");
 
@@ -245,6 +245,13 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(10);
         doc.text("Produto: " + item.descricao, mx + 50, y + 60);
+
+        if (item.observacao) {
+            doc.setFontSize(9);
+            doc.setTextColor(...VERMELHO_DESTAQUE);
+            doc.text("Observação do Item: " + item.observacao, mx + 50, y + 70);
+            doc.setTextColor(...PRETO);
+        }
 
         y += arteHeight;
 

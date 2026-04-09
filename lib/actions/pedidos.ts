@@ -110,21 +110,19 @@ export async function getPedidos(params: {
     status: mapStatusIdToStr(p.statusObj?.nome || ''),
     criadoEm: p.criadoEm.toISOString(),
     atualizadoEm: p.atualizadoEm.toISOString(),
+    prazoEntrega: p.prazoEntrega ? p.prazoEntrega.toISOString() : null,
   }))
 
   if (params.apenasSla) {
     pedidos = pedidos.filter((p: any) => {
-      if (p.status === 'entregue') return false
-      const parts = p.prazoEntrega.split('/')
-      if (parts.length === 3) {
-        const [d, m, y] = parts
-        const prazoDate = new Date(Number(y), Number(m) - 1, Number(d))
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const diffDays = Math.ceil((prazoDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        return diffDays <= 3
-      }
-      return false
+      if (p.status === 'entregue' || !p.prazoEntrega) return false
+      
+      const prazoDate = new Date(p.prazoEntrega)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      
+      const diffDays = Math.ceil((prazoDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      return diffDays <= 3 // SLA: faltando 3 dias ou menos
     })
   }
   
@@ -152,6 +150,7 @@ export async function getPedidoById(id: number) {
       cliente: true,
       statusObj: true,
       vendedor: true,
+      formaPagamentoObj: true,
       itens: {
         include: { etiqueta: true }
       }
@@ -164,6 +163,7 @@ export async function getPedidoById(id: number) {
     status: mapStatusIdToStr(pedido.statusObj?.nome || ''),
     criadoEm: pedido.criadoEm.toISOString(),
     atualizadoEm: pedido.atualizadoEm.toISOString(),
+    prazoEntrega: pedido.prazoEntrega ? pedido.prazoEntrega.toISOString() : null,
   }
 }
 
@@ -177,13 +177,24 @@ export async function updatePedidoStatus(id: number, statusIdent: string | numbe
   const updated = await prisma.pedido.update({
     where: { id },
     data: { statusId },
-    include: { statusObj: true }
+    include: { 
+      statusObj: true,
+      cliente: true,
+      vendedor: true,
+      formaPagamentoObj: true,
+      itens: {
+        include: { etiqueta: true }
+      }
+    }
   })
   revalidatePath("/pedidos")
   revalidatePath(`/pedidos/${id}`)
   return {
     ...updated,
-    status: mapStatusIdToStr(updated.statusObj?.nome || '')
+    status: mapStatusIdToStr(updated.statusObj?.nome || ''),
+    criadoEm: updated.criadoEm.toISOString(),
+    atualizadoEm: updated.atualizadoEm.toISOString(),
+    prazoEntrega: updated.prazoEntrega ? updated.prazoEntrega.toISOString() : null,
   }
 }
 
@@ -223,13 +234,14 @@ export async function savePedido(data: any) {
     numeroPistas: Number(rest.numeroPistas) || 1,
     observacoesEmbalagem: rest.observacoesEmbalagem || "",
     observacoesFaturamento: rest.observacoesFaturamento || "",
-    prazoEntrega: rest.prazoEntrega || "15 dias",
+    prazoEntrega: rest.prazoEntrega ? new Date(rest.prazoEntrega) : null,
     formaPagamento: rest.formaPagamento || "A combinar",
     nomeVendedor: rest.nomeVendedor || "",
     nomeComprador: rest.nomeComprador || "",
     frete: rest.frete || "FOB",
     observacoesGerais: rest.observacoesGerais || "",
     totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
+    formaPagamentoId: rest.formaPagamentoId ? Number(rest.formaPagamentoId) : null,
     ativo: true,
   }
 
@@ -245,14 +257,36 @@ export async function savePedido(data: any) {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,
               quantidade: qty,
+              quantidadeCredito: Number(it.quantidadeCredito) || 0,
               unidade: it.unidade,
               precoUnitario: price,
-              total: Number(it.total) || (qty * price)
+              total: Number(it.total) || ((qty - (Number(it.quantidadeCredito) || 0)) * price),
+              observacao: it.observacao || ""
             }
           })
         }
+      },
+      include: {
+        cliente: true,
+        vendedor: true,
+        statusObj: true,
+        formaPagamentoObj: true,
+        itens: {
+          include: { etiqueta: true }
+        }
       }
     })
+    // Se for gerado a partir de um orçamento, atualiza o status do orçamento para "Aprovado"
+    if (created.orcamentoId) {
+      const statusAprovadoId = await getOrCreateStatus('aprovado', 'orcamento')
+      await prisma.orcamento.update({
+        where: { id: created.orcamentoId },
+        data: { statusId: statusAprovadoId }
+      })
+      revalidatePath("/orcamentos")
+      revalidatePath(`/orcamentos/${created.orcamentoId}`)
+    }
+
     revalidatePath("/pedidos")
     return created
   } else {
@@ -270,11 +304,22 @@ export async function savePedido(data: any) {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,
               quantidade: qty,
+              quantidadeCredito: Number(it.quantidadeCredito) || 0,
               unidade: it.unidade,
               precoUnitario: price,
-              total: Number(it.total) || (qty * price)
+              total: Number(it.total) || ((qty - (Number(it.quantidadeCredito) || 0)) * price),
+              observacao: it.observacao || ""
             }
           })
+        }
+      },
+      include: {
+        cliente: true,
+        vendedor: true,
+        statusObj: true,
+        formaPagamentoObj: true,
+        itens: {
+          include: { etiqueta: true }
         }
       }
     })
