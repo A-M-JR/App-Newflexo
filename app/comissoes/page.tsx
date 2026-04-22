@@ -13,17 +13,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Search, DollarSign, Wallet, TrendingUp, Calendar, ChevronRight, ChevronDown } from "lucide-react"
+import { Search, DollarSign, Wallet, TrendingUp, Calendar, ChevronRight, ChevronDown, HelpCircle } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { getComissoes } from "@/lib/actions/comissoes"
 import { useState, useMemo, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 export default function ComissoesPage() {
   const [search, setSearch] = useState("")
-  const { isVendedor, vendedor, isAdmin } = useAuth()
+  const { isVendedor, vendedor, isAdmin, currentUser } = useAuth()
   
   // Controle de Mês Atual
   const now = new Date()
@@ -37,8 +39,11 @@ export default function ComissoesPage() {
   const vendedorId = isVendedor ? vendedor?.id : undefined
 
   const { data: dbData, isLoading: loading } = useDataQuery<any>({
-    key: `comissoes-${vendedorId || 'admin'}`,
-    fetcher: () => getComissoes(vendedorId)
+    key: `comissoes-${vendedorId || 'admin'}-${periodo}`,
+    fetcher: () => {
+      const [ano, mes] = periodo.split('-').map(Number)
+      return getComissoes(vendedorId, mes, ano, currentUser?.id)
+    }
   })
 
   const todasParcelas = dbData?.dados || []
@@ -54,12 +59,12 @@ export default function ComissoesPage() {
 
   // Calcula KPIs focados no Mês
   const kpisMes = useMemo(() => {
-    const totalComissoes = parcelasDoMes.reduce((acc, curr) => acc + curr.valorComissao, 0)
+    const totalComissoes = parcelasDoMes.reduce((acc: number, curr: any) => acc + curr.valorComissao, 0)
     // Para nao somar duplicado do mesmo pedido, usamos um set
-    const pedidosUnicos = new Set(parcelasDoMes.map(p => p.pedidoId))
+    const pedidosUnicos = new Set(parcelasDoMes.map((p: any) => p.pedidoId))
     return {
-      totalVendas: kpisRaw.totalVendas, // Mantém o total de vendas histórico ou altera para vendas do mês
-      totalComissoes, // O que ele vai GANHAR no mes
+      totalVendas: kpisRaw.totalVendas, // Agora o servidor já devolve o total das vendas criadas NO MÊS
+      totalComissoes, // O que ele vai GANHAR no mes (soma das parcelas)
       pedidosEnvolvidos: pedidosUnicos.size
     }
   }, [parcelasDoMes, kpisRaw])
@@ -112,7 +117,28 @@ export default function ComissoesPage() {
       <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Comissões Mensais</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">Comissões Mensais</h1>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="size-8 rounded-full text-muted-foreground hover:text-primary">
+                    <HelpCircle className="size-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-4">
+                  <div className="space-y-3">
+                    <h4 className="font-bold text-sm border-b pb-2">Critérios de Cálculo</h4>
+                    <ul className="text-xs space-y-2 text-muted-foreground">
+                      <li><strong className="text-foreground">✓ Status:</strong> Apenas pedidos confirmados (exclui rascunhos).</li>
+                      <li><strong className="text-foreground">✓ Valor Bruto:</strong> Calculado sobre o total de itens (Qtd x Preço), ignorando abatimentos de créditos ou bonificações.</li>
+                      <li><strong className="text-foreground">✓ Rateio:</strong> Dividido automaticamente pelo número de parcelas (ex: 30/60/90 = 3 parcelas).</li>
+                      <li><strong className="text-foreground">✓ Datas:</strong> 1ª parcela na data do pedido, as demais a cada 30 dias.</li>
+                      <li><strong className="text-foreground">✓ Vendedor:</strong> Utiliza a % de comissão atual configurada no cadastro do vendedor.</li>
+                    </ul>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               {isAdmin ? "Totalizador de comissões por vendedor e previsão de pagamentos" : "Acompanhamento dos seus ganhos e parcelas previstas"}
             </p>
@@ -248,6 +274,7 @@ export default function ComissoesPage() {
                                 <TableRow className="hover:bg-transparent border-0">
                                   <TableHead className="font-semibold h-10 w-[120px]">Nº Pedido</TableHead>
                                   <TableHead className="font-semibold h-10">Cliente</TableHead>
+                                  <TableHead className="font-semibold h-10">Total Pedido / %</TableHead>
                                   <TableHead className="font-semibold h-10">Condição / Parcela</TableHead>
                                   <TableHead className="text-right font-semibold h-10 w-[160px]">Comissão Rateada</TableHead>
                                 </TableRow>
@@ -255,20 +282,39 @@ export default function ComissoesPage() {
                               <TableBody>
                                 {grupo.parcelas.map((c: any) => (
                                   <TableRow key={c.id} className="group hover:bg-muted/30 transition-colors border-border/30">
-                                    <TableCell className="font-medium font-mono text-xs text-muted-foreground group-hover:text-foreground">
-                                      {c.numero}
+                                    <TableCell className="font-medium font-mono text-xs">
+                                      <Link 
+                                        href={`/pedidos/${c.pedidoId}`}
+                                        className="text-blue-600 hover:underline flex items-center gap-1"
+                                      >
+                                        {c.numero}
+                                        <ChevronRight className="size-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                      </Link>
                                     </TableCell>
-                                    <TableCell className="text-foreground max-w-[200px] truncate">
+                                    <TableCell className="text-foreground max-w-[180px] truncate">
                                       {c.clienteNome}
                                     </TableCell>
                                     <TableCell>
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-[10px] font-medium shadow-none bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900">
-                                          {c.formaPagamentoNome}
-                                        </Badge>
-                                        <span className="text-xs text-muted-foreground font-medium">
-                                          {c.parcelaAtual}/{c.totalParcelas}
-                                        </span>
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-bold text-foreground">{formatCurrency(c.totalPedido)}</span>
+                                        <span className="text-[10px] text-muted-foreground">{c.percentual}% de comissão</span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className="text-[10px] font-medium shadow-none bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900">
+                                            {c.formaPagamentoNome}
+                                          </Badge>
+                                          <span className="text-xs text-muted-foreground font-medium">
+                                            {c.parcelaAtual}/{c.totalParcelas}
+                                          </span>
+                                        </div>
+                                        {c.totalParcelas > 1 && (
+                                          <span className="text-[9px] text-amber-600 font-bold uppercase tracking-tighter">
+                                            Rateado em {c.totalParcelas}x
+                                          </span>
+                                        )}
                                       </div>
                                     </TableCell>
                                     <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">

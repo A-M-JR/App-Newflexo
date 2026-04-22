@@ -63,6 +63,12 @@ export function PDFQuotation({ orcamento, cliente, vendedor }: PDFQuotationProps
             <span className="font-semibold text-gray-600">Telefone:</span>
             <span className="ml-2 text-gray-900">{cliente.telefone}</span>
           </p>
+          {orcamento.ocCliente && (
+            <p className="text-sm mt-1">
+              <span className="font-semibold text-gray-600">OC do Cliente:</span>
+              <span className="ml-2 text-gray-900 font-bold">{orcamento.ocCliente}</span>
+            </p>
+          )}
         </div>
         <div>
           <h3 className="font-bold text-gray-700 mb-3 border-b border-gray-300 pb-2">INFORMAÇÕES DO VENDEDOR</h3>

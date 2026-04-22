@@ -18,6 +18,7 @@ import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, T
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidoById, updatePedidoStatus } from "@/lib/actions/pedidos"
+import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { use, useState, useEffect } from "react"
@@ -33,6 +34,7 @@ export default function PedidoDetailPage({
 }) {
   const { id } = use(params)
   const router = useRouter()
+  const { currentUser } = useAuth()
   
   const [pedido, setPedido] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -40,7 +42,9 @@ export default function PedidoDetailPage({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   useEffect(() => {
-    getPedidoById(Number(id)).then(data => {
+    if (!currentUser) return
+    
+    getPedidoById(Number(id), currentUser?.id).then(data => {
       setPedido(data)
       if (data) setCurrentStatus(data.status as Pedido['status'])
       setLoading(false)
@@ -163,6 +167,7 @@ export default function PedidoDetailPage({
               </div>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Criado em {pedido.criadoEm ? new Date(pedido.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Orcamento: {pedido.orcamentoId}
+                {pedido.ocCliente && <span className="ml-2 inline-flex items-center gap-1 border-l pl-2 border-border/50">• OC Cliente: <b className="text-foreground">{pedido.ocCliente}</b></span>}
               </p>
             </div>
           </div>

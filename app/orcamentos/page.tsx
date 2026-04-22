@@ -41,7 +41,7 @@ export default function OrcamentosPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [page, setPage] = useState(1)
 
-  const { isVendedor, vendedor } = useAuth()
+  const { isVendedor, vendedor, currentUser } = useAuth()
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -64,9 +64,9 @@ export default function OrcamentosPage() {
       status: statusFilter,
       dataInicio: dateRange?.from?.toISOString(),
       dataFim: dateRange?.to?.toISOString(),
-      vendedorId: isVendedor ? vendedor?.id : undefined
+      requesterId: currentUser?.id
     }
-  }, [page, debouncedSearch, fStatus, dateRange, isVendedor, vendedor])
+  }, [page, debouncedSearch, fStatus, dateRange, isVendedor, vendedor, currentUser])
 
   const { data: dbData, isLoading: loading } = useDataQuery<any>({
     key: apiParams,

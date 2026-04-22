@@ -43,6 +43,12 @@ export interface Cliente {
   itensExclusivos?: any[]
 }
 
+export interface ClienteVinculado {
+  id: number
+  razaoSocial: string
+  preco?: number | null
+}
+
 export interface Etiqueta {
   id: number
   nome: string
@@ -62,6 +68,7 @@ export interface Etiqueta {
   coresDescricao?: string | null
   aplicacoesEspeciais?: string[]
   orientacaoRebobinagem?: string | null
+  clientesVinculados?: ClienteVinculado[]
 }
 
 export type StatusOrcamento = "rascunho" | "enviado" | "aprovado" | "recusado"
@@ -95,8 +102,8 @@ export interface Orcamento {
   formaPagamentoId?: number
   formaPagamentoObj?: { id: number, nome: string }
   dataEmissao?: string
-  dataValidade?: string
   desconto?: number
+  ocCliente?: string
 }
 
 export type StatusPedido = "em_analise" | "em_producao" | "separacao" | "faturado" | "entregue" | "cancelado"
@@ -144,6 +151,7 @@ export interface Pedido {
   dataEntrega?: string
   prioridade?: string
   desconto?: number
+  ocCliente?: string
 }
 
 export interface Empresa {

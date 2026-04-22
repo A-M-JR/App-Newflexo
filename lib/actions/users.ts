@@ -144,3 +144,18 @@ export async function verifySession(id: number) {
     } as unknown as Vendedor : null
   }
 }
+
+/**
+ * Retorna 'admin' se for administrador, ou o vendedorId se for um vendedor limitado.
+ * Usado para forçar filtros de segurança no lado do servidor.
+ */
+export async function getRequesterVendedorId(userId: number): Promise<number | 'admin'> {
+  const user = await prisma.user.findUnique({ where: { id: Number(userId) } })
+  
+  // Se o usuário não existir, não estiver ativo ou não for admin e não tiver vendedorId,
+  // retornamos -1 para garantir que ele não veja nada (filtro por ID inexistente).
+  if (!user || !user.ativo) return -1
+  if (user.role === 'admin') return 'admin'
+  
+  return user.vendedorId || -1
+}

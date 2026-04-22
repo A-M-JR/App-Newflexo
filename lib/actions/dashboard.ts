@@ -3,12 +3,22 @@
 import { prisma } from "@/lib/prisma"
 import { unstable_noStore as noStore } from "next/cache"
 import { getPedidos } from "./pedidos"
+import { getRequesterVendedorId } from "./users"
 
-export async function getDashboardMetrics(vendedorId?: number) {
-  noStore()
+export async function getDashboardMetrics(vendedorIdParam?: number, requesterId?: number) {
   
   const quarentaDiasAtras = new Date()
   quarentaDiasAtras.setDate(quarentaDiasAtras.getDate() - 40)
+
+  let vendedorId = vendedorIdParam
+  
+  // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      vendedorId = perm as number // Força o vendedorId dele
+    }
+  }
 
   const searchVendedor = vendedorId ? Number(vendedorId) : null
 
@@ -37,15 +47,17 @@ export async function getDashboardMetrics(vendedorId?: number) {
   // Buscamos clientes inativos (mais de 40 dias sem compra e que já compraram antes)
   const clienteMetrics: any[] = await prisma.$queryRaw`
     SELECT COUNT(*)::int as inativos_count
-    FROM "Cliente"
+    FROM "Cliente" c
     WHERE "ultimaCompra" < ${quarentaDiasAtras}
       AND "ultimaCompra" IS NOT NULL
+      AND (${searchVendedor}::int IS NULL OR EXISTS (SELECT 1 FROM "Pedido" p WHERE p."clienteId" = c.id AND p."vendedorId" = ${searchVendedor}))
   `
   const cliStats = clienteMetrics[0] || { inativos_count: 0 }
 
   const clientesInativosList = await prisma.cliente.findMany({
     where: {
-      ultimaCompra: { lt: quarentaDiasAtras, not: null }
+      ultimaCompra: { lt: quarentaDiasAtras, not: null },
+      pedidos: searchVendedor ? { some: { vendedorId: searchVendedor } } : undefined
     },
     take: 15,
     orderBy: { ultimaCompra: 'asc' },
@@ -60,42 +72,47 @@ export async function getDashboardMetrics(vendedorId?: number) {
   baseDate.setDate(1)
   baseDate.setHours(0,0,0,0)
 
-  // Buscar os raw para orçamentos e pedidos apenas nesses ultimos 6 meses
+  // Buscar agregação mensal via SQL para o Gráfico (muito mais rápido que carregar tudo)
   const sixMonthsAgo = new Date(baseDate)
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-  
-  const [recentOrcamentos, recentPedidos] = await Promise.all([
-    prisma.orcamento.findMany({
-      where: { 
-        vendedorId: vendedorId ? Number(vendedorId) : undefined, 
-        criadoEm: { gte: sixMonthsAgo } 
-      },
-      select: { criadoEm: true }
-    }),
-    prisma.pedido.findMany({
-      where: { 
-        vendedorId: vendedorId ? Number(vendedorId) : undefined, 
-        criadoEm: { gte: sixMonthsAgo } 
-      },
-      select: { criadoEm: true }
-    })
+
+  const [orcStatsMes, pedStatsMes] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT 
+        EXTRACT(MONTH FROM "criadoEm")::int as mes,
+        EXTRACT(YEAR FROM "criadoEm")::int as ano,
+        COUNT(*)::int as count
+      FROM "Orcamento"
+      WHERE "criadoEm" >= ${sixMonthsAgo}
+        AND (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
+        AND "ativo" = TRUE
+      GROUP BY ano, mes
+      ORDER BY ano, mes
+    `,
+    prisma.$queryRaw`
+      SELECT 
+        EXTRACT(MONTH FROM "criadoEm")::int as mes,
+        EXTRACT(YEAR FROM "criadoEm")::int as ano,
+        COUNT(*)::int as count
+      FROM "Pedido"
+      WHERE "criadoEm" >= ${sixMonthsAgo}
+        AND (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
+        AND "ativo" = TRUE
+      GROUP BY ano, mes
+      ORDER BY ano, mes
+    `
   ])
 
   for (let i = 5; i >= 0; i--) {
     const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
-    const monthNum = d.getMonth()
+    const monthNum = d.getMonth() + 1 // Postgres EXTRACT MONTH is 1-indexed
     const yearNum = d.getFullYear()
 
-    const orcsMes = recentOrcamentos.filter(o => 
-      o.criadoEm.getMonth() === monthNum && o.criadoEm.getFullYear() === yearNum
-    ).length
-
-    const pedsMes = recentPedidos.filter(p => 
-      p.criadoEm.getMonth() === monthNum && p.criadoEm.getFullYear() === yearNum
-    ).length
+    const orcsMes = orcStatsMes.find(s => s.mes === monthNum && s.ano === yearNum)?.count || 0
+    const pedsMes = pedStatsMes.find(s => s.mes === monthNum && s.ano === yearNum)?.count || 0
 
     chartData.push({
-      name: monthsNames[monthNum],
+      name: monthsNames[monthNum - 1],
       orcamentos: orcsMes,
       conversoes: pedsMes
     })

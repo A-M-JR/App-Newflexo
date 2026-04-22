@@ -42,7 +42,7 @@ export default function PedidosPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [page, setPage] = useState(1)
 
-  const { isVendedor, vendedor } = useAuth()
+  const { isVendedor, vendedor, currentUser } = useAuth()
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -62,7 +62,8 @@ export default function PedidosPage() {
       apenasSla: fSlaOnly,
       dataInicio: dateRange?.from?.toISOString(),
       dataFim: dateRange?.to?.toISOString(),
-      vendedorId: isVendedor ? vendedor?.id : undefined
+      vendedorId: isVendedor ? vendedor?.id : undefined,
+      requesterId: currentUser?.id
     }
   }, [page, debouncedSearch, fStatus, fSlaOnly, dateRange, isVendedor, vendedor])
 
@@ -76,7 +77,8 @@ export default function PedidosPage() {
       apenasSla: fSlaOnly,
       dataInicio: dateRange?.from?.toISOString(),
       dataFim: dateRange?.to?.toISOString(),
-      vendedorId: isVendedor ? vendedor?.id : undefined
+      vendedorId: isVendedor ? vendedor?.id : undefined,
+      requesterId: currentUser?.id
     })
   })
 

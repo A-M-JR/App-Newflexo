@@ -78,6 +78,12 @@ export function PDFOrder({ pedido, cliente, vendedor }: PDFOrderProps) {
             <span className="font-semibold text-gray-600">Orçamento Origem:</span>
             <span className="ml-2 text-gray-900">{pedido.orcamentoId || 'N/A'}</span>
           </p>
+          {pedido.ocCliente && (
+            <p className="text-sm mb-1">
+              <span className="font-semibold text-gray-600">OC do Cliente:</span>
+              <span className="ml-2 text-gray-900 font-bold">{pedido.ocCliente}</span>
+            </p>
+          )}
           {vendedor && (
             <>
               <p className="text-sm mb-1 mt-3 font-semibold text-blue-900 border-t pt-2">VENDEDOR</p>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Save, Building2, MapPin, Contact, FileText, Factory, UserCircle, Sparkles, Plus, Trash2, Wallet, PlusCircle, MinusCircle, History, Tag } from "lucide-react"
+import { ArrowLeft, Save, Building2, MapPin, Contact, FileText, Factory, UserCircle, Sparkles, Plus, Trash2, Wallet, PlusCircle, MinusCircle, History, Tag, ChevronRight } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getClienteById, saveCliente } from "@/lib/actions/clientes"
@@ -540,7 +540,10 @@ export default function ClienteDetailPage({
                       {clienteOrcamentos.map((orc: any) => (
                         <div key={orc.id} className="p-4 flex justify-between items-center hover:bg-muted/30 transition-colors">
                           <div className="flex flex-col">
-                            <span className="font-bold text-sm">{orc.numero}</span>
+                            <Link href={`/orcamentos/${orc.id}`} className="font-bold text-sm text-primary hover:underline flex items-center gap-1">
+                              {orc.numero}
+                              <ChevronRight className="size-3" />
+                            </Link>
                             <span className="text-xs text-muted-foreground">{new Date(orc.criadoEm).toLocaleDateString()}</span>
                           </div>
                           <div className="flex flex-col items-end">
@@ -569,7 +572,10 @@ export default function ClienteDetailPage({
                       {clientePedidos.map((ped: any) => (
                         <div key={ped.id} className="p-4 flex justify-between items-center hover:bg-muted/30 transition-colors">
                           <div className="flex flex-col">
-                            <span className="font-bold text-sm text-blue-600">{ped.numero}</span>
+                            <Link href={`/pedidos/${ped.id}`} className="font-bold text-sm text-blue-600 hover:underline flex items-center gap-1">
+                              {ped.numero}
+                              <ChevronRight className="size-3" />
+                            </Link>
                             <span className="text-xs text-muted-foreground">{new Date(ped.criadoEm).toLocaleDateString()}</span>
                           </div>
                           <div className="flex flex-col items-end">

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 import { getOrCreateStatus } from "./status"
+import { getRequesterVendedorId } from "./users"
 import { Prisma } from "@prisma/client"
 
 // Helper function map statusId string names to clean strings if they contain "Analise" "Produção" etc.
@@ -24,8 +25,8 @@ export async function getPedidos(params: {
   dataFim?: string
   vendedorId?: number
   apenasSla?: boolean
+  requesterId?: number
 } = {}) {
-  noStore()
   
   const page = params.page || 1
   const limit = params.limit || 20
@@ -42,7 +43,15 @@ export async function getPedidos(params: {
     dataFim.setDate(dataFim.getDate() + 1)
   }
   
-  const vendedorId = params.vendedorId ? Number(params.vendedorId) : null
+  let vendedorId = params.vendedorId ? Number(params.vendedorId) : null
+  
+  // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
+  if (params.requesterId) {
+    const perm = await getRequesterVendedorId(params.requesterId)
+    if (perm !== 'admin') {
+      vendedorId = perm as number // Força o vendedorId dele
+    }
+  }
 
   // 1. Otimização Global: Busca de todos os contadores em UMA ÚNICA query SQL.
   let statusFilterSql = Prisma.sql`TRUE`
@@ -102,6 +111,7 @@ export async function getPedidos(params: {
       cliente: true,
       vendedor: true,
       statusObj: true,
+      _count: { select: { itens: true } }
     }
   })
   
@@ -142,8 +152,7 @@ export async function getPedidos(params: {
   }
 }
 
-export async function getPedidoById(id: number) {
-  noStore()
+export async function getPedidoById(id: number, requesterId?: number) {
   const pedido = await prisma.pedido.findUnique({
     where: { id },
     include: {
@@ -158,6 +167,15 @@ export async function getPedidoById(id: number) {
   })
   
   if (!pedido) return null
+
+  // SEGURANÇA: Vendedor só vê o dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin' && pedido.vendedorId !== perm) {
+       return null // Acesso negado
+    }
+  }
+
   return {
     ...pedido,
     status: mapStatusIdToStr(pedido.statusObj?.nome || ''),
@@ -167,7 +185,15 @@ export async function getPedidoById(id: number) {
   }
 }
 
-export async function updatePedidoStatus(id: number, statusIdent: string | number) {
+export async function updatePedidoStatus(id: number, statusIdent: string | number, requesterId?: number) {
+  // SEGURANÇA: Vendedor só edita o dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      const ped = await prisma.pedido.findUnique({ where: { id }, select: { vendedorId: true } })
+      if (!ped || ped.vendedorId !== perm) throw new Error("Acesso negado.")
+    }
+  }
   let statusId = Number(statusIdent)
   
   if (isNaN(statusId)) {
@@ -198,8 +224,22 @@ export async function updatePedidoStatus(id: number, statusIdent: string | numbe
   }
 }
 
-export async function savePedido(data: any) {
+export async function savePedido(data: any, requesterId?: number) {
   const { id, itens, ...rest } = data
+
+  let forcedVendedorId = rest.vendedorId
+
+  // SEGURANÇA: Vendedor só mexe no dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      if (id) {
+        const ped = await prisma.pedido.findUnique({ where: { id }, select: { vendedorId: true } })
+        if (!ped || ped.vendedorId !== perm) throw new Error("Acesso negado.")
+      }
+      forcedVendedorId = perm // Força ser dele na criação ou edição
+    }
+  }
   
   if (!itens || !Array.isArray(itens)) {
     console.error("savePedido: itens is missing or not an array", data)
@@ -226,7 +266,7 @@ export async function savePedido(data: any) {
     numero: String(numero || ""),
     orcamentoId: rest.orcamentoId ? Number(rest.orcamentoId) : null,
     clienteId: Number(rest.clienteId),
-    vendedorId: Number(rest.vendedorId),
+    vendedorId: Number(forcedVendedorId || 0),
     statusId: Number(statusId),
     sentidoSaidaRolo: rest.sentidoSaidaRolo || "Ext 0º",
     tipoTubete: rest.tipoTubete || "76",
@@ -242,6 +282,7 @@ export async function savePedido(data: any) {
     observacoesGerais: rest.observacoesGerais || "",
     totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
     formaPagamentoId: rest.formaPagamentoId ? Number(rest.formaPagamentoId) : null,
+    ocCliente: rest.ocCliente || null,
     ativo: true,
   }
 
@@ -296,11 +337,11 @@ export async function savePedido(data: any) {
       data: {
         ...prismaData,
         itens: {
-          deleteMany: {},
-          create: itens.map((it: any) => {
+          deleteMany: { id: { notIn: itens.filter((i: any) => i.id).map((i: any) => Number(i.id)) } },
+          upsert: itens.map((it: any) => {
             const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
             const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
-            return {
+            const itemData = {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,
               quantidade: qty,
@@ -309,6 +350,11 @@ export async function savePedido(data: any) {
               precoUnitario: price,
               total: Number(it.total) || ((qty - (Number(it.quantidadeCredito) || 0)) * price),
               observacao: it.observacao || ""
+            }
+            return {
+              where: { id: it.id ? Number(it.id) : 0 },
+              create: itemData,
+              update: itemData
             }
           })
         }

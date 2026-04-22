@@ -80,20 +80,24 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         const opDate = formatDate(pedido.criadoEm); // Ex: 03 / 02 / 26
 
         // Data e Pasta
-        drawBox(doc, mx, y, 60, 8);
+        drawBox(doc, mx, y, 40, 8);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.text("DATA: " + opDate, mx + 2, y + 5);
 
         // Pasta (Mock info)
-        drawBox(doc, mx + 60, y, 40, 8);
-        doc.text("PASTA: X-4045", mx + 62, y + 5);
+        drawBox(doc, mx + 40, y, 35, 8);
+        doc.text("PASTA: " + (etiqueta?.pasta || "N/D"), mx + 42, y + 5);
+
+        // OC Cliente
+        drawBox(doc, mx + 75, y, 40, 8);
+        doc.text("OC CLIENTE: " + (pedido.ocCliente || ""), mx + 77, y + 5);
 
         // Representante
-        drawBox(doc, mx + 100, y, w - 100, 8);
-        doc.text("REPRESENTANTE:", mx + 102, y + 5);
+        drawBox(doc, mx + 115, y, w - 115, 8);
+        doc.text("REPRESENTANTE:", mx + 117, y + 5);
         doc.setTextColor(...VERMELHO_DESTAQUE);
-        doc.text(vendedor ? vendedor.nome.toUpperCase() : "", mx + 135, y + 5);
+        doc.text(vendedor ? vendedor.nome.toUpperCase() : "", mx + 145, y + 5);
         doc.setTextColor(...PRETO);
 
         y += 8;

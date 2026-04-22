@@ -27,12 +27,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 function DashboardContent() {
   const [search, setSearch] = useState("")
-  const { isVendedor, vendedor } = useAuth()
-
+  const { isVendedor, vendedor, currentUser } = useAuth()
+  
   // Busca a métrica otimizada já contando e fatiada pelo backend
   const { data: dashData, isLoading: loadingDash } = useDataQuery<any>({
-    key: `dashboard-stats-${isVendedor ? vendedor?.id : 'admin'}`,
-    fetcher: () => getDashboardMetrics(isVendedor ? vendedor?.id : undefined)
+    key: `dashboard-stats-${isVendedor ? vendedor?.id : 'admin'}-${currentUser?.id}`,
+    fetcher: () => getDashboardMetrics(isVendedor ? vendedor?.id : undefined, currentUser?.id)
   })
 
   const loading = loadingDash

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 
 export async function getEtiquetas() {
-  noStore()
   const dbEtiquetas = await prisma.etiqueta.findMany({
     orderBy: { id: "desc" }, // Most recent first
     include: {
@@ -22,12 +21,16 @@ export async function getEtiquetas() {
     ...e,
     criadoEm: e.criadoEm.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
-    clientesIds: e.clientesAutorizados.map(ca => ca.clienteId)
+    clientesIds: e.clientesAutorizados.map(ca => ca.clienteId),
+    clientesVinculados: e.clientesAutorizados.map(ca => ({
+      id: ca.clienteId,
+      razaoSocial: ca.cliente.razaoSocial,
+      preco: (ca as any).preco
+    }))
   }))
 }
 
 export async function getNextEtiquetaCode() {
-  noStore()
   const lastEtiqueta = await prisma.etiqueta.findFirst({
     orderBy: { id: 'desc' },
     select: { codigo: true }
@@ -46,58 +49,84 @@ export async function getNextEtiquetaCode() {
 }
 
 export async function saveEtiqueta(data: any) {
-  const { id, clientesIds, ...rest } = data
-  
-  const prismaData = {
-    nome: rest.nome,
-    codigo: rest.codigo,
-    material: rest.material,
-    tipoAdesivo: rest.tipoAdesivo,
-    largura: Number(rest.largura),
-    altura: Number(rest.altura),
-    numeroCores: Number(rest.numeroCores),
-    tipoTubete: rest.tipoTubete,
-    quantidadePorRolo: Number(rest.quantidadePorRolo),
-    metragem: rest.metragem ? Number(rest.metragem) : null,
-    preco: rest.preco ? Number(rest.preco) : 0,
-    coresDescricao: rest.coresDescricao || null,
-    observacoesTecnicas: rest.observacoesTecnicas || null,
-    pasta: rest.pasta || null,
-    aplicacoesEspeciais: rest.aplicacoesEspeciais || [],
-    ativo: rest.ativo !== undefined ? rest.ativo : true,
-  }
-
-  if (!id) {
-    const created = await prisma.etiqueta.create({
-      data: {
-        ...prismaData,
-        clientesAutorizados: {
-          create: (clientesIds || []).map((cId: number) => ({
-            clienteId: cId
-          }))
-        }
-      }
-    })
-    revalidatePath("/etiquetas")
-    return created
-  } else {
-    await prisma.clienteEtiqueta.deleteMany({
-      where: { etiquetaId: Number(id) }
-    })
+  try {
+    const { id, clientes, ...rest } = data
     
-    const updated = await prisma.etiqueta.update({
-      where: { id: Number(id) },
-      data: {
-        ...prismaData,
-        clientesAutorizados: {
-          create: (clientesIds || []).map((cId: number) => ({
-            clienteId: cId
-          }))
+    const prismaData = {
+      nome: rest.nome,
+      codigo: rest.codigo,
+      material: rest.material,
+      tipoAdesivo: rest.tipoAdesivo,
+      largura: Number(rest.largura),
+      altura: Number(rest.altura),
+      numeroCores: Number(rest.numeroCores),
+      tipoTubete: rest.tipoTubete,
+      quantidadePorRolo: Number(rest.quantidadePorRolo),
+      metragem: rest.metragem ? Number(rest.metragem) : null,
+      preco: rest.preco ? Number(rest.preco) : 0,
+      coresDescricao: rest.coresDescricao || null,
+      observacoesTecnicas: rest.observacoesTecnicas || null,
+      pasta: rest.pasta || null,
+      aplicacoesEspeciais: rest.aplicacoesEspeciais || [],
+      ativo: rest.ativo !== undefined ? rest.ativo : true,
+    }
+
+    if (!id) {
+      const created = await prisma.$transaction(async (tx) => {
+        const etiqueta = await tx.etiqueta.create({
+          data: prismaData
+        })
+
+        if (clientes && clientes.length > 0) {
+          await Promise.all(clientes.map((c: any) => 
+            tx.clienteEtiqueta.create({
+              data: {
+                etiquetaId: etiqueta.id,
+                clienteId: Number(c.id),
+                preco: c.preco ? Number(c.preco) : null
+              }
+            })
+          ))
         }
-      }
-    })
-    revalidatePath("/etiquetas")
-    return updated
+        return etiqueta
+      })
+
+      revalidatePath("/etiquetas")
+      return created
+    } else {
+      const updated = await prisma.$transaction(async (tx) => {
+        // Remove vínculos antigos
+        await tx.clienteEtiqueta.deleteMany({
+          where: { etiquetaId: Number(id) }
+        })
+        
+        // Atualiza a etiqueta
+        const etiqueta = await tx.etiqueta.update({
+          where: { id: Number(id) },
+          data: prismaData
+        })
+
+        // Cria novos vínculos
+        if (clientes && clientes.length > 0) {
+          await Promise.all(clientes.map((c: any) => 
+            tx.clienteEtiqueta.create({
+              data: {
+                etiquetaId: etiqueta.id,
+                clienteId: Number(c.id),
+                preco: c.preco ? Number(c.preco) : null
+              }
+            })
+          ))
+        }
+        return etiqueta
+      })
+
+      revalidatePath("/etiquetas")
+      return updated
+    }
+  } catch (error: any) {
+    console.error("ERRO DETALHADO EM saveEtiqueta:", error)
+    throw new Error(error.message || "Erro interno ao salvar etiqueta")
   }
 }
 

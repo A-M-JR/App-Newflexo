@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
+import { getRequesterVendedorId } from "./users"
 import { Orcamento } from "@/lib/types"
 import { Prisma } from "@prisma/client"
 
@@ -14,8 +15,8 @@ export async function getOrcamentos(params: {
   dataFim?: string
   vendedorId?: number
   mode?: 'full' | 'history'
+  requesterId?: number
 } = {}) {
-  noStore()
   
   const page = params.page || 1
   const limit = params.limit || 20
@@ -26,7 +27,15 @@ export async function getOrcamentos(params: {
   const dataFim = params.dataFim ? new Date(params.dataFim) : null
   if (dataFim) dataFim.setDate(dataFim.getDate() + 1)
   
-  const vendedorId = params.vendedorId ? Number(params.vendedorId) : null
+  let vendedorId = params.vendedorId ? Number(params.vendedorId) : null
+  
+  // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
+  if (params.requesterId) {
+    const perm = await getRequesterVendedorId(params.requesterId)
+    if (perm !== 'admin') {
+      vendedorId = perm as number // Força o vendedorId dele
+    }
+  }
 
   // 1. Otimização SQL Raw para contadores e KPIs
   let statusFilterSql = Prisma.sql`p."ativo" = TRUE`
@@ -44,7 +53,16 @@ export async function getOrcamentos(params: {
       COALESCE(SUM(p."totalGeral") FILTER (WHERE p."statusId" <> 5), 0)::float as total_valor
     FROM "Orcamento" p
     LEFT JOIN "Cliente" c ON p."clienteId" = c.id
-    WHERE (p."numero" ILIKE ${searchPattern} OR c."razaoSocial" ILIKE ${searchPattern})
+    WHERE (
+      p."numero" ILIKE ${searchPattern} 
+      OR c."razaoSocial" ILIKE ${searchPattern}
+      OR EXISTS (
+        SELECT 1 FROM "ItemOrcamento" io
+        LEFT JOIN "Etiqueta" e ON io."etiquetaId" = e.id
+        WHERE io."orcamentoId" = p.id 
+          AND (io."descricao" ILIKE ${searchPattern} OR e."nome" ILIKE ${searchPattern} OR e."codigo" ILIKE ${searchPattern})
+      )
+    )
       AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
       AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
       AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
@@ -57,6 +75,9 @@ export async function getOrcamentos(params: {
     where.OR = [
       { numero: { contains: params.search, mode: "insensitive" } },
       { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
+      { itens: { some: { descricao: { contains: params.search, mode: "insensitive" } } } },
+      { itens: { some: { etiqueta: { nome: { contains: params.search, mode: "insensitive" } } } } },
+      { itens: { some: { etiqueta: { codigo: { contains: params.search, mode: "insensitive" } } } } },
     ]
   }
 
@@ -98,7 +119,6 @@ export async function getOrcamentos(params: {
       cliente: true,
       vendedor: true,
       statusObj: true,
-      itens: true,
       _count: { select: { itens: true } }
     }
   })
@@ -123,8 +143,7 @@ export async function getOrcamentos(params: {
   }
 }
 
-export async function getOrcamentoById(id: number) {
-  noStore()
+export async function getOrcamentoById(id: number, requesterId?: number) {
   const orcamento = await prisma.orcamento.findUnique({
     where: { id },
     include: {
@@ -140,6 +159,15 @@ export async function getOrcamentoById(id: number) {
   })
   
   if (!orcamento) return null
+
+  // SEGURANÇA: Vendedor só vê o dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin' && orcamento.vendedorId !== perm) {
+       return null // Acesso negado
+    }
+  }
+
   return {
     ...orcamento,
     status: orcamento.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (orcamento.statusObj?.nome?.toLowerCase() || 'rascunho'),
@@ -149,7 +177,16 @@ export async function getOrcamentoById(id: number) {
   }
 }
 
-export async function updateOrcamentoStatus(id: number, statusIdent: string | number) {
+export async function updateOrcamentoStatus(id: number, statusIdent: string | number, requesterId?: number) {
+  // SEGURANÇA: Vendedor só edita o dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      const orc = await prisma.orcamento.findUnique({ where: { id }, select: { vendedorId: true } })
+      if (!orc || orc.vendedorId !== perm) throw new Error("Acesso negado.")
+    }
+  }
+
   let statusId = Number(statusIdent)
   
   if (isNaN(statusId)) {
@@ -195,7 +232,16 @@ export async function updateOrcamentoStatus(id: number, statusIdent: string | nu
   }
 }
 
-export async function deleteOrcamento(id: number) {
+export async function deleteOrcamento(id: number, requesterId?: number) {
+  // SEGURANÇA: Vendedor só exclui o dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      const orc = await prisma.orcamento.findUnique({ where: { id }, select: { vendedorId: true } })
+      if (!orc || orc.vendedorId !== perm) throw new Error("Acesso negado.")
+    }
+  }
+
   await prisma.orcamento.update({
     where: { id },
     data: { ativo: false }
@@ -203,8 +249,22 @@ export async function deleteOrcamento(id: number) {
   revalidatePath("/orcamentos")
 }
 
-export async function saveOrcamento(data: any) {
+export async function saveOrcamento(data: any, requesterId?: number) {
   const { id, itens, ...rest } = data
+  
+  let forcedVendedorId = rest.vendedorId
+
+  // SEGURANÇA: Vendedor só mexe no dele
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      if (id) {
+        const orc = await prisma.orcamento.findUnique({ where: { id }, select: { vendedorId: true } })
+        if (!orc || orc.vendedorId !== perm) throw new Error("Acesso negado.")
+      }
+      forcedVendedorId = perm // Força ser dele na criação ou edição
+    }
+  }
 
   if (!itens || !Array.isArray(itens)) {
     console.error("saveOrcamento: itens is missing or not an array", data)
@@ -257,13 +317,14 @@ export async function saveOrcamento(data: any) {
   const prismaData = {
     numero: String(numero || ""),
     clienteId: Number(rest.clienteId),
-    vendedorId: Number(rest.vendedorId),
+    vendedorId: Number(forcedVendedorId || 0), // Garante que seja um número (campo obrigatório no banco)
     statusId: finalStatusId || 1, // Default para 1 (Pendente)
     formaPagamentoId: rest.formaPagamentoId ? Number(rest.formaPagamentoId) : null,
     observacoes: rest.observacoes || "",
     prazoEntrega: rest.prazoEntrega ? new Date(rest.prazoEntrega) : null,
     totalGeral: totalGeral,
     descontoCredito: isNaN(Number(rest.descontoCredito)) ? 0 : Number(rest.descontoCredito),
+    ocCliente: rest.ocCliente || null,
     ativo: true,
   }
 
@@ -340,11 +401,11 @@ export async function saveOrcamento(data: any) {
       data: {
         ...prismaData,
         itens: {
-          deleteMany: {},
-          create: itens.map((it: any) => {
+          deleteMany: { id: { notIn: itens.filter((i: any) => i.id).map((i: any) => Number(i.id)) } },
+          upsert: itens.map((it: any) => {
             const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
             const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
-            return {
+            const itemData = {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,
               quantidade: qty,
@@ -353,6 +414,11 @@ export async function saveOrcamento(data: any) {
               precoUnitario: price,
               total: Number(it.total) || ((qty - (Number(it.quantidadeCredito) || 0)) * price),
               observacao: it.observacao || ""
+            }
+            return {
+              where: { id: it.id ? Number(it.id) : 0 },
+              create: itemData,
+              update: itemData
             }
           })
         }
@@ -372,7 +438,7 @@ export async function saveOrcamento(data: any) {
     
     return {
       ...updated,
-      status: updated.statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : (updated.statusObj?.nome?.toLowerCase() || 'rascunho'),
+      status: (updated as any).statusObj?.nome?.toLowerCase() === 'pendente' ? 'rascunho' : ((updated as any).statusObj?.nome?.toLowerCase() || 'rascunho'),
       criadoEm: updated.criadoEm.toISOString(),
       atualizadoEm: updated.atualizadoEm.toISOString(),
     }

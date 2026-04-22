@@ -80,6 +80,7 @@ function NovoOrcamentoContent() {
   // Estados de Crédito
   const [descontoCredito, setDescontoCredito] = useState<number>(0)
   const [itensCreditoQtd, setItensCreditoQtd] = useState<Record<string, number>>({}) // id -> quantidade bonificada
+  const [ocCliente, setOcCliente] = useState("")
 
   useEffect(() => {
     Promise.all([
@@ -218,13 +219,24 @@ function NovoOrcamentoContent() {
   function adicionarEtiquetaCatalogo(etqId: string) {
     const etq = etiquetasList.find((e) => e.id === Number(etqId))
     if (!etq) return
+
+    // Buscar preço específico para o cliente se houver
+    let precoSugerido = etq.preco || ""
+    if (clienteId && etq.clientesVinculados) {
+      const vinculo = etq.clientesVinculados.find((v: any) => v.id === Number(clienteId))
+      if (vinculo && vinculo.preco !== null && vinculo.preco !== undefined) {
+        precoSugerido = vinculo.preco
+        toast.info(`Preço especial aplicado para este cliente: R$ ${Number(precoSugerido).toFixed(4)}`)
+      }
+    }
+
     const descricao = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}`
     setItens([...itens, { 
       id: Math.random().toString(36).substr(2, 9), 
       descricao, 
       quantidade: 1, 
       unidade: "unid", 
-      precoUnitario: etq.preco || "", 
+      precoUnitario: precoSugerido, 
       observacao: "" 
     }])
     toast.success("Etiqueta adicionada ao orçamento!")
@@ -276,6 +288,7 @@ function NovoOrcamentoContent() {
         clienteId,
         vendedorId,
         observacoes,
+        ocCliente,
         formaPagamentoId: formaPagamentoId ? Number(formaPagamentoId) : null,
         totalGeral,
         descontoCredito,
@@ -296,7 +309,7 @@ function NovoOrcamentoContent() {
             observacao: qCredito > 0 ? `BONIFICADO: ${qCredito.toLocaleString()} un. ${it.observacao || ""}` : it.observacao
           }
         })
-      })
+      }, currentUser?.id)
 
       toast.success("Orcamento salvo com sucesso!", {
         description: `Total: ${formatCurrency(totalGeral)}`,
@@ -590,12 +603,23 @@ function NovoOrcamentoContent() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[300px] p-0" align="end">
-                    <Command>
+                    <Command filter={(value, search) => {
+                      if (value.toLowerCase().includes(search.toLowerCase())) return 1
+                      return 0
+                    }}>
                       <CommandInput placeholder="Buscar etiqueta (cód ou nome)..." />
                       <CommandList>
                         <CommandEmpty>Nenhuma etiqueta encontrada.</CommandEmpty>
                         <CommandGroup>
-                          {etiquetasList.map((etq) => (
+                          {etiquetasList.filter(etq => {
+                            // Se não há cliente selecionado, mostra apenas etiquetas públicas
+                            if (!clienteId) return !etq.clientesIds || etq.clientesIds.length === 0
+                            
+                            // Se há cliente, mostra públicas OU autorizadas para esse cliente
+                            const isPublic = !etq.clientesIds || etq.clientesIds.length === 0
+                            const isAuthorized = etq.clientesIds?.includes(Number(clienteId))
+                            return isPublic || isAuthorized
+                          }).map((etq) => (
                             <CommandItem
                               key={etq.id}
                               value={`${etq.codigo} ${etq.nome}`}
@@ -768,6 +792,16 @@ function NovoOrcamentoContent() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2 border-t border-border/50 pt-4">
+                <Label className="text-sm font-semibold">OC do Cliente</Label>
+                <Input
+                  value={ocCliente}
+                  onChange={(e) => setOcCliente(e.target.value)}
+                  placeholder="Número da Ordem de Compra do cliente..."
+                  className="bg-muted/10 border-border/50"
+                />
               </div>
 
               <div className="space-y-2 border-t border-border/50 pt-4">

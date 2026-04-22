@@ -33,6 +33,10 @@ model Vendedor {
   updatedAt  DateTime    @updatedAt
   orcamentos Orcamento[]
   pedidos    Pedido[]
+
+  @@index([nome])
+  @@index([email])
+  @@index([ativo])
 }
 
 model Cliente {
@@ -61,6 +65,13 @@ model Cliente {
   movimentacoesCredito MovimentacaoCredito[]
   orcamentos          Orcamento[]
   pedidos             Pedido[]
+
+  @@index([razaoSocial])
+  @@index([cnpj])
+  @@index([cidade])
+  @@index([ativo])
+  @@index([ultimaCompra])
+  @@index([criadoEm])
 }
 
 model Etiqueta {
@@ -87,11 +98,17 @@ model Etiqueta {
   clientesAutorizados   ClienteEtiqueta[]
   itensOrcamento        ItemOrcamento[]
   itensPedido           ItemPedido[]
+
+  @@index([nome])
+  @@index([codigo])
+  @@index([ativo])
+  @@index([criadoEm])
 }
 
 model ClienteEtiqueta {
   clienteId  Int
   etiquetaId Int
+  preco      Float?
   cliente    Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
   etiqueta   Etiqueta @relation(fields: [etiquetaId], references: [id], onDelete: Cascade)
 
@@ -139,6 +156,7 @@ model Orcamento {
   vendedorId   Int
   statusId     Int
   observacoes  String?
+  ocCliente    String?
   totalGeral   Float
   descontoCredito Float          @default(0)
   prazoEntrega   DateTime?
@@ -152,6 +170,12 @@ model Orcamento {
   vendedor     Vendedor        @relation(fields: [vendedorId], references: [id])
   formaPagamentoObj FormaPagamento? @relation(fields: [formaPagamentoId], references: [id])
   pedidos      Pedido[]
+
+  @@index([clienteId])
+  @@index([vendedorId])
+  @@index([statusId])
+  @@index([criadoEm])
+  @@index([ativo])
 }
 
 model ItemOrcamento {
@@ -167,6 +191,9 @@ model ItemOrcamento {
   observacao    String?
   etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id], onDelete: SetNull)
   orcamento     Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+
+  @@index([orcamentoId])
+  @@index([etiquetaId])
 }
 
 model Pedido {
@@ -188,6 +215,7 @@ model Pedido {
   nomeComprador          String?
   frete                  String?
   observacoesGerais      String?
+  ocCliente              String?
   totalGeral             Float
   ativo                  Boolean      @default(true)
   criadoEm               DateTime     @default(now())
@@ -199,6 +227,12 @@ model Pedido {
   statusObj              Status       @relation(fields: [statusId], references: [id])
   vendedor               Vendedor     @relation(fields: [vendedorId], references: [id])
   formaPagamentoObj      FormaPagamento? @relation(fields: [formaPagamentoId], references: [id])
+
+  @@index([clienteId])
+  @@index([vendedorId])
+  @@index([statusId])
+  @@index([criadoEm])
+  @@index([ativo])
 }
 
 model ItemPedido {
@@ -214,6 +248,9 @@ model ItemPedido {
   observacao    String?
   etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id], onDelete: SetNull)
   pedido        Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([pedidoId])
+  @@index([etiquetaId])
 }
 
 model ItemExclusivoCliente {

@@ -16,6 +16,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Toaster } from "@/components/ui/sonner"
 import { useAuth } from "@/lib/auth-context"
 import { getEmpresa } from "@/lib/actions/config"
+import { Loader2 } from "lucide-react"
 
 const breadcrumbMap: Record<string, string> = {
   clientes: "Clientes",
@@ -87,6 +88,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Se estiver carregando, mostramos a estrutura mas com o conteúdo pulsando (skeleton)
   const isAuthorized = !!currentUser;
 
+  // Se estiver carregando ou não autorizado, não renderizamos a estrutura da sidebar
+  // para evitar o "flicker" (piscar) do menu antes de redirecionar para o login.
+  if (isLoading || !isAuthorized) {
+    return (
+      <div className="min-h-screen w-full bg-zinc-950 flex items-center justify-center">
+        <Loader2 className="size-8 text-primary animate-spin" />
+        <Toaster richColors position="top-right" />
+      </div>
+    )
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -120,16 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Breadcrumb>
         </header>
         <div className="flex-1 overflow-auto p-4 md:p-6">
-          {isLoading || !isAuthorized ? (
-            <div className="flex flex-col gap-6 animate-pulse">
-               <div className="h-8 w-64 bg-muted/50 rounded-md mb-2" />
-               <div className="h-4 w-96 bg-muted/50 rounded-md mb-8" />
-               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                 {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-muted/50 rounded-xl" />)}
-               </div>
-               <div className="h-96 bg-muted/50 rounded-xl mt-4" />
-            </div>
-          ) : children}
+          {children}
         </div>
       </SidebarInset>
       <Toaster richColors position="top-right" />

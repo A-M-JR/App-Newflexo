@@ -22,6 +22,7 @@ import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Tra
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus } from "@/lib/actions/orcamentos"
+import { useAuth } from "@/lib/auth-context"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -31,6 +32,7 @@ import { PDFDownloadQuotationButton } from "@/components/pdf-download-quotation-
 
 function OrcamentoDetailContent({ id }: { id: string }) {
   const router = useRouter()
+  const { currentUser } = useAuth()
   const [orcamento, setOrcamento] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -48,6 +50,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const [formasPagamento, setFormasPagamento] = useState<any[]>([])
   const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
   const [prazoEntrega, setPrazoEntrega] = useState("")
+  const [ocCliente, setOcCliente] = useState("")
   const [openCatalogo, setOpenCatalogo] = useState(false)
 
   // Status mapping for the visual steps
@@ -134,8 +137,10 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   }
 
   useEffect(() => {
+    if (!currentUser) return
+    
     Promise.all([
-      getOrcamentoById(Number(id)),
+      getOrcamentoById(Number(id), currentUser?.id),
       getEtiquetas(),
       fetch("/api/formas-pagamento").then(res => res.json())
     ]).then(([data, etqs, formas]) => {
@@ -145,6 +150,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
         setObservacoes(data.observacoes || "")
         setFormaPagamentoId(data.formaPagamentoId?.toString() || "")
         setPrazoEntrega(data.prazoEntrega ? new Date(data.prazoEntrega).toISOString().split('T')[0] : "")
+        setOcCliente((data as any).ocCliente || "")
         setItens(data.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
       }
       setEtiquetasList(etqs)
@@ -202,6 +208,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
         numero: orcamento.numero,
         totalGeral,
         observacoes,
+        ocCliente,
         prazoEntrega,
         formaPagamentoId: formaPagamentoId ? Number(formaPagamentoId) : null,
         statusStr: status,
@@ -257,6 +264,17 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   function adicionarEtiquetaCatalogo(etqId: string) {
     const etq = etiquetasList.find((e) => e.id === Number(etqId))
     if (!etq) return
+
+    // Buscar preço específico para o cliente se houver
+    let precoSugerido = etq.preco || 0
+    if (orcamento.clienteId && etq.clientesVinculados) {
+      const vinculo = etq.clientesVinculados.find((v: any) => v.id === Number(orcamento.clienteId))
+      if (vinculo && vinculo.preco !== null && vinculo.preco !== undefined) {
+        precoSugerido = vinculo.preco
+        toast.info(`Preço especial aplicado para este cliente: R$ ${Number(precoSugerido).toFixed(4)}`)
+      }
+    }
+
     const descricao = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}`
     const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
     
@@ -266,7 +284,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
       descricao, 
       quantidade: 1, 
       unidade: "unid", 
-      precoUnitario: etq.preco || 0, 
+      precoUnitario: precoSugerido, 
       observacao: "" 
     }])
     toast.success("Etiqueta adicionada!")
@@ -298,6 +316,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
               </div>
               <p className="text-xs text-muted-foreground mt-1 font-mono">
                 Criado em {orcamento.criadoEm ? new Date(orcamento.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Editado em {orcamento.atualizadoEm ? new Date(orcamento.atualizadoEm).toLocaleDateString('pt-BR') : 'N/D'}
+                {orcamento.ocCliente && <span className="ml-2 inline-flex items-center gap-1 border-l pl-2 border-border/50">• OC Cliente: <b className="text-foreground">{orcamento.ocCliente}</b></span>}
               </p>
               <div className="flex items-center gap-1.5 mt-2">
                 <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/20 text-[10px] uppercase font-bold px-2 py-0">
@@ -704,6 +723,22 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                 ) : (
                   <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line p-1">
                     {observacoes || "Nenhuma observação geral adicionada na proposta."}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2 border-t border-border/50 pt-4">
+                <Label className="text-sm font-semibold">OC do Cliente</Label>
+                {isEditing ? (
+                  <Input
+                    value={ocCliente}
+                    onChange={(e) => setOcCliente(e.target.value)}
+                    placeholder="Número da OC..."
+                    className="bg-muted/10 border-border/50"
+                  />
+                ) : (
+                  <p className="text-sm font-medium p-2 bg-amber-500/5 rounded border border-amber-500/10 text-amber-700 inline-flex items-center gap-2">
+                    {ocCliente || "Não informada"}
                   </p>
                 )}
               </div>

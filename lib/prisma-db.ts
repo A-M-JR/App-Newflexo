@@ -1,4 +1,4 @@
-// Force reload for schema sync
+// Force reload for schema sync - Updated at 2026-04-21T17:53:00
 import "dotenv/config";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";

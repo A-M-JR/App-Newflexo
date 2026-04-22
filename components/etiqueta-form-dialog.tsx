@@ -22,6 +22,7 @@ import { getClientes } from "@/lib/actions/clientes"
 import { saveEtiqueta, getNextEtiquetaCode } from "@/lib/actions/etiquetas"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Check, X, Info, Sparkles, Box, Ruler, Palette, Layers, MousePointer2, Loader2, DollarSign } from "lucide-react"
+import { maskCurrency, parseCurrencyToNumber } from "@/lib/utils"
 import type { Etiqueta, Cliente } from "@/lib/types"
 import { LabelPreview } from "./etiqueta-preview"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -38,7 +39,7 @@ const etiquetaSchema = z.object({
   numeroCores: z.coerce.number().int().min(1, "Mínimo 1 cor"),
   tipoTubete: z.string().min(1, "Tipo de tubete obrigatório"),
   quantidadePorRolo: z.coerce.number().int().positive("Quantidade deve ser positiva"),
-  preco: z.coerce.number().min(0, "Preço inválido").optional(),
+  preco: z.union([z.string(), z.number()]).optional(),
   observacoesTecnicas: z.string().optional().nullable(),
   pasta: z.string().optional().nullable(),
   metragem: z.coerce.number().optional().nullable(),
@@ -56,7 +57,7 @@ interface EtiquetaFormDialogProps {
 
 
 export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSuccess }: EtiquetaFormDialogProps) {
-  const [selectedClientes, setSelectedClientes] = useState<number[]>([])
+  const [selectedClientes, setSelectedClientes] = useState<{ id: number, preco: number | string | null }[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedAplicacoes, setSelectedAplicacoes] = useState<string[]>([])
   const [loadingAutoCode, setLoadingAutoCode] = useState(false)
@@ -105,13 +106,16 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
             numeroCores: etiquetaToEdit.numeroCores,
             tipoTubete: etiquetaToEdit.tipoTubete,
             quantidadePorRolo: etiquetaToEdit.quantidadePorRolo,
-            preco: etiquetaToEdit.preco || 0,
+            preco: etiquetaToEdit.preco ? maskCurrency(etiquetaToEdit.preco.toFixed(4).replace('.', ''), 4) : "0,0000",
             observacoesTecnicas: etiquetaToEdit.observacoesTecnicas || "",
             pasta: etiquetaToEdit.pasta || "",
             metragem: etiquetaToEdit.metragem || undefined,
             coresDescricao: etiquetaToEdit.coresDescricao || "",
           })
-          setSelectedClientes(etiquetaToEdit.clientesIds || [])
+          setSelectedClientes(etiquetaToEdit.clientesVinculados?.map(cv => ({ 
+            id: cv.id, 
+            preco: cv.preco ? maskCurrency(cv.preco.toFixed(4).replace('.', ''), 4) : null 
+          })) || [])
           setSelectedAplicacoes(etiquetaToEdit.aplicacoesEspeciais || [])
         } else {
           reset({
@@ -139,7 +143,18 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
   }, [open, etiquetaToEdit, reset, setValue])
 
   const toggleCliente = (id: number) => {
-    setSelectedClientes(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+    setSelectedClientes(prev => {
+      const exists = prev.find(c => c.id === id)
+      if (exists) return prev.filter(c => c.id !== id)
+      return [...prev, { id, preco: null }]
+    })
+  }
+
+  const updateClientePreco = (id: number, maskedValue: string) => {
+    const formatted = maskCurrency(maskedValue, 4)
+    setSelectedClientes(prev => prev.map(c => 
+      c.id === id ? { ...c, preco: formatted as any } : c
+    ))
   }
 
   const toggleAplicacao = (app: string) => {
@@ -151,7 +166,11 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
       const finalData = {
         ...data,
         id: etiquetaToEdit?.id,
-        clientesIds: selectedClientes,
+        preco: typeof data.preco === 'string' ? parseCurrencyToNumber(data.preco) : data.preco,
+        clientes: selectedClientes.map(c => ({
+          ...c,
+          preco: typeof c.preco === 'string' ? parseCurrencyToNumber(c.preco) : c.preco
+        })),
         aplicacoesEspeciais: selectedAplicacoes
       }
 
@@ -255,7 +274,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
                               {filteredClientes.map(cliente => (
                                 <button key={cliente.id} type="button" onClick={() => toggleCliente(cliente.id)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-primary/10">
                                    <span className="truncate">{cliente.razaoSocial}</span>
-                                   {selectedClientes.includes(cliente.id) && <Check className="size-3 text-primary" />}
+                                   {selectedClientes.some(c => c.id === cliente.id) && <Check className="size-3 text-primary" />}
                                 </button>
                               ))}
                               {filteredClientes.length === 0 && (
@@ -264,14 +283,33 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
                            </div>
                         )}
 
-                        <div className="flex flex-wrap gap-1.5">
-                            {selectedClientes.map(id => {
-                                const cl = dbClientes?.find(c => c.id === id)
+
+                        <div className="flex flex-col gap-2">
+                            {selectedClientes.map(sel => {
+                                const cl = dbClientes?.find(c => c.id === sel.id)
                                 return (
-                                    <Badge key={id} variant="secondary" className="text-[9px] gap-1 px-1.5 py-0">
-                                        {cl?.razaoSocial || `Cliente #${id}`}
-                                        <X className="size-2.5 cursor-pointer hover:text-destructive" onClick={() => toggleCliente(id)} />
-                                    </Badge>
+                                    <div key={sel.id} className="flex items-center gap-2 bg-muted/20 p-2 rounded-lg border border-border/50 animate-in fade-in slide-in-from-left-2">
+                                        <span className="text-[11px] font-medium flex-1 truncate">{cl?.razaoSocial || `Cliente #${sel.id}`}</span>
+                                        <div className="flex items-center gap-1.5 w-32 shrink-0">
+                                            <span className="text-[10px] text-muted-foreground font-bold">R$</span>
+                                            <Input 
+                                                type="text" 
+                                                placeholder="0,0000"
+                                                value={sel.preco ? (typeof sel.preco === 'number' ? maskCurrency(sel.preco.toString().replace('.', ''), 4) : sel.preco) : ""}
+                                                onChange={(e) => updateClientePreco(sel.id, e.target.value)}
+                                                className="h-7 text-[11px] px-1 bg-background border-primary/20 focus-visible:ring-primary/50 font-mono"
+                                            />
+                                        </div>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="size-7 text-muted-foreground hover:text-destructive"
+                                            onClick={() => toggleCliente(sel.id)}
+                                        >
+                                            <X className="size-3.5" />
+                                        </Button>
+                                    </div>
                                 )
                             })}
                         </div>
@@ -345,7 +383,16 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
                             <Label className="text-xs font-medium text-amber-600 dark:text-amber-400">Preço Base (por unidade) *</Label>
                             <div className="relative">
                                 <DollarSign className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-                                <Input type="number" step="0.0001" {...register("preco")} className="bg-amber-500/5 focus-visible:ring-amber-500 pl-9 h-10 font-semibold" />
+                                <Input 
+                                  type="text" 
+                                  {...register("preco")} 
+                                  onChange={(e) => {
+                                    const masked = maskCurrency(e.target.value, 4)
+                                    setValue("preco", masked as any)
+                                  }}
+                                  placeholder="0,0000"
+                                  className="bg-amber-500/5 focus-visible:ring-amber-500 pl-9 h-10 font-bold font-mono" 
+                                />
                             </div>
                         </div>
                         <div className="grid gap-2">
@@ -423,7 +470,9 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
                     </h5>
                     <div className="flex items-baseline gap-1">
                         <span className="text-[10px] font-medium text-muted-foreground">R$</span>
-                        <span className="text-2xl font-black text-foreground">{Number(watchValues.preco || 0).toFixed(4)}</span>
+                        <span className="text-2xl font-black text-foreground">
+                          {typeof watchValues.preco === 'string' ? watchValues.preco : Number(watchValues.preco || 0).toFixed(4).replace('.', ',')}
+                        </span>
                         <span className="text-[10px] text-muted-foreground ml-1">/ un</span>
                     </div>
                 </div>

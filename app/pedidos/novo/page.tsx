@@ -12,6 +12,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Suspense, useState, useEffect } from "react"
+import { useAuth } from "@/lib/auth-context"
 import { formatCurrency } from "@/lib/mock-data"
 import { getOrcamentoById } from "@/lib/actions/orcamentos"
 import { savePedido } from "@/lib/actions/pedidos"
@@ -20,6 +21,7 @@ import { CreditCard } from "lucide-react"
 function NovoPedidoForm() {
     const searchParams = useSearchParams()
     const router = useRouter()
+    const { currentUser } = useAuth()
     const orcamentoId = searchParams.get("orcamentoId")
 
     const [orcamento, setOrcamento] = useState<any>(null)
@@ -28,8 +30,10 @@ function NovoPedidoForm() {
     const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
 
     useEffect(() => {
+        if (!currentUser) return
+        
         Promise.all([
-            orcamentoId ? getOrcamentoById(Number(orcamentoId)) : Promise.resolve(null),
+            orcamentoId ? getOrcamentoById(Number(orcamentoId), currentUser?.id) : Promise.resolve(null),
             fetch("/api/formas-pagamento").then(res => res.json())
         ]).then(([data, formas]) => {
             if (data) {
@@ -39,6 +43,9 @@ function NovoPedidoForm() {
                 }
                 if (data.formaPagamentoId) {
                     setFormaPagamentoId(data.formaPagamentoId.toString())
+                }
+                if ((data as any).ocCliente) {
+                    setOcCliente((data as any).ocCliente)
                 }
             }
             setFormasPagamento(formas || [])
@@ -63,6 +70,7 @@ function NovoPedidoForm() {
     const [formaPagamento, setFormaPagamento] = useState("30/60 Dias")
     const [frete, setFrete] = useState("FOB")
     const [comprador, setComprador] = useState("")
+    const [ocCliente, setOcCliente] = useState("")
 
     const [obsGerais, setObsGerais] = useState("")
     const [obsPcp, setObsPcp] = useState("")
@@ -107,6 +115,7 @@ function NovoPedidoForm() {
                 nomeComprador: comprador,
                 frete,
                 observacoesGerais: obsGerais + (obsPcp ? `\n\n[PCP]: ${obsPcp}` : ""),
+                ocCliente,
                 totalGeral: orcamento.totalGeral,
             }
             
@@ -119,7 +128,7 @@ function NovoPedidoForm() {
                 observacao: i.observacao || ""
             }))
 
-            const resp = await savePedido({ ...pedidoData, itens: reqItens })
+            const resp = await savePedido({ ...pedidoData, itens: reqItens }, currentUser?.id)
             toast.success("Pedido criado com sucesso!", {
                 description: `Orçamento ${orcamento.numero} foi efetivado. Número: ${resp.numero}`
             })
@@ -179,7 +188,7 @@ function NovoPedidoForm() {
                         <CardTitle className="text-lg">Condições e Faturamento</CardTitle>
                         <CardDescription>Informações que constarão na Nota Fiscal e Financeiro</CardDescription>
                     </CardHeader>
-                    <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div className="space-y-2">
                             <Label htmlFor="formaPagamento" className="flex items-center gap-1.5">
                                 <CreditCard className="size-3.5 text-primary" />
@@ -223,6 +232,10 @@ function NovoPedidoForm() {
                                     <SelectItem value="Retirada">Retirada na Fábrica</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="ocCliente">OC do Cliente</Label>
+                            <Input id="ocCliente" value={ocCliente} onChange={e => setOcCliente(e.target.value)} placeholder="Ex: 12345" />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="comprador">A/C (Nome Comprador)</Label>
@@ -315,14 +328,16 @@ function NovoPedidoForm() {
                 {/* Actions */}
                 <div className="flex justify-end gap-3 mt-4 border-t border-border/50 pt-6">
                     <Link href={`/orcamentos/${orcamento.id}`}>
-                        <Button variant="outline" type="button" disabled={isSubmitting}>Cancelar</Button>
+                        <Button variant="outline" type="button" className="h-12 px-10" disabled={isSubmitting}>
+                            Cancelar
+                        </Button>
                     </Link>
-                    <Button type="submit" className="bg-primary px-8" disabled={isSubmitting}>
+                    <Button type="submit" className="bg-primary h-12 px-10" disabled={isSubmitting}>
                         {isSubmitting ? (
                             <span className="flex items-center gap-2">Gravando Pedido...</span>
                         ) : (
-                            <span className="flex items-center gap-2">
-                                <CheckCircle2 className="size-4" />
+                            <span className="flex items-center gap-2 font-semibold">
+                                <CheckCircle2 className="size-5" />
                                 Validar e Criar Pedido
                             </span>
                         )}

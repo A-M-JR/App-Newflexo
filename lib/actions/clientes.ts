@@ -11,7 +11,6 @@ export async function getClientes(params: {
   filter?: 'todos' | '30d' | '60d'
   mode?: 'full' | 'dropdown'
 } = {}) {
-  noStore()
   
   const page = params.page || 1
   const limit = params.limit || 20
@@ -79,7 +78,6 @@ export async function getClientes(params: {
 }
 
 export async function getClienteById(id: number) {
-  noStore()
   // Busca via Raw SQL para garantir que pegamos os campos novos (nomeFantasia, etc)
   const results = await prisma.$queryRaw`
     SELECT * FROM "Cliente" WHERE id = ${id}
@@ -179,8 +177,13 @@ export async function saveCliente(data: any) {
     return created
   } else {
     const updated = await prisma.$transaction(async (tx) => {
-      // Usando executeRaw devido a cache do Prisma
-      await tx.$executeRaw`DELETE FROM "ItemExclusivoCliente" WHERE "clienteId" = ${Number(id)}`
+      // Sincronização inteligente de itens exclusivos
+      const itemIdsToKeep = itensExclusivos.map((it: any) => it.id).filter(Boolean).map(Number)
+      if (itemIdsToKeep.length > 0) {
+        await tx.$executeRaw`DELETE FROM "ItemExclusivoCliente" WHERE "clienteId" = ${Number(id)} AND id NOT IN (${Prisma.join(itemIdsToKeep)})`
+      } else {
+        await tx.$executeRaw`DELETE FROM "ItemExclusivoCliente" WHERE "clienteId" = ${Number(id)}`
+      }
       
       const now = new Date()
       await tx.$executeRaw`
@@ -207,10 +210,18 @@ export async function saveCliente(data: any) {
       `
 
       for (const it of itensExclusivos) {
-        await tx.$executeRaw`
-          INSERT INTO "ItemExclusivoCliente" ("clienteId", nome, descricao, preco)
-          VALUES (${Number(id)}, ${it.nome}, ${it.descricao || null}, ${Number(it.preco) || 0})
-        `
+        if (it.id) {
+          await tx.$executeRaw`
+            UPDATE "ItemExclusivoCliente" 
+            SET nome = ${it.nome}, descricao = ${it.descricao || null}, preco = ${Number(it.preco) || 0}
+            WHERE id = ${Number(it.id)}
+          `
+        } else {
+          await tx.$executeRaw`
+            INSERT INTO "ItemExclusivoCliente" ("clienteId", nome, descricao, preco)
+            VALUES (${Number(id)}, ${it.nome}, ${it.descricao || null}, ${Number(it.preco) || 0})
+          `
+        }
       }
       return { id: Number(id) }
     })

@@ -180,6 +180,26 @@ export function EtiquetaDetailDialog({
                  )}
               </section>
 
+              {/* Info Section: Clientes Vinculados / Preços Específicos */}
+              {etiqueta.clientesVinculados && etiqueta.clientesVinculados.length > 0 && (
+                <section className="space-y-4">
+                  <div className="flex items-center gap-2 text-primary">
+                      <DollarSign className="size-4" />
+                      <h3 className="text-sm font-bold uppercase tracking-tight">Tabela de Preços por Cliente</h3>
+                  </div>
+                  <div className="pl-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {etiqueta.clientesVinculados.map(cv => (
+                          <div key={cv.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border border-border/40 hover:bg-muted/50 transition-colors">
+                              <span className="text-[11px] font-semibold text-muted-foreground truncate flex-1 mr-2">{cv.razaoSocial}</span>
+                              <span className="text-xs font-bold text-foreground bg-background px-2 py-1 rounded shadow-sm border border-border/20 whitespace-nowrap">
+                                  R$ {cv.preco !== null && cv.preco !== undefined ? Number(cv.preco).toFixed(4) : Number(etiqueta.preco || 0).toFixed(4)}
+                              </span>
+                          </div>
+                      ))}
+                  </div>
+                </section>
+              )}
+
               {/* Info Section: Observações */}
               {(etiqueta.observacoesTecnicas) && (
                 <section className="space-y-4">
