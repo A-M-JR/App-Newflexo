@@ -19,6 +19,10 @@ model User {
   updatedAt    DateTime        @updatedAt
   vendedorId   Int?
   chatMessages AIChatMessage[]
+
+  @@index([role])
+  @@index([vendedorId])
+  @@index([ativo])
 }
 
 model Vendedor {
@@ -176,6 +180,7 @@ model Orcamento {
   @@index([statusId])
   @@index([criadoEm])
   @@index([ativo])
+  @@index([ocCliente])
 }
 
 model ItemOrcamento {
@@ -233,6 +238,8 @@ model Pedido {
   @@index([statusId])
   @@index([criadoEm])
   @@index([ativo])
+  @@index([orcamentoId])
+  @@index([ocCliente])
 }
 
 model ItemPedido {
@@ -260,6 +267,8 @@ model ItemExclusivoCliente {
   descricao String?
   preco     Float    @default(0)
   cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
 }
 
 model MovimentacaoCredito {
@@ -273,6 +282,10 @@ model MovimentacaoCredito {
   criadoEm    DateTime @default(now())
   
   cliente     Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@index([clienteId])
+  @@index([criadoEm])
+  @@index([tipo])
 }
 
 model FormaPagamento {
@@ -284,6 +297,8 @@ model FormaPagamento {
   updatedAt  DateTime    @updatedAt
   orcamentos Orcamento[]
   pedidos    Pedido[]
+
+  @@index([ativo])
 }
 
 model AIConfig {

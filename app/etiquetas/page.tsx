@@ -64,7 +64,7 @@ export default function EtiquetasPage() {
               Catálogo de Etiquetas
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Registro técnico, medidas e vinculação as matrizes de rótulos
+              Registro técnico, medidas e vinculação as etiquetas de rótulos
             </p>
           </div>
           <Button onClick={() => { setEtiquetaToEdit(null); setFormOpen(true); }} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all hover:scale-[1.02]">
@@ -80,7 +80,7 @@ export default function EtiquetasPage() {
             <div className="flex items-center gap-2 flex-1 relative">
               <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome da matriz, código ou faca..."
+                placeholder="Buscar por nome da etiqueta, código ou faca..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 bg-muted/50 focus-visible:bg-background border-border w-full"
@@ -193,7 +193,7 @@ export default function EtiquetasPage() {
               {!loading && filtered.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground bg-background rounded-lg border border-dashed">
                   <Layers className="size-8 opacity-20 mb-2" />
-                  <p>Nenhuma etiqueta ou matriz encontrada.</p>
+                  <p>Nenhuma etiqueta encontrada.</p>
                 </div>
               )}
             </div>

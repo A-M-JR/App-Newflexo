@@ -31,6 +31,7 @@ import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
+import { cn } from "@/lib/utils"
 
 interface NovoItem {
   id: string
@@ -62,6 +63,7 @@ function NovoOrcamentoContent() {
   const [observacoes, setObservacoes] = useState("")
   const [showRecompra, setShowRecompra] = useState(false)
   const [openCatalogo, setOpenCatalogo] = useState(false)
+  const [openCliente, setOpenCliente] = useState(false)
 
   const [clientes, setClientes] = useState<any[]>([])
   const [vendedores, setVendedores] = useState<any[]>([])
@@ -356,18 +358,52 @@ function NovoOrcamentoContent() {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 <div className="flex-1">
                   <Label>Selecionar Cliente *</Label>
-                  <Select value={clienteId?.toString()} onValueChange={handleClienteChange}>
-                    <SelectTrigger className="mt-1.5 h-10 bg-muted/30">
-                      <SelectValue placeholder="Busque ou selecione um cliente..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clientes.map((c) => (
-                        <SelectItem key={c.id} value={c.id.toString()}>
-                          {c.razaoSocial}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={openCliente} onOpenChange={setOpenCliente}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openCliente}
+                        className="w-full mt-1.5 h-10 bg-muted/30 justify-between font-normal"
+                      >
+                        {clienteId
+                          ? clientes.find((c) => c.id === Number(clienteId))?.razaoSocial
+                          : "Busque ou selecione um cliente..."}
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Digite o nome ou CNPJ do cliente..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                          <CommandGroup>
+                            {clientes.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={`${c.razaoSocial} ${c.cnpj}`}
+                                onSelect={() => {
+                                  handleClienteChange(c.id.toString())
+                                  setOpenCliente(false)
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    clienteId === c.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <div className="flex flex-col">
+                                  <span>{c.razaoSocial}</span>
+                                  <span className="text-[10px] text-muted-foreground">{c.cnpj}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 {clienteId && itensAnteriores.length > 0 && (
                   <Button
@@ -481,16 +517,16 @@ function NovoOrcamentoContent() {
 
             {/* Abas de Sugestões */}
             {(etiquetasSugeridas.length > 0 || itensExclusivosSugeridos.length > 0 || (showRecompra && itensAnteriores.length > 0)) && (
-              <Tabs defaultValue={itensAnteriores.length > 0 ? "recompra" : "matrizes"} className="w-full">
+              <Tabs defaultValue={etiquetasSugeridas.length > 0 ? "matrizes" : itensExclusivosSugeridos.length > 0 ? "insumos" : "recompra"} className="w-full">
                 <TabsList className="grid w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
-                  <TabsTrigger value="recompra" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensAnteriores.length === 0}>
-                    <RotateCcw className="size-3 mr-1.5" /> Histórico
-                  </TabsTrigger>
                   <TabsTrigger value="matrizes" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={etiquetasSugeridas.length === 0}>
-                    <Sparkles className="size-3 mr-1.5" /> Matrizes
+                    <Sparkles className="size-3 mr-1.5" /> Etiquetas
                   </TabsTrigger>
                   <TabsTrigger value="insumos" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensExclusivosSugeridos.length === 0}>
                     <Plus className="size-3 mr-1.5" /> Insumos
+                  </TabsTrigger>
+                  <TabsTrigger value="recompra" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensAnteriores.length === 0}>
+                    <RotateCcw className="size-3 mr-1.5" /> Histórico
                   </TabsTrigger>
                 </TabsList>
 
@@ -521,7 +557,7 @@ function NovoOrcamentoContent() {
                   </div>
                 </TabsContent>
 
-                {/* Matrizes Content */}
+                {/* Etiquetas Content */}
                 <TabsContent value="matrizes" className="mt-0 outline-none">
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
                     <ScrollArea className="h-44 pr-4">
@@ -542,7 +578,7 @@ function NovoOrcamentoContent() {
                               {etq.material} • {etq.largura}x{etq.altura}mm
                             </p>
                             <Button variant="outline" size="sm" className="w-full h-6 text-[9px] bg-amber-100/50 hover:bg-amber-200/50 border-amber-200 text-amber-800">
-                              Adicionar Matriz
+                              Adicionar Etiqueta
                             </Button>
                           </div>
                         ))}
@@ -645,7 +681,7 @@ function NovoOrcamentoContent() {
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border-2 border-dashed border-border/60 rounded-xl bg-background">
                 <Tag className="size-8 opacity-20 mb-3" />
                 <p className="text-sm font-medium">Nenhum produto adicionado.</p>
-                <p className="text-xs opacity-70 mt-1">Selecione uma matriz acima ou adicione um item avulso.</p>
+                <p className="text-xs opacity-70 mt-1">Selecione uma etiqueta acima ou adicione um item avulso.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-5">
