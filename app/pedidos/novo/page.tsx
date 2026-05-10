@@ -31,7 +31,7 @@ function NovoPedidoForm() {
 
     useEffect(() => {
         if (!currentUser) return
-        
+
         Promise.all([
             orcamentoId ? getOrcamentoById(Number(orcamentoId), currentUser?.id) : Promise.resolve(null),
             fetch("/api/formas-pagamento").then(res => res.json())
@@ -118,7 +118,7 @@ function NovoPedidoForm() {
                 ocCliente,
                 totalGeral: orcamento.totalGeral,
             }
-            
+
             const reqItens = orcamento.itens.map((i: any) => ({
                 descricao: i.descricao,
                 quantidade: i.quantidade,
@@ -212,12 +212,12 @@ function NovoPedidoForm() {
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="prazoEntrega">Prazo de Entrega</Label>
-                            <Input 
-                                id="prazoEntrega" 
+                            <Input
+                                id="prazoEntrega"
                                 type="date"
-                                value={prazoEntrega} 
-                                onChange={e => setPrazoEntrega(e.target.value)} 
-                                required 
+                                value={prazoEntrega}
+                                onChange={e => setPrazoEntrega(e.target.value)}
+                                required
                             />
                         </div>
                         <div className="space-y-2">
