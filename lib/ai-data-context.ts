@@ -4,13 +4,28 @@ import { prisma } from "./prisma"
  * Gera um resumo textual do estado atual da plataforma para contextualizar a IA.
  * Inclui: total de pedidos, pedidos atrasados (SLA), clientes inativos e desempenho de vendas.
  */
-export async function getAIContextSummary() {
+export async function getAIContextSummary(vendedorId?: number) {
     const today = new Date()
+    const searchVendedor = vendedorId ? Number(vendedorId) : null
 
-    const orcamentos = await prisma.orcamento.findMany()
-    const pedidos = await prisma.pedido.findMany({ include: { cliente: true, vendedor: true, statusObj: true } })
-    const clientes = await prisma.cliente.findMany()
-    const vendedores = await prisma.vendedor.findMany()
+    const orcamentos = await prisma.orcamento.findMany({
+        where: searchVendedor ? { vendedorId: searchVendedor } : undefined
+    })
+    const pedidos = await prisma.pedido.findMany({
+        where: searchVendedor ? { vendedorId: searchVendedor } : undefined,
+        include: { cliente: true, vendedor: true, statusObj: true }
+    })
+    const clientes = await prisma.cliente.findMany({
+        where: searchVendedor ? {
+            OR: [
+                { pedidos: { some: { vendedorId: searchVendedor } } },
+                { orcamentos: { some: { vendedorId: searchVendedor } } }
+            ]
+        } : undefined
+    })
+    const vendedores = await prisma.vendedor.findMany({
+        where: searchVendedor ? { id: searchVendedor } : undefined
+    })
 
     // 1. Pedidos e SLA (Atrasados)
     const pedidosAtrasados = pedidos.filter(p => {

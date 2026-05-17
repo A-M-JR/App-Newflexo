@@ -3,19 +3,40 @@
 import { prisma } from "@/lib/prisma"
 import { unstable_noStore as noStore } from "next/cache"
 
-export async function getOportunidadesData() {
+export async function getOportunidadesData(vendedorIdParam?: number, requesterId?: number) {
     noStore()
     const today = new Date()
     const trintaDiasAtras = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000))
     const sessentaDiasAtras = new Date(today.getTime() - (60 * 24 * 60 * 60 * 1000))
 
+    let vendedorId = vendedorIdParam
+  
+    // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
+    if (requesterId) {
+        const { getRequesterVendedorId } = await import("./users")
+        const perm = await getRequesterVendedorId(requesterId)
+        if (perm !== 'admin') {
+            vendedorId = perm as number // Força o vendedorId dele
+        }
+    }
+
+    const searchVendedor = vendedorId ? Number(vendedorId) : null
+
     // 1. Dados de Faturamento e Ranking
     const pedidos = await prisma.pedido.findMany({
-        where: { ativo: true },
+        where: { 
+            ativo: true,
+            vendedorId: searchVendedor ? searchVendedor : undefined
+        },
         include: { vendedor: true, statusObj: true, cliente: true }
     })
 
-    const vendedores = await prisma.vendedor.findMany({ where: { ativo: true } })
+    const vendedores = await prisma.vendedor.findMany({ 
+        where: { 
+            ativo: true,
+            id: searchVendedor ? searchVendedor : undefined
+        } 
+    })
 
     const rankingVendedores = vendedores.map(v => {
         const pedidosVendedor = pedidos.filter(p => p.vendedorId === v.id && p.statusObj?.nome === 'Entregue')
@@ -29,9 +50,20 @@ export async function getOportunidadesData() {
     }).sort((a, b) => b.total - a.total)
 
     // 2. Oportunidades de Reativação (Novos critérios: Sem compra OU +30 dias sem orçamento)
-    const clientes = await prisma.cliente.findMany({ where: { ativo: true } })
+    const clientes = await prisma.cliente.findMany({ 
+        where: { 
+            ativo: true,
+            OR: searchVendedor ? [
+                { pedidos: { some: { vendedorId: searchVendedor } } },
+                { orcamentos: { some: { vendedorId: searchVendedor } } }
+            ] : undefined
+        } 
+    })
     const todosOrcamentos = await prisma.orcamento.findMany({ 
-        where: { ativo: true },
+        where: { 
+            ativo: true,
+            vendedorId: searchVendedor ? searchVendedor : undefined
+        },
         orderBy: { criadoEm: 'desc' },
         select: { clienteId: true, criadoEm: true }
     })
@@ -118,12 +150,25 @@ export async function getOportunidadesData() {
     }
 }
 
-export async function generateOportunidadesInsight() {
+export async function generateOportunidadesInsight(vendedorIdParam?: number, requesterId?: number) {
     noStore()
     const { getAIContextSummary } = await import("@/lib/ai-data-context")
     const { getAIConfig } = await import("./config")
     
-    const context = await getAIContextSummary()
+    let vendedorId = vendedorIdParam
+  
+    // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
+    if (requesterId) {
+        const { getRequesterVendedorId } = await import("./users")
+        const perm = await getRequesterVendedorId(requesterId)
+        if (perm !== 'admin') {
+            vendedorId = perm as number // Força o vendedorId dele
+        }
+    }
+
+    const searchVendedor = vendedorId ? Number(vendedorId) : null
+    
+    const context = await getAIContextSummary(searchVendedor || undefined)
     const config = await getAIConfig()
 
     if (config.provider === 'desativado' || !config.apiKey) {
@@ -169,9 +214,9 @@ export async function generateOportunidadesInsight() {
         try {
             await prisma.aISugestao.create({
                 data: {
-                    tipo: "OPORTUNIDADES_GERAL",
+                    tipo: searchVendedor ? `OPORTUNIDADES_VENDEDOR_${searchVendedor}` : "OPORTUNIDADES_GERAL",
                     dados: { insight: data.reply },
-                    raciocinio: "Análise estratégica CGO Newflexo",
+                    raciocinio: searchVendedor ? `Análise estratégica CGO Newflexo para Vendedor #${searchVendedor}` : "Análise estratégica CGO Newflexo",
                     status: "CONCLUIDO"
                 }
             })
@@ -186,11 +231,24 @@ export async function generateOportunidadesInsight() {
     }
 }
 
-export async function getLatestOportunidadesInsight() {
+export async function getLatestOportunidadesInsight(vendedorIdParam?: number, requesterId?: number) {
+    let vendedorId = vendedorIdParam
+  
+    // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
+    if (requesterId) {
+        const { getRequesterVendedorId } = await import("./users")
+        const perm = await getRequesterVendedorId(requesterId)
+        if (perm !== 'admin') {
+            vendedorId = perm as number // Força o vendedorId dele
+        }
+    }
+
+    const searchVendedor = vendedorId ? Number(vendedorId) : null
+
     try {
         const latest = await prisma.aISugestao.findFirst({
             where: {
-                tipo: "OPORTUNIDADES_GERAL",
+                tipo: searchVendedor ? `OPORTUNIDADES_VENDEDOR_${searchVendedor}` : "OPORTUNIDADES_GERAL",
                 status: "CONCLUIDO"
             },
             orderBy: {

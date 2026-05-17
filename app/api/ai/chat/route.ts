@@ -33,6 +33,7 @@ interface ChatRequestBody {
     systemPrompt: string
     includeTools?: boolean // Novo flag para ativar ferramentas
     image?: string | null // Imagem em Base64
+    vendedorId?: number // Opcional: ID do vendedor para contextualizar
 }
 
 // ── Definição das Ferramentas (Tools) ───────────────────────
@@ -219,7 +220,7 @@ function translateAIError(msg: string): string {
 export async function POST(request: NextRequest) {
     try {
         const body: ChatRequestBody = await request.json()
-        const { messages, provider, apiKey, systemPrompt } = body
+        const { messages, provider, apiKey, systemPrompt, vendedorId } = body
 
         if (!apiKey || !provider || !messages?.length) {
             // console.error("[Módulo IA] Requisição inválida")
@@ -230,7 +231,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Monta o prompt combinando configuração básica com contexto live
-        const contextSummary = await getAIContextSummary()
+        const contextSummary = await getAIContextSummary(vendedorId)
         // Invertendo a ordem: Instruções do usuário por último para terem mais peso
         const fullSystemPrompt = contextSummary + "\n\n" + systemPrompt
 

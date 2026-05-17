@@ -224,8 +224,32 @@ export async function updatePedidoStatus(id: number, statusIdent: string | numbe
   }
 }
 
+async function updateClienteUltimaCompra(clienteId: number) {
+  const latestPedido = await prisma.pedido.findFirst({
+    where: { clienteId, ativo: true },
+    orderBy: { criadoEm: 'desc' },
+    select: { criadoEm: true }
+  })
+  
+  await prisma.cliente.update({
+    where: { id: clienteId },
+    data: { ultimaCompra: latestPedido ? latestPedido.criadoEm : null }
+  })
+}
+
 export async function savePedido(data: any, requesterId?: number) {
   const { id, itens, ...rest } = data
+
+  let oldClienteId: number | null = null
+  if (id) {
+    const existing = await prisma.pedido.findUnique({
+      where: { id: Number(id) },
+      select: { clienteId: true }
+    })
+    if (existing) {
+      oldClienteId = existing.clienteId
+    }
+  }
 
   let forcedVendedorId = rest.vendedorId
 
@@ -328,6 +352,9 @@ export async function savePedido(data: any, requesterId?: number) {
       revalidatePath(`/orcamentos/${created.orcamentoId}`)
     }
 
+    // Sincroniza a data da última compra do cliente
+    await updateClienteUltimaCompra(created.clienteId)
+
     revalidatePath("/pedidos")
     return created
   } else {
@@ -369,6 +396,13 @@ export async function savePedido(data: any, requesterId?: number) {
         }
       }
     })
+
+    // Sincroniza a data da última compra do cliente atual e do antigo (se alterado)
+    await updateClienteUltimaCompra(updated.clienteId)
+    if (oldClienteId && oldClienteId !== updated.clienteId) {
+      await updateClienteUltimaCompra(oldClienteId)
+    }
+
     revalidatePath("/pedidos")
     revalidatePath(`/pedidos/${id}`)
     return updated

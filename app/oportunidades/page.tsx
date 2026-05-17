@@ -32,6 +32,7 @@ import { getOportunidadesData } from "@/lib/actions/oportunidades"
 import { formatCurrency } from "@/lib/mock-data"
 import Link from "next/link"
 import { useAI } from "@/lib/ai-context"
+import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 
 export default function OportunidadesPage() {
@@ -44,6 +45,7 @@ export default function OportunidadesPage() {
     const [chatHistory, setChatHistory] = useState<{role: 'user' | 'assistant', content: string}[]>([])
     const scrollRef = useRef<HTMLDivElement>(null)
     const { addMessage } = useAI()
+    const { isVendedor, vendedor, currentUser } = useAuth()
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -57,12 +59,12 @@ export default function OportunidadesPage() {
     useEffect(() => {
         const load = async () => {
             try {
-                const res = await getOportunidadesData()
+                const res = await getOportunidadesData(isVendedor ? vendedor?.id : undefined, currentUser?.id)
                 setData(res)
                 
                 // Busca o último insight salvo no banco de dados para evitar consumo no F5
                 const { getLatestOportunidadesInsight } = await import("@/lib/actions/oportunidades")
-                const savedData = await getLatestOportunidadesInsight()
+                const savedData = await getLatestOportunidadesInsight(isVendedor ? vendedor?.id : undefined, currentUser?.id)
                 
                 if (savedData?.insight) {
                     setAiInsight(savedData.insight)
@@ -79,13 +81,13 @@ export default function OportunidadesPage() {
             }
         }
         load()
-    }, [])
+    }, [isVendedor, vendedor, currentUser])
 
     const handleGenerateIAAnalysis = async () => {
         setAnalyzingIA(true)
         try {
             const { generateOportunidadesInsight } = await import("@/lib/actions/oportunidades")
-            const insight = await generateOportunidadesInsight()
+            const insight = await generateOportunidadesInsight(isVendedor ? vendedor?.id : undefined, currentUser?.id)
             setAiInsight(insight)
             setLastUpdated(new Date())
             setChatHistory([]) // Limpa o histórico ao gerar nova análise base
@@ -128,7 +130,8 @@ export default function OportunidadesPage() {
                     provider: config.provider,
                     apiKey: config.apiKey,
                     systemPrompt: "Você é o CGO da Newflexo. Responda de forma curta e estratégica sobre os dados de oportunidades fornecidos. Mantenha o foco em ações comerciais e produtividade.",
-                    includeTools: false
+                    includeTools: false,
+                    vendedorId: isVendedor ? vendedor?.id : undefined
                 }),
             })
 
