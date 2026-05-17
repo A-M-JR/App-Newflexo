@@ -29,6 +29,13 @@ export async function getAIContextSummary() {
         dias: c.ultimaCompra ? Math.floor((today.getTime() - c.ultimaCompra.getTime()) / (1000 * 3600 * 24)) : 0
     }))
 
+    // 3. Clientes "sem compra" (Sem nenhum orçamento ou pedido)
+    const clientesSemOrcamento = clientes.filter(c => {
+        const temOrcamento = orcamentos.some(o => o.clienteId === c.id)
+        const temPedido = pedidos.some(p => p.clienteId === c.id)
+        return !temOrcamento && !temPedido
+    })
+
     // 3. Desempenho de Vendas (Ranking e Volume)
     const desempenhoVendedores = vendedores.map(v => {
         const pedidosVendedor = pedidos.filter(p => p.vendedorId === v.id && p.statusObj?.nome === 'Entregue')
@@ -42,12 +49,15 @@ export async function getAIContextSummary() {
     }).sort((a, b) => b.total - (a.total as number))
 
     // Monta o resumo
+    const faturamentoTotal = pedidos.reduce((acc, p) => acc + Number(p.totalGeral || 0), 0)
+    
     let summary = `\n--- CONTEXTO ATUAL DO SISTEMA ---\n`
     summary += `Data atual: ${today.toLocaleDateString('pt-BR')}\n`
-
-    summary += `RESUMO FINANCEIRO:\n`
-    summary += `- Total de Pedidos: ${pedidos.length}\n`
-    summary += `- Pedidos em Produção: ${pedidos.filter(p => p.statusObj?.nome === 'Em Produção').length}\n\n`
+    summary += `RESUMO GERAL DO BANCO DE DADOS:\n`
+    summary += `- Total de Pedidos Existentes: ${pedidos.length}\n`
+    summary += `- Total de Orçamentos Existentes: ${orcamentos.length}\n`
+    summary += `- Faturamento Total Acumulado: R$ ${faturamentoTotal.toLocaleString('pt-BR')}\n`
+    summary += `- Pedidos em Produção/Fábrica: ${pedidos.filter(p => p.statusObj?.nome?.toLowerCase().includes('produ')).length}\n\n`
 
     summary += `RANKING DE VENDEDORES (Vendas Concluídas):\n`
     desempenhoVendedores.forEach((v, i) => {
@@ -69,6 +79,15 @@ export async function getAIContextSummary() {
         clientesInativos.slice(0, 5).forEach(c => {
             summary += `- ${c.nome} (Há ${c.dias} dias)\n`
         })
+        summary += `\n`
+    }
+
+    if (clientesSemOrcamento.length > 0) {
+        summary += `CLIENTES NA BASE SEM NENHUM ORÇAMENTO/PEDIDO:\n`
+        clientesSemOrcamento.slice(0, 10).forEach(c => {
+            summary += `- ${c.razaoSocial} (CNPJ: ${c.cnpj || 'N/D'})\n`
+        })
+        summary += `Nota: Existem no total ${clientesSemOrcamento.length} clientes sem histórico comercial.\n`
     }
 
     summary += `--- FIM DO CONTEXTO ---\n`

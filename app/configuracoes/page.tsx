@@ -509,10 +509,12 @@ function ConfiguracoesForm() {
                                     <option value="desativado">🔴 Desativado</option>
                                     <option value="gemini-flash">🟢 Google Gemini Flash (Recomendado - Mais Econômico)</option>
                                     <option value="gpt-4o-mini">🔵 OpenAI GPT-4o Mini</option>
+                                    <option value="abacus-route">🟣 Abacus AI (RouteLLM)</option>
                                 </select>
                                 <p className="text-xs text-muted-foreground">
                                     {aiConfig.provider === 'gemini-flash' && '💡 Gemini Flash: ~R$ 0,001 por interação. Obtenha sua chave em ai.google.dev'}
                                     {aiConfig.provider === 'gpt-4o-mini' && '💡 GPT-4o Mini: ~R$ 0,003 por interação. Obtenha sua chave em platform.openai.com'}
+                                    {aiConfig.provider === 'abacus-route' && '💡 Abacus AI: Roteamento inteligente de modelos. Insira sua chave do Abacus.'}
                                     {aiConfig.provider === 'desativado' && 'O assistente IA ficará indisponível para todos os usuários.'}
                                 </p>
                             </div>
@@ -527,7 +529,10 @@ function ConfiguracoesForm() {
                                                 type={showApiKey ? "text" : "password"}
                                                 value={aiConfig.apiKey}
                                                 onChange={(e) => updateAIConfig({ apiKey: e.target.value })}
-                                                placeholder={aiConfig.provider === 'gemini-flash' ? 'AIzaSy...' : 'sk-proj-...'}
+                                                placeholder={
+                                                    aiConfig.provider === 'gemini-flash' ? 'AIzaSy...' : 
+                                                    aiConfig.provider === 'abacus-route' ? 'Abacus API Key...' : 'sk-proj-...'
+                                                }
                                                 className="pr-10 bg-muted/50 focus-visible:bg-background font-mono text-xs"
                                             />
                                             <button

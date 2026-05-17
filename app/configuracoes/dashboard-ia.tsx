@@ -20,7 +20,18 @@ export const AIDashboard = React.memo(function AIDashboard() {
         ? Math.min(100, Math.round((usage.count / config.monthlyLimit) * 100))
         : 0
 
-    const estimatedCost = (usage.count * 0.05).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    const getCostPerMessage = () => {
+        if (config.provider === 'gemini-flash') return 0.005 // R$ 0,005
+        if (config.provider === 'gpt-4o-mini') return 0.015  // R$ 0,015
+        if (config.provider === 'abacus-route') return 0.02  // R$ 0,020 (médio)
+        return 0
+    }
+
+    const estimatedCost = (usage.count * getCostPerMessage()).toLocaleString('pt-BR', { 
+        style: 'currency', 
+        currency: 'BRL',
+        minimumFractionDigits: 2 
+    })
 
     return (
         <div className="space-y-6">

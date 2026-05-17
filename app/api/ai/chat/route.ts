@@ -28,7 +28,7 @@ interface ChatMessage {
 
 interface ChatRequestBody {
     messages: ChatMessage[]
-    provider: "gpt-4o-mini" | "gemini-flash"
+    provider: "gpt-4o-mini" | "gemini-flash" | "abacus-route"
     apiKey: string
     systemPrompt: string
     includeTools?: boolean // Novo flag para ativar ferramentas
@@ -46,7 +46,9 @@ const AI_TOOLS = [
                 type: "object",
                 properties: {
                     cliente: { type: "string", description: "Nome ou CNPJ do cliente" },
-                    itens: { type: "string", description: "Descrição dos produtos/itens" },
+                    itens: { type: "string", description: "Nome da etiqueta ou produto (não inclua a quantidade aqui)" },
+                    quantidade: { type: "number", description: "A quantidade numérica solicitada (ex: 10, 500, 1000)" },
+                    unidade: { type: "string", description: "A unidade de medida (ex: un, mil, rolos)" },
                     observacoes: { type: "string", description: "Detalhes técnicos ou observações" }
                 },
                 required: ["cliente"]
@@ -174,6 +176,19 @@ const AI_TOOLS = [
                 }
             }
         }
+    },
+    {
+        type: "function",
+        function: {
+            name: "consultar_catalogo",
+            description: "Busca no catálogo geral de etiquetas, materiais e facas da Newflexo.",
+            parameters: {
+                type: "object",
+                properties: {
+                    termo: { type: "string", description: "Termo de busca (ex: BOPP, 110x95, Couché)" }
+                }
+            }
+        }
     }
 ]
 
@@ -216,13 +231,16 @@ export async function POST(request: NextRequest) {
 
         // Monta o prompt combinando configuração básica com contexto live
         const contextSummary = await getAIContextSummary()
-        const fullSystemPrompt = systemPrompt + contextSummary
+        // Invertendo a ordem: Instruções do usuário por último para terem mais peso
+        const fullSystemPrompt = contextSummary + "\n\n" + systemPrompt
 
         // Roteamento por provedor
         if (provider === "gpt-4o-mini") {
             return await handleOpenAI(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
         } else if (provider === "gemini-flash") {
             return await handleGemini(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
+        } else if (provider === "abacus-route") {
+            return await handleAbacus(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
         }
 
         return NextResponse.json({ error: "Provedor de IA não reconhecido." }, { status: 400 })
@@ -371,6 +389,65 @@ async function handleGemini(messages: ChatMessage[], apiKey: string, systemPromp
     }))
 
     const tokensUsed = data.usageMetadata?.totalTokenCount || 0
+
+    return NextResponse.json({ reply, toolCalls, tokensUsed })
+}
+
+// ── Abacus AI (RouteLLM) ────────────────────────────────────
+async function handleAbacus(messages: ChatMessage[], apiKey: string, systemPrompt: string, includeTools?: boolean, image?: string | null) {
+    const lastMsg = messages[messages.length - 1]
+    const otherMsgs = messages.slice(0, -1)
+
+    const abacusMessages: any[] = [
+        { role: "system", content: systemPrompt },
+        ...otherMsgs.map(m => ({ role: m.role, content: m.content })),
+    ]
+
+    // Formata a última mensagem
+    if (image) {
+        abacusMessages.push({
+            role: "user",
+            content: [
+                { type: "text", text: lastMsg.content },
+                { type: "image_url", image_url: { url: image } }
+            ]
+        })
+    } else {
+        abacusMessages.push({ role: lastMsg.role, content: lastMsg.content })
+    }
+
+    const body: any = {
+        model: "route-llm", // Usando o modelo padrão do RouteLLM
+        messages: abacusMessages,
+        max_tokens: 500,
+        temperature: 0.3,
+    }
+
+    if (includeTools) {
+        body.tools = AI_TOOLS
+        body.tool_choice = "auto"
+    }
+
+    const response = await fetch("https://routellm.abacus.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+    })
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const rawError = errorData?.error?.message || `Erro ${response.status}`
+        return NextResponse.json({ error: translateAIError(rawError) }, { status: response.status })
+    }
+
+    const data = await response.json()
+    const message = data.choices?.[0]?.message
+    const reply = message?.content || ""
+    const toolCalls = message?.tool_calls
+    const tokensUsed = data.usage?.total_tokens || 0
 
     return NextResponse.json({ reply, toolCalls, tokensUsed })
 }

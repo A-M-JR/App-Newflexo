@@ -43,25 +43,49 @@ export async function getClientes(params: {
   
   const stats = counts[0] || { total_global: 0, sem_compra_30: 0, sem_compra_60: 0, total_filtrado: 0 }
 
-  // 2. Busca dos dados da página via Raw SQL para evitar problemas de cache do Prisma com novos campos
-  const limitNum = Number(limit)
-  const offsetNum = (Number(page) - 1) * limitNum
+  // 2. Busca dos dados via Prisma para garantir integridade das relações
+  const where: Prisma.ClienteWhereInput = {
+    OR: [
+      { razaoSocial: { contains: search, mode: 'insensitive' } },
+      { cnpj: { contains: search, mode: 'insensitive' } },
+      { cidade: { contains: search, mode: 'insensitive' } },
+    ],
+  }
 
-  const dbClientes: any[] = await prisma.$queryRaw`
-    SELECT c.*, 
-      (SELECT COUNT(*)::int FROM "Orcamento" o WHERE o."clienteId" = c.id) as orcamentos_count,
-      (SELECT COUNT(*)::int FROM "Pedido" p WHERE p."clienteId" = c.id) as pedidos_count
-    FROM "Cliente" c
-    WHERE ("razaoSocial" ILIKE ${searchPattern} OR "cnpj" ILIKE ${searchPattern} OR "cidade" ILIKE ${searchPattern})
-    AND ${filterSql}
-    ORDER BY "razaoSocial" ASC
-    LIMIT ${limitNum} OFFSET ${offsetNum}
-  `
+  // Aplica filtro de tempo se necessário
+  if (filter === '30d') {
+    where.OR = [
+      { ultimaCompra: { lt: trintaDiasAtras, gte: sessentaDiasAtras } },
+      { AND: [{ ultimaCompra: null }, { criadoEm: { lt: trintaDiasAtras, gte: sessentaDiasAtras } }] }
+    ]
+  } else if (filter === '60d') {
+    where.OR = [
+      { ultimaCompra: { lt: sessentaDiasAtras } },
+      { AND: [{ ultimaCompra: null }, { criadoEm: { lt: sessentaDiasAtras } }] }
+    ]
+  }
+
+  const dbClientes = await prisma.cliente.findMany({
+    where,
+    include: {
+      etiquetasExclusivas: {
+        include: {
+          etiqueta: true
+        }
+      },
+      _count: {
+        select: { orcamentos: true, pedidos: true }
+      }
+    },
+    orderBy: { razaoSocial: 'asc' },
+    skip: (page - 1) * limit,
+    take: limit,
+  })
   
   return {
     data: dbClientes.map((c: any) => ({
       ...c,
-      _count: { orcamentos: c.orcamentos_count, pedidos: c.pedidos_count },
+      etiquetasVinculadas: c.etiquetasExclusivas.map((ee: any) => ee.etiqueta),
       criadoEm: c.criadoEm.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
       ultimaCompra: c.ultimaCompra ? c.ultimaCompra.toISOString() : null,

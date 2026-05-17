@@ -13,6 +13,7 @@ import {
   LogOut,
   Sparkles,
   CreditCard,
+  LineChart,
 } from "lucide-react"
 import {
   Sidebar,
@@ -161,6 +162,26 @@ export function AppSidebar() {
                       <Sparkles className="size-[18px]" />
                       <span>Assistente IA</span>
                     </button>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem className="px-2">
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/oportunidades"}
+                    tooltip="Oportunidades IA"
+                    className={`
+                      my-0.5 h-10 transition-all duration-200 
+                      ${pathname === "/oportunidades"
+                        ? "bg-violet-500 text-white font-bold shadow-md hover:bg-violet-600"
+                        : "text-sidebar-foreground/70 hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-400"
+                      }
+                    `}
+                  >
+                    <Link href="/oportunidades" className="flex items-center gap-3">
+                      <LineChart className="size-[18px]" />
+                      <span>Oportunidades IA</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>

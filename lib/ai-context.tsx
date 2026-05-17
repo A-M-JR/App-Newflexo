@@ -19,7 +19,7 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { getAIConfig, updateAIConfig, getAIUsage, incrementAIUsage } from "./actions/config"
 
 // ── Tipos do Módulo IA ──────────────────────────────────────
-export type AIProvider = "desativado" | "gpt-4o-mini" | "gemini-flash"
+export type AIProvider = "desativado" | "gpt-4o-mini" | "gemini-flash" | "abacus-route"
 
 export interface AIConfig {
     provider: AIProvider
@@ -30,6 +30,7 @@ export interface AIConfig {
 
 export interface AIUsage {
     count: number         // Interações usadas no mês atual
+    tokensUsed: number    // Tokens totais consumidos
     month: string         // Mês de referência (YYYY-MM)
 }
 
@@ -59,21 +60,31 @@ interface AIContextType {
 
 
 // ── Valores Padrão ──────────────────────────────────────────
-const DEFAULT_SYSTEM_PROMPT = `Você é o Assistente Especialista da Newflexo, responsável por auxiliar na gestão de uma gráfica de etiquetas e rótulos. Pode realizar integrações ao vivo com o Banco de Dados.
- 
-Sua personalidade: Profissional, eficiente e focado em resultados.
- 
-DIRETRIZES DE COMPORTAMENTO:
-1. ESCOPO RESTRITO: Você só pode responder sobre temas da Newflexo (Pedidos, Orçamentos, Clientes, CRM, Produção Gráfica). Se o usuário perguntar sobre outros temas (receitas, notícias, programação geral), recuse educadamente.
-2. AÇÕES DE BANCO: Você possui ferramentas nativas para consultar e navegar pelo banco de dados:
-   - 'consultar_clientes': Busca base de clientes reais por CNPJ ou nome.
-   - 'consultar_orcamentos': Verifica os últimos orçamentos ou procura um específico.
-   - 'consultar_pedidos': Checa status e andamento de pedidos na produção.
-   - 'inserir_cliente': Realiza o cadastro silêncioso e oficial de um novo cliente após obter os dados essenciais (Nome, CNPJ).
-   - Continue oferecendo as ferramentas antigas ('gerar_orcamento', 'abrir_pedido', 'buscar_cnpj') para atalhos de tela.
-3. VISÃO (IMAGES): Se o usuário enviar uma imagem, analise como se fosse uma arte de etiqueta ou foto de produto gráfico. Verifique cores, faca e texto.
-4. TONS E VALORES: Sempre use R$ para moedas e o formato brasileiro para datas.
-5. CONTEXTO DE NEGÓCIO: Lembre-se que a Newflexo lida com 'Metragem', 'Sentido de Rebobinagem', 'Cores Pantone' e 'Tipos de Papel (BOPP, Couché, Térmico)'.`
+const DEFAULT_SYSTEM_PROMPT = `Você é o Agente de Vendas e Analista de Operações da Newflexo. Sua missão é ser o braço direito do gestor, atuando proativamente para converter vendas e otimizar a produção.
+
+DIRETRIZES DE OURO:
+1. AGENTE PROATIVO E AUTÔNOMO: Se o usuário pedir para criar um cliente, use 'cadastrar_cliente' IMEDIATAMENTE. Jamais pergunte "posso fazer?". Apenas execute. Para orçamentos, siga RIGOROSAMENTE a Regra 8.
+2. CAPACIDADE ANALÍTICA: Você é um analista. Antes de usar ferramentas, verifique o "RESUMO DO CONTEXTO" que você recebe. Se a informação estiver lá, responda direto.
+3. INTELIGÊNCIA DE MERCADO: Identifique orçamentos parados há mais de 48h e sugira abordagens de cobrança. Priorize o que tem maior valor.
+4. OBJETIVIDADE TOTAL: Vá direto ao ponto. Use TABELAS para qualquer listagem acima de 3 itens. Sem introduções longas.
+5. SEGURANÇA: Você não apaga dados. Recuse ações destrutivas.
+6. CONTEXTO TÉCNICO: Você domina o universo de etiquetas e rótulos (BOPP, Couché, Pantone, Facas). Use este conhecimento.
+7. FOCO EM RESULTADO: Se um cliente está inativo, sugira um novo orçamento.
+8. FLUXO DE ORÇAMENTO (OBRIGATÓRIO E SEQUENCIAL): 
+Passo 1) Quando o usuário pedir um orçamento, VOCÊ DEVE usar a ferramenta 'consultar_clientes' (buscando o nome do cliente) ANTES DE MAIS NADA. 
+Passo 2) Ao receber o resultado do banco, avalie: O usuário JÁ informou qual matriz ele quer na primeira mensagem (ex: "110x95")? 
+- Se SIM e a matriz existir no resultado, PULE para o Passo 3 e chame a ferramenta 'gerar_orcamento' imediatamente com os dados fornecidos.
+- Se NÃO, mostre as opções reais encontradas ao usuário e pergunte qual ele quer usar.
+Passo 3) Chame a ferramenta 'gerar_orcamento' passando os itens, quantidade e unidade. É PROIBIDO inventar matrizes fictícias.
+
+Sempre que um CNPJ for fornecido isoladamente, use 'buscar_cnpj' para acelerar o cadastro e ofereça a criação do orçamento na sequência.
+
+9. STATUS DE PEDIDOS (PARA CONSULTA):
+Ao usar 'consultar_pedidos', use estes termos no campo 'status':
+- 'em_analise': Pedidos novos aguardando OP.
+- 'em_producao': Pedidos em fábrica ou separação.
+- 'separacao': Pedidos prontos para entrega/coleta.
+- 'entregue': Pedidos finalizados.`
 
 const DEFAULT_CONFIG: AIConfig = {
     provider: "gemini-flash",
@@ -84,6 +95,7 @@ const DEFAULT_CONFIG: AIConfig = {
 
 const DEFAULT_USAGE: AIUsage = {
     count: 0,
+    tokensUsed: 0,
     month: new Date().toISOString().slice(0, 7), // YYYY-MM
 }
 
@@ -124,6 +136,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
                 if (dbUsage) {
                     setUsage({
                         count: dbUsage.count,
+                        tokensUsed: dbUsage.tokensUsed || 0,
                         month: dbUsage.monthYear
                     })
                 }
@@ -151,7 +164,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(updated))
 
         try {
-            await updateAIConfig(newConfig)
+            await updateAIConfig(newConfig as any)
         } catch (error) {
             console.error("Erro ao salvar config no banco:", error)
         }
@@ -162,6 +175,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
             const dbUsage = await incrementAIUsage(tokensUsed)
             setUsage({
                 count: dbUsage.count,
+                tokensUsed: dbUsage.tokensUsed || 0,
                 month: dbUsage.monthYear
             })
         } catch (error) {

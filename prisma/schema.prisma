@@ -44,31 +44,32 @@ model Vendedor {
 }
 
 model Cliente {
-  id                  Int               @id @default(autoincrement())
-  razaoSocial         String
-  nomeFantasia        String?
-  cnpj                String            @unique
-  ie                  String?
-  email               String?
-  telefone            String
-  compradorNome       String?
-  compradorTelefone   String?
-  endereco            String
-  cep                 String
-  cidade              String
-  estado              String
-  observacoes         String?
-  ativo               Boolean           @default(true)
-  ultimaCompra        DateTime?
-  saldoCreditoValor   Float             @default(0)
-  saldoCreditoEtiquetas Int             @default(0)
-  criadoEm            DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  etiquetasExclusivas ClienteEtiqueta[]
-  itensExclusivos     ItemExclusivoCliente[]
-  movimentacoesCredito MovimentacaoCredito[]
-  orcamentos          Orcamento[]
-  pedidos             Pedido[]
+  id                    Int                    @id @default(autoincrement())
+  razaoSocial           String
+  cnpj                  String                 @unique
+  ie                    String?
+  email                 String?
+  telefone              String
+  endereco              String
+  cep                   String
+  cidade                String
+  estado                String
+  observacoes           String?
+  ativo                 Boolean                @default(true)
+  ultimaCompra          DateTime?
+  criadoEm              DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  compradorNome         String?
+  compradorTelefone     String?
+  nomeFantasia          String?
+  saldoCreditoEtiquetas Int                    @default(0)
+  saldoCreditoValor     Float                  @default(0)
+  AISugestao            AISugestao[]
+  etiquetasExclusivas   ClienteEtiqueta[]
+  itensExclusivos       ItemExclusivoCliente[]
+  movimentacoesCredito  MovimentacaoCredito[]
+  orcamentos            Orcamento[]
+  pedidos               Pedido[]
 
   @@index([razaoSocial])
   @@index([cnpj])
@@ -90,7 +91,6 @@ model Etiqueta {
   tipoTubete            String
   quantidadePorRolo     Int
   metragem              Float?
-  preco                 Float?            @default(0)
   coresDescricao        String?
   orientacaoRebobinagem String?
   observacoesTecnicas   String?
@@ -99,6 +99,7 @@ model Etiqueta {
   ativo                 Boolean           @default(true)
   criadoEm              DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
+  preco                 Float?            @default(0)
   clientesAutorizados   ClienteEtiqueta[]
   itensOrcamento        ItemOrcamento[]
   itensPedido           ItemPedido[]
@@ -154,26 +155,26 @@ model Status {
 }
 
 model Orcamento {
-  id           Int             @id @default(autoincrement())
-  numero       String          @unique
-  clienteId    Int
-  vendedorId   Int
-  statusId     Int
-  observacoes  String?
-  ocCliente    String?
-  totalGeral   Float
-  descontoCredito Float          @default(0)
-  prazoEntrega   DateTime?
-  ativo          Boolean         @default(true)
-  criadoEm     DateTime        @default(now())
-  atualizadoEm DateTime        @updatedAt
-  formaPagamentoId Int?
-  itens        ItemOrcamento[]
-  cliente      Cliente         @relation(fields: [clienteId], references: [id])
-  statusObj    Status          @relation(fields: [statusId], references: [id])
-  vendedor     Vendedor        @relation(fields: [vendedorId], references: [id])
+  id                Int             @id @default(autoincrement())
+  numero            String          @unique
+  clienteId         Int
+  vendedorId        Int
+  statusId          Int
+  observacoes       String?
+  totalGeral        Float
+  ativo             Boolean         @default(true)
+  criadoEm          DateTime        @default(now())
+  atualizadoEm      DateTime        @updatedAt
+  formaPagamentoId  Int?
+  descontoCredito   Float           @default(0)
+  prazoEntrega      DateTime?
+  ocCliente         String?
+  itens             ItemOrcamento[]
+  cliente           Cliente         @relation(fields: [clienteId], references: [id])
   formaPagamentoObj FormaPagamento? @relation(fields: [formaPagamentoId], references: [id])
-  pedidos      Pedido[]
+  statusObj         Status          @relation(fields: [statusId], references: [id])
+  vendedor          Vendedor        @relation(fields: [vendedorId], references: [id])
+  pedidos           Pedido[]
 
   @@index([clienteId])
   @@index([vendedorId])
@@ -184,26 +185,26 @@ model Orcamento {
 }
 
 model ItemOrcamento {
-  id            Int       @id @default(autoincrement())
-  orcamentoId   Int
-  etiquetaId    Int?
-  descricao     String
-  quantidade    Int
+  id                Int       @id @default(autoincrement())
+  orcamentoId       Int
+  etiquetaId        Int?
+  descricao         String
+  quantidade        Int
+  unidade           String
+  precoUnitario     Float
+  total             Float
+  observacao        String?
   quantidadeCredito Float     @default(0)
-  unidade       String
-  precoUnitario Float
-  total         Float
-  observacao    String?
-  etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id], onDelete: SetNull)
-  orcamento     Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  etiqueta          Etiqueta? @relation(fields: [etiquetaId], references: [id])
+  orcamento         Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
 
   @@index([orcamentoId])
   @@index([etiquetaId])
 }
 
 model Pedido {
-  id                     Int          @id @default(autoincrement())
-  numero                 String       @unique
+  id                     Int             @id @default(autoincrement())
+  numero                 String          @unique
   orcamentoId            Int?
   clienteId              Int
   vendedorId             Int
@@ -214,24 +215,24 @@ model Pedido {
   numeroPistas           Int
   observacoesEmbalagem   String?
   observacoesFaturamento String?
-  prazoEntrega           DateTime?
-  formaPagamento         String?      @default("A combinar")
+  formaPagamento         String?         @default("A combinar")
   nomeVendedor           String?
   nomeComprador          String?
   frete                  String?
   observacoesGerais      String?
-  ocCliente              String?
   totalGeral             Float
-  ativo                  Boolean      @default(true)
-  criadoEm               DateTime     @default(now())
-  atualizadoEm           DateTime     @updatedAt
+  ativo                  Boolean         @default(true)
+  criadoEm               DateTime        @default(now())
+  atualizadoEm           DateTime        @updatedAt
   formaPagamentoId       Int?
+  prazoEntrega           DateTime?
+  ocCliente              String?
   itens                  ItemPedido[]
-  cliente                Cliente      @relation(fields: [clienteId], references: [id])
-  orcamento              Orcamento?   @relation(fields: [orcamentoId], references: [id])
-  statusObj              Status       @relation(fields: [statusId], references: [id])
-  vendedor               Vendedor     @relation(fields: [vendedorId], references: [id])
+  cliente                Cliente         @relation(fields: [clienteId], references: [id])
   formaPagamentoObj      FormaPagamento? @relation(fields: [formaPagamentoId], references: [id])
+  orcamento              Orcamento?      @relation(fields: [orcamentoId], references: [id])
+  statusObj              Status          @relation(fields: [statusId], references: [id])
+  vendedor               Vendedor        @relation(fields: [vendedorId], references: [id])
 
   @@index([clienteId])
   @@index([vendedorId])
@@ -243,30 +244,30 @@ model Pedido {
 }
 
 model ItemPedido {
-  id            Int       @id @default(autoincrement())
-  pedidoId      Int
-  etiquetaId    Int?
-  descricao     String
-  quantidade    Int
+  id                Int       @id @default(autoincrement())
+  pedidoId          Int
+  etiquetaId        Int?
+  descricao         String
+  quantidade        Int
+  unidade           String
+  precoUnitario     Float
+  total             Float
+  observacao        String?
   quantidadeCredito Float     @default(0)
-  unidade       String
-  precoUnitario Float
-  total         Float
-  observacao    String?
-  etiqueta      Etiqueta? @relation(fields: [etiquetaId], references: [id], onDelete: SetNull)
-  pedido        Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  etiqueta          Etiqueta? @relation(fields: [etiquetaId], references: [id])
+  pedido            Pedido    @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
 
   @@index([pedidoId])
   @@index([etiquetaId])
 }
 
 model ItemExclusivoCliente {
-  id        Int      @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   clienteId Int
   nome      String
   descricao String?
-  preco     Float    @default(0)
-  cliente   Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  preco     Float   @default(0)
+  cliente   Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
   @@index([clienteId])
 }
@@ -274,14 +275,13 @@ model ItemExclusivoCliente {
 model MovimentacaoCredito {
   id          Int      @id @default(autoincrement())
   clienteId   Int
-  tipo        String   // VALOR ou ETIQUETA
-  operacao    String   // CREDITO (Adicionar) ou DEBITO (Remover)
+  tipo        String
+  operacao    String
   quantidade  Float
   descricao   String?
   orcamentoId Int?
   criadoEm    DateTime @default(now())
-  
-  cliente     Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  cliente     Cliente  @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
   @@index([clienteId])
   @@index([criadoEm])
@@ -289,14 +289,14 @@ model MovimentacaoCredito {
 }
 
 model FormaPagamento {
-  id         Int         @id @default(autoincrement())
-  nome       String      @unique
+  id                 Int         @id @default(autoincrement())
+  nome               String      @unique
   ativo              Boolean     @default(true)
-  quantidadeParcelas Int         @default(1)
   criadoEm           DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  orcamentos Orcamento[]
-  pedidos    Pedido[]
+  updatedAt          DateTime    @updatedAt
+  quantidadeParcelas Int         @default(1)
+  orcamentos         Orcamento[]
+  pedidos            Pedido[]
 
   @@index([ativo])
 }
@@ -329,4 +329,31 @@ model AIUsage {
   count      Int      @default(0)
   tokensUsed Int      @default(0)
   updatedAt  DateTime @updatedAt
+}
+
+model AIAprendizado {
+  id        Int      @id @default(autoincrement())
+  topico    String
+  licao     String
+  confianca Float    @default(1.0)
+  criadoEm  DateTime @default(now())
+  updatedAt DateTime
+
+  @@index([topico])
+}
+
+model AISugestao {
+  id           Int       @id @default(autoincrement())
+  tipo         String
+  dados        Json
+  raciocinio   String?
+  status       String    @default("PENDENTE")
+  feedback     String?
+  clienteId    Int?
+  criadoEm     DateTime  @default(now())
+  processadoEm DateTime?
+  Cliente      Cliente?  @relation(fields: [clienteId], references: [id])
+
+  @@index([status])
+  @@index([tipo])
 }

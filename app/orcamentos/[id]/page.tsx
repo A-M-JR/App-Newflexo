@@ -18,12 +18,14 @@ import {
 } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles } from "lucide-react"
+import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles, Wallet, RotateCcw, Check } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus } from "@/lib/actions/orcamentos"
+import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus, getOrcamentos } from "@/lib/actions/orcamentos"
 import { useAuth } from "@/lib/auth-context"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -52,6 +54,8 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const [prazoEntrega, setPrazoEntrega] = useState("")
   const [ocCliente, setOcCliente] = useState("")
   const [openCatalogo, setOpenCatalogo] = useState(false)
+  const [todosOrcamentos, setTodosOrcamentos] = useState<any[]>([])
+  const [clienteCompleto, setClienteCompleto] = useState<any>(null)
 
   // Status mapping for the visual steps
   const steps = [
@@ -142,8 +146,9 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     Promise.all([
       getOrcamentoById(Number(id), currentUser?.id),
       getEtiquetas(),
-      fetch("/api/formas-pagamento").then(res => res.json())
-    ]).then(([data, etqs, formas]) => {
+      fetch("/api/formas-pagamento").then(res => res.json()),
+      getOrcamentos({ limit: 100, mode: 'history' })
+    ]).then(async ([data, etqs, formas, orcs]) => {
       if (data) {
         setOrcamento(data)
         setStatus(data.status)
@@ -152,9 +157,19 @@ function OrcamentoDetailContent({ id }: { id: string }) {
         setPrazoEntrega(data.prazoEntrega ? new Date(data.prazoEntrega).toISOString().split('T')[0] : "")
         setOcCliente((data as any).ocCliente || "")
         setItens(data.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
+
+        // Fetch full client for exclusive items and credit balances
+        try {
+          const { getClienteById } = await import("@/lib/actions/clientes")
+          const fullCl = await getClienteById(data.clienteId)
+          setClienteCompleto(fullCl)
+        } catch (e) {
+          console.error("Erro ao carregar cliente completo:", e)
+        }
       }
       setEtiquetasList(etqs)
       setFormasPagamento(formas || [])
+      setTodosOrcamentos(orcs?.data || [])
       setLoading(false)
     })
   }, [id])
@@ -290,6 +305,43 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     toast.success("Etiqueta adicionada!")
     setOpenCatalogo(false)
   }
+
+  function adicionarRecompra(descricao: string, precoUnitario: number | string) {
+    const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
+    const finalPreco = typeof precoUnitario === 'string' ? parseFloat(precoUnitario.replace(',', '.')) || 0 : precoUnitario
+    setItens([...itens, {
+      id: nextId,
+      descricao,
+      quantidade: 1,
+      unidade: "unid",
+      precoUnitario: finalPreco,
+      observacao: ""
+    }])
+    toast.success("Item de recompra adicionado!")
+  }
+
+  function adicionarItemExclusivo(item: any) {
+    const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
+    setItens([...itens, {
+      id: nextId,
+      descricao: item.nome,
+      quantidade: 1,
+      unidade: "unid",
+      precoUnitario: item.preco || 0,
+      observacao: item.descricao || "Item exclusivo cadastrado"
+    }])
+    toast.success(`${item.nome} adicionado!`)
+  }
+
+  const clienteSelecionado = clienteCompleto || orcamento?.cliente
+  const historicoOrcamentos = orcamento?.clienteId ? todosOrcamentos.filter(o => o.clienteId === orcamento.clienteId) : []
+  const itensAnteriores = historicoOrcamentos.flatMap((o) => o.itens || [])
+
+  // Sugestões de Etiquetas para o Cliente Selecionado
+  const etiquetasSugeridas = orcamento?.clienteId ? etiquetasList.filter(e => e.clientesIds?.includes(Number(orcamento.clienteId))) : []
+
+  // Sugestões de Itens Exclusivos (Insumos) para o Cliente Selecionado
+  const itensExclusivosSugeridos = clienteSelecionado?.itensExclusivos || []
 
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -495,6 +547,151 @@ function OrcamentoDetailContent({ id }: { id: string }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Central de Sugestões e Créditos (Compactada) */}
+      {isEditing && clienteSelecionado && (
+        <div className="space-y-4 my-2">
+          {/* Barra de Créditos Compacta */}
+          {((clienteSelecionado.saldoCreditoValor ?? 0) > 0 || (clienteSelecionado.saldoCreditoEtiquetas ?? 0) > 0) && (
+            <div className="flex flex-wrap items-center gap-2 p-2 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs animate-in fade-in zoom-in-95">
+              <Wallet className="size-3.5 text-emerald-600" />
+              <span className="font-bold text-emerald-800 uppercase tracking-tight">Saldos:</span>
+              {(clienteSelecionado.saldoCreditoValor ?? 0) > 0 && (
+                <Badge variant="outline" className="bg-emerald-100/50 text-emerald-700 border-emerald-200">
+                  Valor: {formatCurrency(clienteSelecionado.saldoCreditoValor)}
+                </Badge>
+              )}
+              {(clienteSelecionado.saldoCreditoEtiquetas ?? 0) > 0 && (
+                <Badge variant="outline" className="bg-blue-100/50 text-blue-700 border-blue-200">
+                  Etiquetas: {(clienteSelecionado.saldoCreditoEtiquetas ?? 0).toLocaleString()} un
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Abas de Sugestões */}
+          {(etiquetasSugeridas.length > 0 || itensExclusivosSugeridos.length > 0 || itensAnteriores.length > 0) && (
+            <Tabs defaultValue={etiquetasSugeridas.length > 0 ? "matrizes" : itensExclusivosSugeridos.length > 0 ? "insumos" : "recompra"} className="w-full">
+              <TabsList className="grid w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
+                <TabsTrigger value="matrizes" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={etiquetasSugeridas.length === 0}>
+                  <Sparkles className="size-3 mr-1.5" /> Etiquetas
+                </TabsTrigger>
+                <TabsTrigger value="insumos" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensExclusivosSugeridos.length === 0}>
+                  <Plus className="size-3 mr-1.5" /> Insumos
+                </TabsTrigger>
+                <TabsTrigger value="recompra" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensAnteriores.length === 0}>
+                  <RotateCcw className="size-3 mr-1.5" /> Histórico
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Histórico Content */}
+              <TabsContent value="recompra" className="mt-0 outline-none">
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <ScrollArea className="h-44 pr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {itensAnteriores.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-col justify-between rounded-lg border border-primary/10 bg-background/60 p-2 hover:bg-background hover:border-primary/40 transition-all cursor-pointer shadow-sm group"
+                          onClick={() => adicionarRecompra(item.descricao, item.precoUnitario)}
+                        >
+                          <span className="text-[11px] leading-tight text-foreground font-medium mb-1 whitespace-pre-wrap">
+                            {item.descricao}
+                          </span>
+                          <div className="flex justify-between items-center mt-auto">
+                            <span className="text-[9px] text-muted-foreground uppercase font-bold">RECOMPRA</span>
+                            <span className="text-[10px] font-bold text-primary mr-1">
+                              {formatCurrency(item.precoUnitario)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </TabsContent>
+
+              {/* Etiquetas Content */}
+              <TabsContent value="matrizes" className="mt-0 outline-none">
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                  <ScrollArea className="h-44 pr-4">
+                    <div className="flex flex-wrap gap-2">
+                      {etiquetasSugeridas.map(etq => (
+                        <div
+                          key={etq.id}
+                          onClick={() => {
+                            // Buscar preço específico para o cliente se houver
+                            let precoSugerido = etq.preco || 0
+                            if (orcamento.clienteId && etq.clientesVinculados) {
+                              const vinculo = etq.clientesVinculados.find((v: any) => v.id === Number(orcamento.clienteId))
+                              if (vinculo && vinculo.preco !== null && vinculo.preco !== undefined) {
+                                precoSugerido = vinculo.preco
+                              }
+                            }
+                            const desc = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}${etq.observacoesTecnicas ? `\nObs: ${etq.observacoesTecnicas}` : ''}`
+                            const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
+                            setItens([...itens, {
+                              id: nextId,
+                              etiquetaId: etq.id,
+                              descricao: desc,
+                              quantidade: 1,
+                              unidade: "unid",
+                              precoUnitario: precoSugerido,
+                              observacao: ""
+                            }])
+                            toast.success("Etiqueta adicionada!")
+                          }}
+                          className="w-[240px] border border-amber-200 bg-background hover:bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/20 rounded-lg p-2 cursor-pointer transition-all shadow-sm group"
+                        >
+                          <div className="flex flex-col mb-1">
+                            <span className="font-bold text-[11px] text-amber-900 dark:text-amber-400 group-hover:underline leading-tight">
+                              {etq.nome}
+                            </span>
+                            <span className="text-[9px] text-muted-foreground mt-0.5 font-medium">Ref: {etq.codigo}</span>
+                          </div>
+                          <p className="text-[9px] text-amber-700/80 mb-1">
+                            {etq.material} • {etq.largura}x{etq.altura}mm
+                          </p>
+                          <Button variant="outline" size="sm" className="w-full h-6 text-[9px] bg-amber-100/50 hover:bg-amber-200/50 border-amber-200 text-amber-800">
+                            Adicionar Etiqueta
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </TabsContent>
+
+              {/* Insumos Content */}
+              <TabsContent value="insumos" className="mt-0 outline-none">
+                <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3">
+                  <ScrollArea className="h-44 pr-4">
+                    <div className="flex flex-wrap gap-2">
+                      {itensExclusivosSugeridos.map((item: any, idx: number) => (
+                        <div
+                          key={idx}
+                          onClick={() => adicionarItemExclusivo(item)}
+                          className="w-[200px] border border-blue-200 bg-background hover:bg-blue-50 dark:border-blue-900/50 dark:bg-blue-950/20 rounded-lg p-2 cursor-pointer transition-all shadow-sm group"
+                        >
+                          <p className="font-bold text-[11px] text-blue-900 dark:text-blue-400 group-hover:underline truncate mb-1">
+                            {item.nome}
+                          </p>
+                          <p className="text-[10px] font-mono text-blue-700 mb-2">
+                            {formatCurrency(item.preco)}
+                          </p>
+                          <Button variant="outline" size="sm" className="w-full h-6 text-[9px] bg-blue-100/50 hover:bg-blue-200/50 border-blue-200 text-blue-800">
+                            Adicionar Insumo
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </div>
+      )}
 
       <Card className="border-border/50 shadow-sm overflow-hidden mt-2">
         <CardHeader className="bg-muted/20 border-b border-border/50 pb-4">

@@ -26,7 +26,7 @@ import { getOrcamentos, saveOrcamento } from "@/lib/actions/orcamentos"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -83,6 +83,7 @@ function NovoOrcamentoContent() {
   const [descontoCredito, setDescontoCredito] = useState<number>(0)
   const [itensCreditoQtd, setItensCreditoQtd] = useState<Record<string, number>>({}) // id -> quantidade bonificada
   const [ocCliente, setOcCliente] = useState("")
+  const aiProcessedRef = useRef(false) // 🔒 Trava contra loop de automação
 
   useEffect(() => {
     Promise.all([
@@ -112,40 +113,58 @@ function NovoOrcamentoContent() {
   useEffect(() => {
     const aiCliente = searchParams.get("cliente")
     const aiItens = searchParams.get("itens")
+    const aiQtd = searchParams.get("qtd")
+    const aiUnid = searchParams.get("unid")
     const aiObs = searchParams.get("obs")
 
+    if (aiProcessedRef.current) return // Já processou esta automação
+
     if (aiCliente && clientes.length > 0) {
-      // Busca inteligente: tenta encontrar o cliente mais próximo por nome
-      const match = clientes.find(c =>
-        c.razaoSocial.toLowerCase().includes(aiCliente.toLowerCase())
-      )
-      if (match) {
+      const searchNormalized = aiCliente.toLowerCase().trim().replace(/\D/g, '') // Remove tudo que não é número para testar CNPJ
+      const searchName = aiCliente.toLowerCase().trim()
+
+      // Busca inteligente: tenta encontrar por CNPJ (se for número) ou por nome
+      const match = clientes.find(c => {
+        const cnpjMatch = c.cnpj && c.cnpj.replace(/\D/g, '').includes(searchNormalized) && searchNormalized.length > 5
+        const nameMatch = c.razaoSocial.toLowerCase().includes(searchName)
+        return cnpjMatch || nameMatch
+      })
+
+      if (match && clienteId !== match.id) {
         handleClienteChange(match.id.toString())
       }
     }
 
     if (aiItens && itens.length === 0) {
-      // Converte a descrição da IA em um item inicial
+      // Converte a descrição da IA em um item inicial com quantidade e unidade corretas
       setItens([{
         id: "ai-item-1",
         descricao: aiItens,
-        quantidade: 1,
-        unidade: "unid",
+        quantidade: aiQtd ? (parseFloat(aiQtd) || 1) : 1,
+        unidade: aiUnid || "unid",
         precoUnitario: 0,
         observacao: "Item sugerido pela IA"
       }])
     }
 
-    if (aiObs) {
+    if (aiObs && !observacoes) {
       setObservacoes(aiObs)
     }
 
     if (aiCliente || aiItens || aiObs) {
-      toast.info("Orçamento pré-montado pelo Assistente IA", {
-        description: "Revise os dados antes de salvar."
-      })
+      // Só marca como processado se:
+      // 1. Não pediu cliente OU já carregou a lista e tentou o match
+      // 2. Pediu itens ou obs e eles foram processados
+      const clientReady = !aiCliente || (aiCliente && clientes.length > 0)
+      
+      if (clientReady) {
+        aiProcessedRef.current = true
+        toast.info("Orçamento pré-montado pelo Assistente IA", {
+          description: "Revise os dados antes de salvar."
+        })
+      }
     }
-  }, [searchParams, clientes])
+  }, [searchParams, clientes, clienteId, itens.length, observacoes])
 
   const clienteSelecionado = clientes.find((c) => c.id === clienteId)
   const historicoOrcamentos = clienteId ? todosOrcamentos.filter(o => o.clienteId === clienteId) : []
