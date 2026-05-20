@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { unstable_noStore as noStore } from "next/cache"
+import { getRequesterVendedorId } from "./users"
 
 export async function getOportunidadesData(vendedorIdParam?: number, requesterId?: number) {
     noStore()
@@ -13,7 +14,6 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
   
     // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
     if (requesterId) {
-        const { getRequesterVendedorId } = await import("./users")
         const perm = await getRequesterVendedorId(requesterId)
         if (perm !== 'admin') {
             vendedorId = perm as number // Força o vendedorId dele
@@ -236,7 +236,6 @@ export async function getLatestOportunidadesInsight(vendedorIdParam?: number, re
   
     // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
     if (requesterId) {
-        const { getRequesterVendedorId } = await import("./users")
         const perm = await getRequesterVendedorId(requesterId)
         if (perm !== 'admin') {
             vendedorId = perm as number // Força o vendedorId dele
