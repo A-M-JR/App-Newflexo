@@ -192,7 +192,7 @@ export async function generateOportunidadesInsight(vendedorIdParam?: number, req
 
     // Chamada interna ao endpoint de chat ou lógica direta
     // Para simplificar e garantir segurança (sem expor chave no client), vamos usar a mesma lógica do route.ts ou chamar o route.ts internamente
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.alvarobueno.com.br'
     
     try {
         const res = await fetch(`${baseUrl}/api/ai/chat`, {

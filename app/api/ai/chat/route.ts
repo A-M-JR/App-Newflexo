@@ -235,16 +235,21 @@ export async function POST(request: NextRequest) {
         // Invertendo a ordem: Instruções do usuário por último para terem mais peso
         const fullSystemPrompt = contextSummary + "\n\n" + systemPrompt
 
+        // Normalização do provedor para caso exista resquício no banco de dados
+        let normProvider = provider as string;
+        if (normProvider === "gpt-4" || normProvider === "gpt-4o") normProvider = "gpt-4o-mini";
+        if (normProvider === "gemini") normProvider = "gemini-flash";
+
         // Roteamento por provedor
-        if (provider === "gpt-4o-mini") {
+        if (normProvider === "gpt-4o-mini") {
             return await handleOpenAI(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
-        } else if (provider === "gemini-flash") {
+        } else if (normProvider === "gemini-flash") {
             return await handleGemini(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
-        } else if (provider === "abacus-route") {
+        } else if (normProvider === "abacus-route") {
             return await handleAbacus(messages, apiKey, fullSystemPrompt, body.includeTools, body.image)
         }
 
-        return NextResponse.json({ error: "Provedor de IA não reconhecido." }, { status: 400 })
+        return NextResponse.json({ error: `Provedor de IA não reconhecido: '${provider}'` }, { status: 400 })
     } catch (error) {
         // console.error("[Módulo IA] Erro na API Route")
         return NextResponse.json(
