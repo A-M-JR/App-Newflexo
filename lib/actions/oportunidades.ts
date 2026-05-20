@@ -175,20 +175,20 @@ export async function generateOportunidadesInsight(vendedorIdParam?: number, req
         throw new Error("Módulo IA não configurado ou desativado.")
     }
 
-    const prompt = `Você é o CGO (Chief Growth Officer) da Newflexo. Sua missão é transformar os dados operacionais em lucro imediato.
+    const prompt = `Você é o CGO (Chief Growth Officer) da Newflexo. Analise os dados operacionais abaixo e forneça uma estratégia rápida.
     
-    Analise o contexto abaixo e forneça um RELATÓRIO DE COMANDO E ESTRATÉGIA.
+    RESTRIÇÃO ABSOLUTA: Baseie-se EXCLUSIVAMENTE nos dados fornecidos abaixo. Não invente informações, não fale sobre assuntos externos à Newflexo e mantenha o foco 100% nas operações e vendas da gráfica.
     
     ESTRUTURA DO RELATÓRIO:
-    1. 🎯 FOCO PRIORITÁRIO: Qual a ação #1 que trará mais retorno HOJE?
-    2. 📈 ANÁLISE DE CRESCIMENTO: Como escalar o faturamento com os clientes atuais (upsell/cross-sell)?
+    1. 🎯 FOCO PRIORITÁRIO: Qual a ação #1 que trará mais retorno HOJE? (Seja breve)
+    2. 📈 ANÁLISE DE CRESCIMENTO: Como escalar o faturamento (upsell/cross-sell)?
     3. ⚠️ MITIGAÇÃO DE RISCO: Onde a produção está perdendo dinheiro ou tempo?
-    4. 💡 INSIGHTS PREDITIVOS: Baseado nos clientes sem orçamento, quem tem maior potencial de se tornar 'Cliente VIP'?
+    4. 💡 INSIGHTS PREDITIVOS: Quem tem maior potencial de se tornar 'Cliente VIP'?
     
     DADOS PARA PROCESSAMENTO:
     ${context}
     
-    Formate como um painel executivo dinâmico. Use tabelas, listas de tarefas (checklists) e indicadores de prioridade (ALTA/MÉDIA/BAIXA).`
+    Formate como um painel executivo. Use tabelas e checklists concisos (MÁXIMO de 3 itens por tabela/lista para garantir velocidade de resposta) e indicadores de prioridade.`
 
     // Chamada interna ao endpoint de chat ou lógica direta
     // Para simplificar e garantir segurança (sem expor chave no client), vamos usar a mesma lógica do route.ts ou chamar o route.ts internamente
