@@ -1,6 +1,7 @@
 "use client"
 
 import { Layers } from "lucide-react"
+import type { FormatoEtiqueta } from "@/lib/types"
 
 interface LabelPreviewProps {
   largura: number
@@ -8,13 +9,15 @@ interface LabelPreviewProps {
   material: string
   cores: number
   aplicacoes: string[]
+  formato?: FormatoEtiqueta | string | null
 }
 
-export function LabelPreview({ largura, altura, material, cores, aplicacoes }: LabelPreviewProps) {
-  const ratio = altura > 0 ? largura / altura : 1
+export function LabelPreview({ largura, altura, material, cores, aplicacoes, formato = "RETANGULAR" }: LabelPreviewProps) {
+  const isRedonda = formato === "REDONDA"
+  const ratio = isRedonda ? 1 : altura > 0 ? largura / altura : 1
   const maxWidth = 200
   const maxHeight = 160
-  
+
   let w = maxWidth
   let h = maxWidth / ratio
 
@@ -32,17 +35,21 @@ export function LabelPreview({ largura, altura, material, cores, aplicacoes }: L
     return "bg-slate-50 border-slate-200"
   }
 
+  const medidaLabel = isRedonda
+    ? `Ø ${largura || "?"} mm`
+    : `${largura || "?"} x ${altura || "?"} mm`
+
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4">
       <div className="relative group perspective-1000">
-        <div 
+        <div
           style={{ width: `${w}px`, height: `${h}px` }}
-          className={`rounded-sm border-2 shadow-lg transition-all duration-500 relative overflow-hidden flex flex-col items-center justify-center p-2 ${getMaterialColor()}`}
+          className={`border-2 shadow-lg transition-all duration-500 relative overflow-hidden flex flex-col items-center justify-center p-2 ${isRedonda ? "rounded-full" : "rounded-sm"} ${getMaterialColor()}`}
         >
           <div className="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:10px_10px]" />
           <Layers className="size-6 text-slate-300/50 mb-1" />
-          <span className="text-[9px] uppercase font-bold text-slate-400 select-none">
-            {largura || "?"} x {altura || "?"} mm
+          <span className="text-[9px] uppercase font-bold text-slate-400 select-none text-center">
+            {medidaLabel}
           </span>
           <div className="absolute top-1 right-1 flex flex-col gap-1">
             {aplicacoes.includes("Hot Stamping") && <div className="size-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse" />}

@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import type { Pedido, Cliente, Vendedor } from "./types";
-import { etiquetas } from "./mock-data";
+import { formatEtiquetaMedida } from "./utils";
 
 // Helper Colors
 const PRETO = [0, 0, 0] as [number, number, number];
@@ -72,7 +72,7 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
 
         let y = 10;
 
-        const etiqueta = item.etiquetaId ? etiquetas.find(e => e.id === item.etiquetaId) : null;
+        const etiqueta = item.etiqueta ?? null;
 
         // ==============================================
         // HEADER DA OP
@@ -171,7 +171,7 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         y += qH;
 
         // Medida e Faca
-        const medida = etiqueta ? `${etiqueta.largura}x${etiqueta.altura}` : "N/D";
+        const medida = etiqueta ? formatEtiquetaMedida(etiqueta).replace("mm", "") : "N/D";
         const faca = etiqueta ? etiqueta.codigo : "N/D";
         drawBox(doc, mx, y, 35, 10, "MEDIDA:", medida, true);
         drawBox(doc, mx + 35, y, 30, 10, "CÓDIGO FACA:", faca, true);
@@ -179,7 +179,7 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         y += 10;
 
         // ETIQUETAS P/ ROLO
-        const qtdRolo = etiqueta ? `${etiqueta.quantidadePorRolo}` : "N/D";
+        const qtdRolo = etiqueta?.quantidadePorRolo != null ? `${etiqueta.quantidadePorRolo}` : "N/D";
         drawBox(doc, mx, y, 35, 10, "ETIQUETAS P/ ROLO:", qtdRolo, false);
         // METRAGEM
         const metragem = etiqueta?.metragem ? `${etiqueta.metragem}m` : "N/D";
@@ -191,7 +191,7 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         y += 10;
 
         // TUBETE
-        const tubete = etiqueta ? etiqueta.tipoTubete : pedido.tipoTubete;
+        const tubete = etiqueta?.tipoTubete || pedido.tipoTubete || "N/D";
         drawBox(doc, mx, y, w, 8);
         doc.text("TUBETE:", mx + 2, y + 5);
         doc.setFontSize(10);
@@ -202,7 +202,7 @@ export async function gerarOPPDF(pedido: Pedido, cliente: Cliente, vendedor?: Ve
         y += 8;
 
         // MATERIAL
-        const material = etiqueta ? etiqueta.material.toUpperCase() : "N/D";
+        const material = etiqueta?.material ? etiqueta.material.toUpperCase() : "N/D";
         drawBox(doc, mx, y, w, 8);
         doc.setFontSize(8);
         doc.text("MATERIAL:", mx + 2, y + 5);

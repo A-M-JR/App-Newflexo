@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check, CreditCard, Wallet, MinusCircle, AlertCircle } from "lucide-react"
-import { etiquetas, formatCurrency } from "@/lib/mock-data"
+import { formatCurrency, formatEtiquetaMedida } from "@/lib/utils"
 import { getClientes, getClienteById } from "@/lib/actions/clientes"
 import { getVendedores } from "@/lib/actions/vendedores"
 import { getOrcamentos, saveOrcamento } from "@/lib/actions/orcamentos"
@@ -251,12 +251,17 @@ function NovoOrcamentoContent() {
       }
     }
 
-    const descricao = `${etq.nome} \nRef: ${etq.codigo} | Medida: ${etq.largura}x${etq.altura}mm | Mat: ${etq.material} | Cores: ${etq.numeroCores} | Tubete: ${etq.tipoTubete}`
+    const detalhes: string[] = [`Medida: ${formatEtiquetaMedida(etq)}`]
+    if (etq.material) detalhes.push(`Mat: ${etq.material}`)
+    if (etq.numeroCores != null) detalhes.push(`Cores: ${etq.numeroCores}`)
+    if (etq.tipoTubete) detalhes.push(`Tubete: ${etq.tipoTubete}`)
+
+    const descricao = `${etq.nome} \nRef: ${etq.codigo} | ${detalhes.join(" | ")}`
     setItens([...itens, {
       id: Math.random().toString(36).substr(2, 9),
       descricao,
       quantidade: 1,
-      unidade: "unid",
+      unidade: etq.unidadeVenda === "MILHEIRO" ? "mil" : "unid",
       precoUnitario: precoSugerido,
       observacao: ""
     }])
@@ -594,7 +599,7 @@ function NovoOrcamentoContent() {
                             <span className="text-[9px] text-muted-foreground mt-0.5 font-medium">Ref: {etq.codigo}</span>
                           </div>
                           <p className="text-[9px] text-amber-700/80 mb-1">
-                            {etq.material} • {etq.largura}x{etq.altura}mm
+                            {formatEtiquetaMedida(etq)}{etq.material ? ` • ${etq.material}` : ""}
                           </p>
                           <Button variant="outline" size="sm" className="w-full h-6 text-[9px] bg-amber-100/50 hover:bg-amber-200/50 border-amber-200 text-amber-800">
                             Adicionar Etiqueta

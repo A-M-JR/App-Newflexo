@@ -13,6 +13,7 @@ import { getEtiquetas } from "@/lib/actions/etiquetas"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Etiqueta } from "@/lib/types"
+import { formatEtiquetaMedida } from "@/lib/utils"
 
 export default function EtiquetasPage() {
   const [search, setSearch] = useState("")
@@ -45,8 +46,8 @@ export default function EtiquetasPage() {
       )
   }, [etiquetasList, search, fMaterial, fTubete])
 
-  const uniqueMaterials = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.material))), [etiquetasList])
-  const uniqueTubetes = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.tipoTubete))), [etiquetasList])
+  const uniqueMaterials = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.material).filter(Boolean))), [etiquetasList])
+  const uniqueTubetes = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.tipoTubete).filter(Boolean))), [etiquetasList])
 
   const handleEdit = () => {
     setEtiquetaToEdit(detailEtiqueta)
@@ -147,7 +148,7 @@ export default function EtiquetasPage() {
                         </p>
                       </div>
                       <Badge variant="outline" className="text-[10px] bg-background shadow-sm shrink-0">
-                        {etiqueta.material}
+                        {etiqueta.formato === "REDONDA" ? "Redonda" : "Retangular"}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -156,24 +157,26 @@ export default function EtiquetasPage() {
                       <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
                         <span className="flex items-center gap-1.5 bg-muted/30 p-1.5 rounded-md">
                           <Ruler className="size-3 text-primary/70" />
-                          {etiqueta.largura}x{etiqueta.altura}mm
+                          {formatEtiquetaMedida(etiqueta)}
                         </span>
                         <span className="flex items-center gap-1.5 bg-muted/30 p-1.5 rounded-md">
                           <Palette className="size-3 text-primary/70" />
-                          {etiqueta.numeroCores} cor(es)
+                          {etiqueta.numeroCores != null ? `${etiqueta.numeroCores} cor(es)` : "—"}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/50">
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold">Valor Unitário</span>
+                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold">
+                            {etiqueta.unidadeVenda === "MILHEIRO" ? "Valor / Mil" : "Valor Unitário"}
+                          </span>
                           <span className="text-xs font-bold text-primary flex items-center gap-1">
                             {etiqueta.preco ? `R$ ${etiqueta.preco.toFixed(4)}` : "R$ 0,0000"}
                           </span>
                         </div>
                         <div className="flex flex-col items-end">
                           <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold text-right">Volume Rolo</span>
-                          <span className="text-xs font-medium text-right">{etiqueta.quantidadePorRolo} un</span>
+                          <span className="text-xs font-medium text-right">{etiqueta.quantidadePorRolo != null ? `${etiqueta.quantidadePorRolo} un` : "—"}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-end gap-1.5 pt-2">

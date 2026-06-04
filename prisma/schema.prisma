@@ -83,13 +83,15 @@ model Etiqueta {
   id                    Int               @id @default(autoincrement())
   nome                  String
   codigo                String            @unique
-  material              String
-  tipoAdesivo           String
+  formato               String            @default("RETANGULAR")
+  unidadeVenda          String            @default("UNIDADE")
+  material              String            @default("")
+  tipoAdesivo           String            @default("")
   largura               Float
   altura                Float
-  numeroCores           Int
-  tipoTubete            String
-  quantidadePorRolo     Int
+  numeroCores           Int?
+  tipoTubete            String            @default("")
+  quantidadePorRolo     Int?
   metragem              Float?
   coresDescricao        String?
   orientacaoRebobinagem String?

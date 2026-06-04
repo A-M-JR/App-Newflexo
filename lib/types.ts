@@ -49,17 +49,22 @@ export interface ClienteVinculado {
   preco?: number | null
 }
 
+export type FormatoEtiqueta = "RETANGULAR" | "REDONDA"
+export type UnidadeVendaEtiqueta = "UNIDADE" | "MILHEIRO"
+
 export interface Etiqueta {
   id: number
   nome: string
   codigo: string
+  formato?: FormatoEtiqueta
+  unidadeVenda?: UnidadeVendaEtiqueta
   material: string
   tipoAdesivo: string
   largura: number
   altura: number
-  numeroCores: number
+  numeroCores?: number | null
   tipoTubete: string
-  quantidadePorRolo: number
+  quantidadePorRolo?: number | null
   observacoesTecnicas?: string | null
   clientesIds?: number[]
   pasta?: string | null
@@ -112,6 +117,7 @@ export interface ItemPedido {
   id: number
   pedidoId: number
   etiquetaId?: number
+  etiqueta?: Etiqueta | null
   descricao: string
   quantidade: number
   quantidadeCredito: number

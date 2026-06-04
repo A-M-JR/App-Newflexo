@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -63,11 +64,44 @@ export function AppSidebar() {
   const pathname = usePathname()
   const { currentUser, isAdmin, logout } = useAuth()
   const { isActive: isAIActive } = useAI()
+  const sidebarContentRef = useRef<HTMLDivElement>(null)
+  const savedScrollRef = useRef(0)
+
+  const handleSidebarScroll = useCallback(() => {
+    if (sidebarContentRef.current) {
+      savedScrollRef.current = sidebarContentRef.current.scrollTop
+    }
+  }, [])
+
+  useEffect(() => {
+    const content = sidebarContentRef.current
+    if (!content) return
+
+    content.scrollTop = savedScrollRef.current
+
+    const active = content.querySelector<HTMLElement>(
+      '[data-sidebar="menu-button"][data-active="true"]',
+    )
+    if (!active) return
+
+    requestAnimationFrame(() => {
+      const contentRect = content.getBoundingClientRect()
+      const activeRect = active.getBoundingClientRect()
+      const isFullyVisible =
+        activeRect.top >= contentRect.top &&
+        activeRect.bottom <= contentRect.bottom
+
+      if (!isFullyVisible) {
+        active.scrollIntoView({ block: "nearest", behavior: "smooth" })
+        savedScrollRef.current = content.scrollTop
+      }
+    })
+  }, [pathname])
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4 border-b border-sidebar-border/50 bg-gradient-to-b from-sidebar-accent/50 to-transparent">
-        <Link href="/" className="flex items-center gap-3 transition-transform hover:scale-[1.02] group/logo">
+      <SidebarHeader className="shrink-0 p-4 border-b border-sidebar-border/50 bg-gradient-to-b from-sidebar-accent/50 to-transparent">
+        <Link href="/" scroll={false} className="flex items-center gap-3 transition-transform hover:scale-[1.02] group/logo">
           <div className="relative flex h-16 w-full items-center justify-center">
             <img
               src="/logo_sem_fundo_branca.png"
@@ -77,7 +111,11 @@ export function AppSidebar() {
           </div>
         </Link>
       </SidebarHeader>
-      <SidebarContent className="custom-scrollbar">
+      <SidebarContent
+        ref={sidebarContentRef}
+        onScroll={handleSidebarScroll}
+        className="custom-scrollbar scroll-smooth"
+      >
         <SidebarGroup>
           <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -103,7 +141,7 @@ export function AppSidebar() {
                         }
                       `}
                     >
-                      <Link href={item.href} className="flex items-center gap-3">
+                      <Link href={item.href} scroll={false} className="flex items-center gap-3">
                         <item.icon className="size-[18px]" />
                         <span>{item.label}</span>
                       </Link>
@@ -127,7 +165,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/comissoes" className="flex items-center gap-3">
+                    <Link href="/comissoes" scroll={false} className="flex items-center gap-3">
                       <CreditCard className="size-[18px]" />
                       <span>Comissões</span>
                     </Link>
@@ -178,7 +216,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/oportunidades" className="flex items-center gap-3">
+                    <Link href="/oportunidades" scroll={false} className="flex items-center gap-3">
                       <LineChart className="size-[18px]" />
                       <span>Oportunidades IA</span>
                     </Link>
@@ -210,7 +248,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/usuarios" className="flex items-center gap-3">
+                    <Link href="/usuarios" scroll={false} className="flex items-center gap-3">
                       <Users className={`size-[18px] ${pathname.startsWith("/usuarios") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Usuários</span>
                     </Link>
@@ -229,7 +267,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/vendedores" className="flex items-center gap-3">
+                    <Link href="/vendedores" scroll={false} className="flex items-center gap-3">
                       <UserCog className={`size-[18px] ${pathname.startsWith("/vendedores") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Vendedores</span>
                     </Link>
@@ -248,7 +286,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/formas-pagamento" className="flex items-center gap-3">
+                    <Link href="/formas-pagamento" scroll={false} className="flex items-center gap-3">
                       <CreditCard className={`size-[18px] ${pathname.startsWith("/formas-pagamento") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Formas de Pagto</span>
                     </Link>
@@ -267,7 +305,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/configuracoes" className="flex items-center gap-3">
+                    <Link href="/configuracoes" scroll={false} className="flex items-center gap-3">
                       <Settings className={`size-[18px] ${pathname.startsWith("/configuracoes") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Configurações</span>
                     </Link>
@@ -278,7 +316,7 @@ export function AppSidebar() {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter className="group-data-[collapsible=icon]:hidden p-4 pt-1 border-t border-sidebar-border/30 bg-gradient-to-t from-sidebar-accent/20 to-transparent">
+      <SidebarFooter className="shrink-0 group-data-[collapsible=icon]:hidden max-h-[min(42vh,320px)] overflow-y-auto custom-scrollbar p-4 pt-1 border-t border-sidebar-border/30 bg-gradient-to-t from-sidebar-accent/20 to-transparent md:max-h-none md:overflow-visible">
         <div className="space-y-4">
           {currentUser && (
             <div className="flex items-center gap-3 py-2 px-1 relative group transition-all">

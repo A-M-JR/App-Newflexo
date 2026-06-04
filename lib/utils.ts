@@ -28,3 +28,18 @@ export function parseCurrencyToNumber(value: string): number {
   if (!value) return 0
   return Number(value.replace(/\D/g, '')) / 10000 // Fixo para 4 casas no parse de etiquetas
 }
+
+export function formatEtiquetaMedida(etiqueta: {
+  formato?: string | null
+  largura: number
+  altura: number
+}): string {
+  if (etiqueta.formato === "REDONDA") {
+    return `Ø ${etiqueta.largura}mm`
+  }
+  return `${etiqueta.largura}x${etiqueta.altura}mm`
+}
+
+export function formatUnidadeVenda(unidadeVenda?: string | null): string {
+  return unidadeVenda === "MILHEIRO" ? "mil" : "un"
+}
