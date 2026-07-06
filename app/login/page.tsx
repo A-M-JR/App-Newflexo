@@ -189,12 +189,12 @@ export default function LoginPage() {
                                 Newflexo Rótulos &amp; Etiquetas &copy; {new Date().getFullYear()}
                             </p>
                             <a
-                                href="https://bitwiseagency.com.br/"
+                                href="https://www.nodewayagency.com.br/"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[10px] font-medium text-zinc-400 hover:text-primary transition-colors"
                             >
-                                Desenvolvido por <span className="font-bold">Bitwise Agency</span>
+                                Desenvolvido por <span className="font-bold">Nodeway Agency</span>
                             </a>
                         </CardFooter>
                     </Card>

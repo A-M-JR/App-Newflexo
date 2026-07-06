@@ -13,6 +13,7 @@ function mapStatusIdToStr(statusName: string) {
   if (s.includes('produ') || s.includes('fabrica')) return 'em_producao'
   if (s.includes('separa')) return 'separacao'
   if (s.includes('entregue') || s.includes('entrega')) return 'entregue'
+  if (s.includes('cancel')) return 'cancelado'
   return 'em_analise'
 }
 
@@ -54,8 +55,16 @@ export async function getPedidos(params: {
   }
 
   // 1. Otimização Global: Busca de todos os contadores em UMA ÚNICA query SQL.
+  const slaFilterSql = Prisma.sql`(
+    p."statusId" <> ${statusEntregue}
+    AND p."prazoEntrega" IS NOT NULL
+    AND (p."prazoEntrega"::date - CURRENT_DATE) <= 3
+  )`
+
   let statusFilterSql = Prisma.sql`TRUE`
-  if (params.status === 'em_analise') statusFilterSql = Prisma.sql`p."statusId" = ${statusEmAnalise}`
+  if (params.apenasSla) statusFilterSql = slaFilterSql
+  else if (params.status === 'cancelado') statusFilterSql = Prisma.sql`p."ativo" = FALSE`
+  else if (params.status === 'em_analise') statusFilterSql = Prisma.sql`p."statusId" = ${statusEmAnalise}`
   else if (params.status === 'em_producao') statusFilterSql = Prisma.sql`p."statusId" IN (${statusEmProducao}, ${statusSeparacao})`
   else if (params.status === 'separacao') statusFilterSql = Prisma.sql`p."statusId" = ${statusSeparacao}`
   else if (params.status === 'entregue') statusFilterSql = Prisma.sql`p."statusId" = ${statusEntregue}`
@@ -67,25 +76,44 @@ export async function getPedidos(params: {
       COUNT(*) FILTER (WHERE p."statusId" IN (${statusEmProducao}, ${statusSeparacao}))::int as em_producao_soma,
       COUNT(*) FILTER (WHERE p."statusId" = ${statusSeparacao})::int as separacao,
       COUNT(*) FILTER (WHERE p."statusId" = ${statusEntregue})::int as entregue,
+      COUNT(*) FILTER (WHERE 
+        p."statusId" <> ${statusEntregue}
+        AND p."prazoEntrega" IS NOT NULL
+        AND (p."prazoEntrega"::date - CURRENT_DATE) <= 3
+      )::int as sla_alerta,
+      COUNT(*) FILTER (WHERE p."ativo" = FALSE)::int as cancelados,
       COALESCE(SUM(p."totalGeral"), 0)::float as total_valor
     FROM "Pedido" p
     LEFT JOIN "Cliente" c ON p."clienteId" = c.id
     WHERE (p."numero" ILIKE ${searchPattern} OR c."razaoSocial" ILIKE ${searchPattern})
+      AND (${params.status === 'cancelado'}::boolean = TRUE OR p."ativo" = TRUE)
       AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
       AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
       AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
   `
-  const stats = counts[0] || { total_filtrado: 0, em_analise: 0, em_producao_soma: 0, entregue: 0, separacao: 0, total_valor: 0 }
+  const stats = counts[0] || { total_filtrado: 0, em_analise: 0, em_producao_soma: 0, entregue: 0, separacao: 0, sla_alerta: 0, cancelados: 0, total_valor: 0 }
 
   // 2. Busca paginada dos registros
   const where: any = {}
+  if (params.status === 'cancelado') {
+    where.ativo = false
+  } else {
+    where.ativo = true
+  }
   if (params.search) {
     where.OR = [
       { numero: { contains: params.search, mode: "insensitive" } },
       { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
     ]
   }
-  if (params.status) {
+  if (params.apenasSla) {
+    const limiteSla = new Date()
+    limiteSla.setHours(0, 0, 0, 0)
+    limiteSla.setDate(limiteSla.getDate() + 3)
+    limiteSla.setHours(23, 59, 59, 999)
+    where.statusId = { not: statusEntregue }
+    where.prazoEntrega = { lte: limiteSla }
+  } else if (params.status) {
     if (params.status === 'em_analise') where.statusId = statusEmAnalise
     else if (params.status === 'em_producao') where.statusId = { in: [statusEmProducao, statusSeparacao] }
     else if (params.status === 'separacao') where.statusId = statusSeparacao
@@ -104,7 +132,7 @@ export async function getPedidos(params: {
 
   const dbPedidos = await prisma.pedido.findMany({
     where,
-    orderBy: { id: "desc" },
+    orderBy: params.apenasSla ? { prazoEntrega: 'asc' } : { id: 'desc' },
     skip: (page - 1) * limit,
     take: limit,
     include: {
@@ -115,7 +143,7 @@ export async function getPedidos(params: {
     }
   })
   
-  let pedidos = dbPedidos.map(p => ({
+  const pedidos = dbPedidos.map(p => ({
     ...p,
     status: mapStatusIdToStr(p.statusObj?.nome || ''),
     criadoEm: p.criadoEm.toISOString(),
@@ -123,30 +151,21 @@ export async function getPedidos(params: {
     prazoEntrega: p.prazoEntrega ? p.prazoEntrega.toISOString() : null,
   }))
 
-  if (params.apenasSla) {
-    pedidos = pedidos.filter((p: any) => {
-      if (p.status === 'entregue' || !p.prazoEntrega) return false
-      
-      const prazoDate = new Date(p.prazoEntrega)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      const diffDays = Math.ceil((prazoDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      return diffDays <= 3 // SLA: faltando 3 dias ou menos
-    })
-  }
-  
+  const totalFiltrado = stats.total_filtrado
+
   return {
     data: pedidos,
-    total: stats.total_filtrado,
+    total: totalFiltrado,
     page,
-    totalPages: Math.ceil(stats.total_filtrado / limit),
+    totalPages: Math.ceil(totalFiltrado / limit) || 1,
     kpis: {
       total: stats.total_filtrado,
       emAnalise: stats.em_analise,
       emProducao: stats.em_producao_soma, 
       separacao: stats.separacao,
       entregue: stats.entregue,
+      slaAlerta: stats.sla_alerta,
+      cancelados: stats.cancelados,
       totalValor: stats.total_valor
     }
   }
@@ -186,12 +205,14 @@ export async function getPedidoById(id: number, requesterId?: number) {
 }
 
 export async function updatePedidoStatus(id: number, statusIdent: string | number, requesterId?: number) {
+  const pedCheck = await prisma.pedido.findUnique({ where: { id }, select: { ativo: true, vendedorId: true } })
+  if (!pedCheck?.ativo) throw new Error("Pedido cancelado não pode ser alterado.")
+
   // SEGURANÇA: Vendedor só edita o dele
   if (requesterId) {
     const perm = await getRequesterVendedorId(requesterId)
     if (perm !== 'admin') {
-      const ped = await prisma.pedido.findUnique({ where: { id }, select: { vendedorId: true } })
-      if (!ped || ped.vendedorId !== perm) throw new Error("Acesso negado.")
+      if (!pedCheck || pedCheck.vendedorId !== perm) throw new Error("Acesso negado.")
     }
   }
   let statusId = Number(statusIdent)
@@ -222,6 +243,38 @@ export async function updatePedidoStatus(id: number, statusIdent: string | numbe
     atualizadoEm: updated.atualizadoEm.toISOString(),
     prazoEntrega: updated.prazoEntrega ? updated.prazoEntrega.toISOString() : null,
   }
+}
+
+export async function cancelarPedido(id: number, requesterId?: number) {
+  if (requesterId) {
+    const perm = await getRequesterVendedorId(requesterId)
+    if (perm !== 'admin') {
+      const ped = await prisma.pedido.findUnique({ where: { id }, select: { vendedorId: true } })
+      if (!ped || ped.vendedorId !== perm) throw new Error("Acesso negado.")
+    }
+  }
+
+  const existing = await prisma.pedido.findUnique({
+    where: { id },
+    select: { ativo: true, clienteId: true, statusObj: { select: { nome: true } } }
+  })
+  if (!existing || !existing.ativo) throw new Error("Pedido não encontrado ou já cancelado.")
+
+  const statusNome = existing.statusObj?.nome?.toLowerCase() || ''
+  if (statusNome.includes('entregue') || statusNome.includes('entrega')) {
+    throw new Error("Não é possível cancelar um pedido já entregue.")
+  }
+
+  const statusId = await getOrCreateStatus('cancelado', 'pedido')
+
+  await prisma.pedido.update({
+    where: { id },
+    data: { ativo: false, statusId },
+  })
+
+  await updateClienteUltimaCompra(existing.clienteId)
+  revalidatePath("/pedidos")
+  revalidatePath(`/pedidos/${id}`)
 }
 
 async function updateClienteUltimaCompra(clienteId: number) {
@@ -283,7 +336,15 @@ export async function savePedido(data: any, requesterId?: number) {
   let statusId = rest.statusId ? Number(rest.statusId) : null
   if (!statusId) {
     const { getOrCreateStatus } = await import("./status")
-    statusId = await getOrCreateStatus('em_analise')
+    const { getEmpresa } = await import("./config")
+    
+    // Verifica config da empresa para pular etapa
+    const empresaConfig = await getEmpresa()
+    if (empresaConfig?.pularDiretoSeparacao) {
+      statusId = await getOrCreateStatus('separacao')
+    } else {
+      statusId = await getOrCreateStatus('em_analise')
+    }
   }
 
   const prismaData = {
@@ -302,7 +363,7 @@ export async function savePedido(data: any, requesterId?: number) {
     formaPagamento: rest.formaPagamento || "A combinar",
     nomeVendedor: rest.nomeVendedor || "",
     nomeComprador: rest.nomeComprador || "",
-    frete: rest.frete || "FOB",
+    frete: rest.frete || "CIF",
     observacoesGerais: rest.observacoesGerais || "",
     totalGeral: isNaN(Number(rest.totalGeral)) ? 0 : Number(rest.totalGeral),
     formaPagamentoId: rest.formaPagamentoId ? Number(rest.formaPagamentoId) : null,

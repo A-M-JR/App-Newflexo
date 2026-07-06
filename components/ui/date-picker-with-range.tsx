@@ -14,6 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { useIsMobile } from "@/hooks/use-mobile"
 
 interface DatePickerWithRangeProps {
   className?: string
@@ -28,41 +29,45 @@ export function DatePickerWithRange({
   setDate,
   placeholder = "Filtrar por data..."
 }: DatePickerWithRangeProps) {
+  const isMobile = useIsMobile()
+
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-2 min-w-0", className)}>
       <Popover>
         <PopoverTrigger asChild>
           <Button
             id="date"
             variant={"outline"}
             className={cn(
-              "w-auto justify-start text-left font-normal bg-background px-3 h-8 text-xs",
+              "min-w-0 max-w-full justify-start text-left font-normal bg-background px-3 h-8 text-xs",
               !date && "text-muted-foreground"
             )}
           >
-            <CalendarIcon className="mr-2 h-3 w-3" />
-            {date?.from ? (
-              date.to ? (
-                <>
-                  {format(date.from, "dd LLL, y", { locale: ptBR })} -{" "}
-                  {format(date.to, "dd LLL, y", { locale: ptBR })}
-                </>
+            <CalendarIcon className="mr-2 h-3 w-3 shrink-0" />
+            <span className="truncate">
+              {date?.from ? (
+                date.to ? (
+                  <>
+                    {format(date.from, "dd LLL, y", { locale: ptBR })} -{" "}
+                    {format(date.to, "dd LLL, y", { locale: ptBR })}
+                  </>
+                ) : (
+                  format(date.from, "dd LLL, y", { locale: ptBR })
+                )
               ) : (
-                format(date.from, "dd LLL, y", { locale: ptBR })
-              )
-            ) : (
-              <span>{placeholder}</span>
-            )}
+                placeholder
+              )}
+            </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="end">
+        <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="end">
           <Calendar
             initialFocus
             mode="range"
             defaultMonth={date?.from}
             selected={date}
             onSelect={setDate}
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
           />
         </PopoverContent>
       </Popover>
@@ -70,7 +75,7 @@ export function DatePickerWithRange({
          <Button 
            variant="ghost" 
            size="icon" 
-           className="h-8 w-8 rounded-full" 
+           className="h-8 w-8 shrink-0 rounded-full" 
            onClick={() => setDate(undefined)}
            title="Limpar Data"
          >

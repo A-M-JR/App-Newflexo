@@ -178,6 +178,7 @@ export interface Empresa {
     estado: string
   }
   corSidebar?: string
+  pularDiretoSeparacao?: boolean
 }
 
 export interface AIChatMessage {

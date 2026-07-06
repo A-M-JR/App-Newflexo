@@ -138,6 +138,7 @@ model Empresa {
   cidade            String
   estado            String
   corSidebar        String?
+  pularDiretoSeparacao Boolean @default(false)
   updatedAt         DateTime @updatedAt
 }
 

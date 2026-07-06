@@ -130,8 +130,8 @@ export default function ClientesPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="relative flex-1 max-w-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
+              <div className="relative flex-1 min-w-0 max-w-full sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por razão social, CNPJ ou cidade..."
@@ -141,7 +141,7 @@ export default function ClientesPage() {
                 />
               </div>
               {fRetencao !== 'todos' && (
-                <Button variant="ghost" onClick={() => setFRetencao('todos')} className="text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" onClick={() => setFRetencao('todos')} className="text-muted-foreground hover:text-foreground shrink-0 w-full sm:w-auto">
                   Limpar Filtros
                 </Button>
               )}

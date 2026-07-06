@@ -25,7 +25,8 @@ export let empresaDefault: Empresa = {
     cidade: "Goiânia",
     estado: "GO",
   },
-  corSidebar: "#0f264a"
+  corSidebar: "#0f264a",
+  pularDiretoSeparacao: false
 }
 
 export const vendedores: Vendedor[] = [

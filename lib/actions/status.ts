@@ -9,6 +9,7 @@ export async function getOrCreateStatus(nome: string, modulo: 'pedido' | 'orcame
   if (nome === 'em_producao') searchName = 'Em Produção'
   if (nome === 'separacao') searchName = 'Separação'
   if (nome === 'entregue') searchName = 'Entregue'
+  if (nome === 'cancelado') searchName = 'Cancelado'
   if (nome === 'aprovado' || nome === 'fechado') searchName = 'Aprovado'
 
   const status = await prisma.status.findFirst({
@@ -27,7 +28,7 @@ export async function getOrCreateStatus(nome: string, modulo: 'pedido' | 'orcame
       nome: searchName,
       modulo: modulo,
       ordem: count + 1,
-      cor: modulo === 'orcamento' ? '#10b981' : '#94a3b8'
+      cor: searchName === 'Cancelado' ? '#ef4444' : (modulo === 'orcamento' ? '#10b981' : '#94a3b8')
     }
   })
   return created.id

@@ -43,6 +43,7 @@ export async function getOrcamentos(params: {
   else if (params.status === 'enviado') statusFilterSql = Prisma.sql`p."statusId" = 4`
   else if (params.status === 'aprovado') statusFilterSql = Prisma.sql`p."statusId" = 2`
   else if (params.status === 'recusado') statusFilterSql = Prisma.sql`p."statusId" = 5`
+  else if (params.status === 'parados') statusFilterSql = Prisma.sql`p."statusId" IN (1, 5)`
 
   const counts: any[] = await prisma.$queryRaw`
     SELECT 
@@ -86,6 +87,7 @@ export async function getOrcamentos(params: {
     else if (params.status === 'enviado') where.statusId = 4
     else if (params.status === 'aprovado') where.statusId = 2
     else if (params.status === 'recusado') where.statusId = 5
+    else if (params.status === 'parados') where.statusId = { in: [1, 5] }
   }
 
   if (params.vendedorId) where.vendedorId = params.vendedorId

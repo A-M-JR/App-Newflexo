@@ -83,11 +83,11 @@ export default function PedidosPage() {
   })
 
   const pedidosList = dbData?.data || []
-  const KPIs = dbData?.kpis || { totalValor: 0, emAnalise: 0, emProducao: 0, separacao: 0, entregue: 0 }
+  const KPIs = dbData?.kpis || { totalValor: 0, emAnalise: 0, emProducao: 0, separacao: 0, entregue: 0, slaAlerta: 0 }
   const totalPages = dbData?.totalPages || 1
 
   const getSlaStatus = (prazo: string | null, status: string) => {
-    if (status === 'entregue') return { class: '', icon: null, text: 'Entregue', urgent: false, isLate: false }
+    if (status === 'entregue' || status === 'cancelado') return { class: '', icon: null, text: status === 'cancelado' ? 'Cancelado' : 'Entregue', urgent: false, isLate: false }
     if (!prazo) return { class: '', icon: null, text: 'Sem prazo', urgent: false, isLate: false }
 
     const prazoDate = new Date(prazo)
@@ -174,7 +174,7 @@ export default function PedidosPage() {
           >
             <CardContent className="p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-red-600 dark:text-red-400 flex items-center gap-2"><Truck className="size-4" />Alerta de SLA</p>
-              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && !dbData ? "..." : 'SLA'}</h2>
+              <h2 className="text-2xl font-bold text-red-700 dark:text-red-300">{loading && !dbData ? "..." : KPIs.slaAlerta}</h2>
               <p className="text-xs text-red-500 font-medium">Atrasados ou Urgentes</p>
             </CardContent>
           </Card>
@@ -206,6 +206,7 @@ export default function PedidosPage() {
                 <option value="em_producao">Em Produção</option>
                 <option value="separacao">Separação</option>
                 <option value="entregue">Entregue</option>
+                <option value="cancelado">Cancelado</option>
               </select>
             </div>
           </CardHeader>
@@ -249,7 +250,7 @@ export default function PedidosPage() {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="py-4 border-t border-border/50">
+              <div className="py-4 border-t border-border/50 overflow-x-auto">
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>

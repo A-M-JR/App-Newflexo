@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Palette, Building2, Save, Search, Loader2, Bot, Eye, EyeOff, Sparkles, RotateCcw, ArrowLeft } from "lucide-react"
+import { Palette, Building2, Save, Search, Loader2, Bot, Eye, EyeOff, Sparkles, RotateCcw, ArrowLeft, Settings2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useAI, type AIProvider } from "@/lib/ai-context"
 import { empresaDefault } from "@/lib/mock-data"
@@ -14,6 +14,7 @@ import { getEmpresa, updateEmpresa } from "@/lib/actions/config"
 import Link from "next/link"
 import { AIDashboard } from "./dashboard-ia"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -459,6 +460,38 @@ function ConfiguracoesForm() {
                                     Restaurar Padrão
                                 </Button>
                             </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* ═══════════════════════════════════════════════ */}
+                {/* MÓDULO DE WORKFLOW E REGRAS                     */}
+                {/* ═══════════════════════════════════════════════ */}
+                <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-blue-500/10 rounded-lg">
+                                <Settings2 className="size-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Regras de Negócio e Workflow</CardTitle>
+                                <CardDescription>Configure como o sistema se comporta automaticamente nas etapas.</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border border-border/50 rounded-lg bg-card/50">
+                            <div className="space-y-1 min-w-0 flex-1">
+                                <Label className="text-base font-medium">Aprovação Direta para Separação</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Ao converter um Orçamento em Pedido de Produção, pular o status "Em Análise" e mover direto para "Separação".
+                                </p>
+                            </div>
+                            <Switch 
+                                className="shrink-0"
+                                checked={empresa.pularDiretoSeparacao || false} 
+                                onCheckedChange={(val) => setEmpresa({ ...empresa, pularDiretoSeparacao: val })} 
+                            />
                         </div>
                     </CardContent>
                 </Card>

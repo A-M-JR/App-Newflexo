@@ -637,8 +637,8 @@ export default function ClienteDetailPage({
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Tipo</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label className="sm:text-right">Tipo</Label>
                         <Select value={novoLancamento.tipo} onValueChange={(v:any) => setNovoLancamento({...novoLancamento, tipo: v})}>
                           <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -647,8 +647,8 @@ export default function ClienteDetailPage({
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Operação</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label className="sm:text-right">Operação</Label>
                         <Select value={novoLancamento.operacao} onValueChange={(v:any) => setNovoLancamento({...novoLancamento, operacao: v})}>
                           <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -657,8 +657,8 @@ export default function ClienteDetailPage({
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Quantidade</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label className="sm:text-right">Quantidade</Label>
                         <Input 
                           type="number" 
                           autoFocus
@@ -668,8 +668,8 @@ export default function ClienteDetailPage({
                           placeholder={novoLancamento.tipo === 'VALOR' ? '0.00' : '0'}
                         />
                       </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Motivo</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 items-center gap-2 sm:gap-4">
+                        <Label className="sm:text-right">Motivo</Label>
                         <Input 
                           value={novoLancamento.descricao} 
                           onChange={(e) => setNovoLancamento({...novoLancamento, descricao: e.target.value})}
@@ -695,7 +695,7 @@ export default function ClienteDetailPage({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div className="overflow-auto max-h-[400px]">
+                  <div className="overflow-x-auto max-h-[400px]">
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs uppercase bg-muted/30 text-muted-foreground font-bold">
                         <tr>

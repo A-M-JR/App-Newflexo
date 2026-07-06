@@ -14,10 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard } from "lucide-react"
+import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2 } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { getPedidoById, updatePedidoStatus } from "@/lib/actions/pedidos"
+import { getPedidoById, updatePedidoStatus, cancelarPedido } from "@/lib/actions/pedidos"
 import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -26,6 +26,17 @@ import { PDFDownloadButton } from "@/components/pdf-download-button"
 import { PDFProductionOrderButton } from "@/components/pdf-production-order-button"
 import { toast } from "sonner"
 import type { Pedido, Cliente, Vendedor } from "@/lib/types"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function PedidoDetailPage({
   params,
@@ -34,7 +45,7 @@ export default function PedidoDetailPage({
 }) {
   const { id } = use(params)
   const router = useRouter()
-  const { currentUser } = useAuth()
+  const { currentUser, isLoading: authLoading } = useAuth()
   
   const [pedido, setPedido] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -42,14 +53,32 @@ export default function PedidoDetailPage({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   useEffect(() => {
-    if (!currentUser) return
-    
-    getPedidoById(Number(id), currentUser?.id).then(data => {
-      setPedido(data)
-      if (data) setCurrentStatus(data.status as Pedido['status'])
+    if (authLoading) return
+
+    if (!currentUser) {
       setLoading(false)
-    })
-  }, [id])
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+
+    getPedidoById(Number(id), currentUser.id)
+      .then(data => {
+        if (cancelled) return
+        setPedido(data)
+        if (data) setCurrentStatus(data.status as Pedido['status'])
+      })
+      .catch((err) => {
+        console.error(err)
+        if (!cancelled) setPedido(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [id, currentUser, authLoading])
 
   if (loading) {
     return (
@@ -148,30 +177,45 @@ export default function PedidoDetailPage({
     }
   }
 
+  const handleCancelarPedido = async () => {
+    setIsUpdatingStatus(true)
+    try {
+      await cancelarPedido(pedido.id, currentUser?.id)
+      toast.success("Pedido cancelado com sucesso.")
+      router.push("/pedidos")
+    } catch (err: any) {
+      toast.error(err?.message || "Erro ao cancelar pedido.")
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  const isCancelado = currentStatus === 'cancelado' || pedido.ativo === false
+
   return (
     <AppShell>
       <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4 min-w-0 flex-1">
             <Link href="/pedidos">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="shrink-0">
                 <ArrowLeft className="size-4" />
               </Button>
             </Link>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
                   {pedido.numero}
                 </h1>
                 <StatusBadge statusObj={pedido.statusObj} fallback={currentStatus} />
               </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5 break-words">
                 Criado em {pedido.criadoEm ? new Date(pedido.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Orcamento: {pedido.orcamentoId}
-                {pedido.ocCliente && <span className="ml-2 inline-flex items-center gap-1 border-l pl-2 border-border/50">• OC Cliente: <b className="text-foreground">{pedido.ocCliente}</b></span>}
+                {pedido.ocCliente && <span className="block sm:inline sm:ml-2 sm:border-l sm:pl-2 border-border/50 mt-1 sm:mt-0">OC Cliente: <b className="text-foreground">{pedido.ocCliente}</b></span>}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <PDFProductionOrderButton
               pedido={pedido}
               cliente={cliente as Cliente}
@@ -188,13 +232,53 @@ export default function PedidoDetailPage({
         <div className="bg-card rounded-xl border border-border/50 shadow-sm p-6 mt-2 relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent pointer-events-none" />
           <div className="relative z-10">
-            <h3 className="text-sm font-semibold text-foreground mb-6 uppercase tracking-wider">Progresso da Produção</h3>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Progresso da Produção</h3>
+              {!isCancelado && currentStatus !== 'entregue' && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-8 text-xs px-4 w-full sm:w-auto border-destructive/40 text-destructive hover:bg-destructive/10">
+                      <Trash2 className="size-3.5 mr-1.5" />
+                      Cancelar Pedido
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar pedido?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O pedido {pedido.numero} será marcado como cancelado e removido da lista ativa.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2">
+                      <AlertDialogCancel className="w-full sm:w-auto">Voltar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleCancelarPedido()
+                        }}
+                        disabled={isUpdatingStatus}
+                        className="w-full sm:w-auto bg-destructive text-white hover:bg-destructive/90"
+                      >
+                        {isUpdatingStatus ? "Cancelando..." : "Confirmar Cancelamento"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
 
-            <div className="relative flex justify-between">
+            {isCancelado && (
+              <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-medium">
+                Este pedido foi cancelado e não aparece mais na fila ativa de produção.
+              </div>
+            )}
+
+            {!isCancelado && (
+            <div className="relative flex flex-col gap-6 sm:flex-row sm:justify-between">
               {/* Connecting line */}
-              <div className="absolute top-5 left-[10%] right-[10%] h-[2px] bg-muted/50 -z-10" />
+              <div className="absolute top-5 left-[10%] right-[10%] h-[2px] bg-muted/50 -z-10 hidden sm:block" />
               <div
-                className="absolute top-5 left-[10%] h-[2px] bg-primary -z-10 transition-all duration-500 ease-in-out"
+                className="absolute top-5 left-[10%] h-[2px] bg-primary -z-10 transition-all duration-500 ease-in-out hidden sm:block"
                 style={{ width: `${(currentStepIndex / (steps.length - 1)) * 80}%` }}
               />
 
@@ -204,7 +288,7 @@ export default function PedidoDetailPage({
                 const isCompleted = index < currentStepIndex
 
                 return (
-                  <div key={step.id} className="flex flex-col items-center gap-3 w-1/4">
+                  <div key={step.id} className="flex flex-row sm:flex-col items-center gap-3 sm:w-1/4">
                     <div className={`
                       size-10 rounded-full flex items-center justify-center border-2 bg-background transition-colors duration-300
                       ${isCompleted ? 'border-primary text-primary' : ''}
@@ -251,6 +335,7 @@ export default function PedidoDetailPage({
                 )
               })}
             </div>
+            )}
           </div>
         </div>
 
@@ -301,12 +386,12 @@ export default function PedidoDetailPage({
                       </p>
                       <p className="text-xs font-mono text-muted-foreground mt-1">CEP: {cliente.cep}</p>
 
-                      <div className="mt-4 pt-4 border-t border-amber-200 dark:border-amber-800/50 flex justify-between">
+                      <div className="mt-4 pt-4 border-t border-amber-200 dark:border-amber-800/50 flex flex-col gap-3 sm:flex-row sm:justify-between">
                         <div>
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Prazo Acordado</span>
                           <span className="text-sm font-black text-foreground">{pedido.prazoEntrega ? new Date(pedido.prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}</span>
                         </div>
-                        <div className="text-right">
+                        <div className="sm:text-right">
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Tipo de Frete</span>
                           <span className="text-sm font-bold text-foreground">{pedido.frete}</span>
                         </div>

@@ -27,6 +27,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useAuth } from "@/lib/auth-context"
 import { useAI } from "@/lib/ai-context"
@@ -64,8 +65,13 @@ export function AppSidebar() {
   const pathname = usePathname()
   const { currentUser, isAdmin, logout } = useAuth()
   const { isActive: isAIActive } = useAI()
+  const { setOpenMobile, isMobile } = useSidebar()
   const sidebarContentRef = useRef<HTMLDivElement>(null)
   const savedScrollRef = useRef(0)
+
+  const closeMobileMenu = () => {
+    if (isMobile) setOpenMobile(false)
+  }
 
   const handleSidebarScroll = useCallback(() => {
     if (sidebarContentRef.current) {
@@ -101,12 +107,12 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="shrink-0 p-4 border-b border-sidebar-border/50 bg-gradient-to-b from-sidebar-accent/50 to-transparent">
-        <Link href="/" scroll={false} className="flex items-center gap-3 transition-transform hover:scale-[1.02] group/logo">
-          <div className="relative flex h-16 w-full items-center justify-center">
+        <Link href="/" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3 transition-transform hover:scale-[1.02] group/logo">
+          <div className="relative flex h-16 w-full items-center justify-center overflow-hidden">
             <img
               src="/logo_sem_fundo_branca.png"
               alt="Newflexo Logo"
-              className="absolute top-1/2 w-[140%] -translate-y-1/2 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_2px_4px_rgba(255,255,255,0.1)]"
+              className="max-h-14 w-full max-w-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_2px_4px_rgba(255,255,255,0.1)]"
             />
           </div>
         </Link>
@@ -141,7 +147,7 @@ export function AppSidebar() {
                         }
                       `}
                     >
-                      <Link href={item.href} scroll={false} className="flex items-center gap-3">
+                      <Link href={item.href} scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                         <item.icon className="size-[18px]" />
                         <span>{item.label}</span>
                       </Link>
@@ -165,7 +171,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/comissoes" scroll={false} className="flex items-center gap-3">
+                    <Link href="/comissoes" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                       <CreditCard className="size-[18px]" />
                       <span>Comissões</span>
                     </Link>
@@ -192,7 +198,7 @@ export function AppSidebar() {
                   >
                     <button
                       onClick={() => {
-                        // Dispara abertura do chat via evento customizado
+                        closeMobileMenu()
                         window.dispatchEvent(new CustomEvent('toggle-ai-chat'))
                       }}
                       className="flex items-center gap-3 w-full"
@@ -216,7 +222,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/oportunidades" scroll={false} className="flex items-center gap-3">
+                    <Link href="/oportunidades" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                       <LineChart className="size-[18px]" />
                       <span>Oportunidades IA</span>
                     </Link>
@@ -248,7 +254,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/usuarios" scroll={false} className="flex items-center gap-3">
+                    <Link href="/usuarios" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                       <Users className={`size-[18px] ${pathname.startsWith("/usuarios") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Usuários</span>
                     </Link>
@@ -267,7 +273,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/vendedores" scroll={false} className="flex items-center gap-3">
+                    <Link href="/vendedores" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                       <UserCog className={`size-[18px] ${pathname.startsWith("/vendedores") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Vendedores</span>
                     </Link>
@@ -286,7 +292,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/formas-pagamento" scroll={false} className="flex items-center gap-3">
+                    <Link href="/formas-pagamento" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                       <CreditCard className={`size-[18px] ${pathname.startsWith("/formas-pagamento") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Formas de Pagto</span>
                     </Link>
@@ -305,7 +311,7 @@ export function AppSidebar() {
                       }
                     `}
                   >
-                    <Link href="/configuracoes" scroll={false} className="flex items-center gap-3">
+                    <Link href="/configuracoes" scroll={false} onClick={closeMobileMenu} className="flex items-center gap-3">
                       <Settings className={`size-[18px] ${pathname.startsWith("/configuracoes") ? "text-primary fill-primary/10" : ""}`} />
                       <span>Configurações</span>
                     </Link>
@@ -351,17 +357,17 @@ export function AppSidebar() {
             </div>
 
             <a
-              href="https://bitwiseagency.com.br/"
+              href="https://www.nodewayagency.com.br/"
               target="_blank"
               rel="noopener noreferrer"
               className="group/agency flex flex-col items-center gap-1 opacity-90 hover:opacity-100 transition-all duration-300 py-2 mt-3"
             >
-              <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground/80 flex items-center justify-center gap-1.5 w-full">
-                <Sparkles className="size-3 text-primary/70" />
+              <span className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-sidebar-foreground/60 flex items-center justify-center gap-1.5 w-full">
+                <Sparkles className="size-3 text-primary" />
                 Crafted by
               </span>
-              <span className="text-[13px] font-black tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent group-hover/agency:from-primary group-hover/agency:to-primary/70 transition-all">
-                BITWISE<span className="font-light">AGENCY</span>
+              <span className="text-[13px] font-black tracking-tight text-sidebar-foreground group-hover/agency:text-primary transition-colors">
+                NODEWAY<span className="font-light opacity-80">AGENCY</span>
               </span>
             </a>
           </div>

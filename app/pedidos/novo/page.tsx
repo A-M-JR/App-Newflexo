@@ -21,7 +21,7 @@ import { CreditCard } from "lucide-react"
 function NovoPedidoForm() {
     const searchParams = useSearchParams()
     const router = useRouter()
-    const { currentUser } = useAuth()
+    const { currentUser, isLoading: authLoading } = useAuth()
     const orcamentoId = searchParams.get("orcamentoId")
 
     const [orcamento, setOrcamento] = useState<any>(null)
@@ -30,45 +30,56 @@ function NovoPedidoForm() {
     const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
 
     useEffect(() => {
-        if (!currentUser) return
+        if (authLoading) return
+
+        if (!currentUser) {
+            setLoading(false)
+            return
+        }
+
+        let cancelled = false
+        setLoading(true)
 
         Promise.all([
-            orcamentoId ? getOrcamentoById(Number(orcamentoId), currentUser?.id) : Promise.resolve(null),
+            orcamentoId ? getOrcamentoById(Number(orcamentoId), currentUser.id) : Promise.resolve(null),
             fetch("/api/formas-pagamento").then(res => res.json())
-        ]).then(([data, formas]) => {
-            if (data) {
-                setOrcamento(data)
-                if (data.prazoEntrega) {
-                    setPrazoEntrega(new Date(data.prazoEntrega).toISOString().split('T')[0])
+        ])
+            .then(([data, formas]) => {
+                if (cancelled) return
+                if (data) {
+                    setOrcamento(data)
+                    if (data.prazoEntrega) {
+                        setPrazoEntrega(new Date(data.prazoEntrega).toISOString().split('T')[0])
+                    }
+                    if (data.formaPagamentoId) {
+                        setFormaPagamentoId(data.formaPagamentoId.toString())
+                    }
+                    if ((data as any).ocCliente) {
+                        setOcCliente((data as any).ocCliente)
+                    }
                 }
-                if (data.formaPagamentoId) {
-                    setFormaPagamentoId(data.formaPagamentoId.toString())
-                }
-                if ((data as any).ocCliente) {
-                    setOcCliente((data as any).ocCliente)
-                }
-            }
-            setFormasPagamento(formas || [])
-            setLoading(false)
-        }).catch(() => setLoading(false))
-    }, [orcamentoId])
+                setFormasPagamento(formas || [])
+            })
+            .catch(() => {
+                if (!cancelled) setOrcamento(null)
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false)
+            })
+
+        return () => { cancelled = true }
+    }, [orcamentoId, currentUser, authLoading])
 
     const cliente = orcamento?.cliente
     const vendedor = orcamento?.vendedor
 
-    // Formulário State
-    const [sentidoSaidaRolo, setSentidoSaidaRolo] = useState("Ext 0º")
-    const [tipoTubete, setTipoTubete] = useState("40")
-    const [numeroPistas, setNumeroPistas] = useState("1")
-    const [gapEntreEtiquetas, setGapEntreEtiquetas] = useState("3mm")
-
+    const [formaPagamento, setFormaPagamento] = useState("30/60 Dias")
+    const [frete, setFrete] = useState("CIF")
     const [prazoEntrega, setPrazoEntrega] = useState(() => {
         const d = new Date()
         d.setDate(d.getDate() + 15)
         return d.toISOString().split('T')[0]
     })
-    const [formaPagamento, setFormaPagamento] = useState("30/60 Dias")
-    const [frete, setFrete] = useState("FOB")
     const [comprador, setComprador] = useState("")
     const [ocCliente, setOcCliente] = useState("")
 
@@ -104,10 +115,6 @@ function NovoPedidoForm() {
                 orcamentoId: orcamento.id,
                 clienteId: orcamento.clienteId,
                 vendedorId: orcamento.vendedorId,
-                sentidoSaidaRolo,
-                tipoTubete,
-                gapEntreEtiquetas,
-                numeroPistas,
                 prazoEntrega,
                 formaPagamento, // Keep for backward compatibility/legacy
                 formaPagamentoId: formaPagamentoId ? Number(formaPagamentoId) : null,
@@ -244,57 +251,7 @@ function NovoPedidoForm() {
                     </CardContent>
                 </Card>
 
-                {/* Row 2: Dados de Produção e Acabamento */}
-                <Card className="border-border/50 shadow-sm">
-                    <CardHeader className="bg-muted/30 border-b border-border/50 pb-4">
-                        <CardTitle className="text-lg">Especificações Técnicas Genéricas</CardTitle>
-                        <CardDescription>Definições de rebobinagem e acabamento para a PCP</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="sentidoSaida">Sentido Saída do Rolo</Label>
-                            <Select value={sentidoSaidaRolo} onValueChange={setSentidoSaidaRolo}>
-                                <SelectTrigger id="sentidoSaida">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Ext 0º">Ext 0º (Pé 1º)</SelectItem>
-                                    <SelectItem value="Ext 90º">Ext 90º</SelectItem>
-                                    <SelectItem value="Ext 180º">Ext 180º (Cabeça 1º)</SelectItem>
-                                    <SelectItem value="Ext 270º">Ext 270º</SelectItem>
-                                    <SelectItem value="Int 0º">Int 0º (Pé 1º)</SelectItem>
-                                    <SelectItem value="Normalizado">Conforme Ficha</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="tubete">Tipo de Tubete (mm)</Label>
-                            <Select value={tipoTubete} onValueChange={setTipoTubete}>
-                                <SelectTrigger id="tubete">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="40">40 mm (Pequeno)</SelectItem>
-                                    <SelectItem value="76">76 mm (Padrão 3")</SelectItem>
-                                    <SelectItem value="25">25 mm</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="gap">Gap (Entre Etiquetas)</Label>
-                            <Input id="gap" value={gapEntreEtiquetas} onChange={e => setGapEntreEtiquetas(e.target.value)} placeholder="Ex: 3mm" />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="pistas">Número de Pistas</Label>
-                            <Input id="pistas" type="number" min="1" value={numeroPistas} onChange={e => setNumeroPistas(e.target.value)} />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Row 3: Observações */}
+                {/* Row 2: Observações */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card className="border-border/50 shadow-sm">
                         <CardHeader className="bg-muted/20 border-b border-border/50 pb-4">

@@ -21,7 +21,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles, Wallet, RotateCcw, Check } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus, getOrcamentos } from "@/lib/actions/orcamentos"
+import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus, getOrcamentos, deleteOrcamento } from "@/lib/actions/orcamentos"
 import { useAuth } from "@/lib/auth-context"
 import { getEtiquetas } from "@/lib/actions/etiquetas"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -31,10 +31,21 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { use, useState, useEffect } from "react"
 import { PDFDownloadQuotationButton } from "@/components/pdf-download-quotation-button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 function OrcamentoDetailContent({ id }: { id: string }) {
   const router = useRouter()
-  const { currentUser } = useAuth()
+  const { currentUser, isLoading: authLoading } = useAuth()
   const [orcamento, setOrcamento] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -126,7 +137,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   const handleRejectStatus = async () => {
     setIsUpdatingStatus(true)
     try {
-      const updated = await updateOrcamentoStatus(orcamento.id, 'recusado')
+      const updated = await updateOrcamentoStatus(orcamento.id, 'recusado', currentUser?.id)
       if (updated) {
         setOrcamento(updated)
         setStatus(updated.status)
@@ -140,39 +151,69 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     }
   }
 
+  const handleCancelarOrcamento = async () => {
+    setIsUpdatingStatus(true)
+    try {
+      await deleteOrcamento(orcamento.id, currentUser?.id)
+      toast.success("Orçamento cancelado com sucesso.")
+      router.push("/orcamentos")
+    } catch {
+      toast.error("Erro ao cancelar orçamento.")
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
   useEffect(() => {
-    if (!currentUser) return
+    if (authLoading) return
+
+    if (!currentUser) {
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
 
     Promise.all([
-      getOrcamentoById(Number(id), currentUser?.id),
+      getOrcamentoById(Number(id), currentUser.id),
       getEtiquetas(),
       fetch("/api/formas-pagamento").then(res => res.json()),
       getOrcamentos({ limit: 100, mode: 'history' })
-    ]).then(async ([data, etqs, formas, orcs]) => {
-      if (data) {
-        setOrcamento(data)
-        setStatus(data.status)
-        setObservacoes(data.observacoes || "")
-        setFormaPagamentoId(data.formaPagamentoId?.toString() || "")
-        setPrazoEntrega(data.prazoEntrega ? new Date(data.prazoEntrega).toISOString().split('T')[0] : "")
-        setOcCliente((data as any).ocCliente || "")
-        setItens(data.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
+    ])
+      .then(async ([data, etqs, formas, orcs]) => {
+        if (cancelled) return
+        if (data) {
+          setOrcamento(data)
+          setStatus(data.status)
+          setObservacoes(data.observacoes || "")
+          setFormaPagamentoId(data.formaPagamentoId?.toString() || "")
+          setPrazoEntrega(data.prazoEntrega ? new Date(data.prazoEntrega).toISOString().split('T')[0] : "")
+          setOcCliente((data as any).ocCliente || "")
+          setItens(data.itens.map((i: any) => ({ ...i, observacao: i.observacao || "" })))
 
-        // Fetch full client for exclusive items and credit balances
-        try {
-          const { getClienteById } = await import("@/lib/actions/clientes")
-          const fullCl = await getClienteById(data.clienteId)
-          setClienteCompleto(fullCl)
-        } catch (e) {
-          console.error("Erro ao carregar cliente completo:", e)
+          try {
+            const { getClienteById } = await import("@/lib/actions/clientes")
+            const fullCl = await getClienteById(data.clienteId)
+            if (!cancelled) setClienteCompleto(fullCl)
+          } catch (e) {
+            console.error("Erro ao carregar cliente completo:", e)
+          }
         }
-      }
-      setEtiquetasList(etqs)
-      setFormasPagamento(formas || [])
-      setTodosOrcamentos(orcs?.data || [])
-      setLoading(false)
-    })
-  }, [id])
+        setEtiquetasList(etqs)
+        setFormasPagamento(formas || [])
+        setTodosOrcamentos(orcs?.data || [])
+      })
+      .catch((err) => {
+        console.error(err)
+        if (!cancelled) setOrcamento(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [id, currentUser, authLoading])
 
   if (loading) {
     return <div className="flex justify-center py-20 animate-pulse text-muted-foreground">Carregando orçamento...</div>
@@ -346,89 +387,132 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-card p-4 rounded-xl border border-border/50 shadow-sm relative overflow-hidden">
+      <div className="flex flex-col gap-4 bg-card p-4 rounded-xl border border-border/50 shadow-sm relative overflow-hidden">
         {/* Subtle background gradient based on status */}
         <div className={`absolute inset-0 opacity-5 pointer-events-none ${status === 'aprovado' ? 'bg-emerald-500' :
           status === 'enviado' ? 'bg-indigo-500' :
             status === 'recusado' ? 'bg-rose-500' : 'bg-slate-500'
           }`} />
 
-        <div className="flex items-center gap-4 relative z-10">
-          <Link href="/orcamentos">
-            <Button variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-full">
-              <ArrowLeft className="size-4" />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                Proposta #{orcamento.numero}
-              </h1>
-              <StatusBadge statusObj={orcamento.statusObj} fallback={status} />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 font-mono">
-              Criado em {orcamento.criadoEm ? new Date(orcamento.criadoEm).toLocaleDateString('pt-BR') : 'N/D'} | Editado em {orcamento.atualizadoEm ? new Date(orcamento.atualizadoEm).toLocaleDateString('pt-BR') : 'N/D'}
-              {orcamento.ocCliente && <span className="ml-2 inline-flex items-center gap-1 border-l pl-2 border-border/50">• OC Cliente: <b className="text-foreground">{orcamento.ocCliente}</b></span>}
-            </p>
-            <div className="flex items-center gap-1.5 mt-2">
-              <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/20 text-[10px] uppercase font-bold px-2 py-0">
-                Prazo: {prazoEntrega ? new Date(prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}
-              </Badge>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 relative z-10">
-          {!isEditing ? (
-            <Button
-              variant="secondary"
-              onClick={() => setIsEditing(true)}
-              className="bg-secondary/80 hover:bg-secondary"
-              disabled={!!pedidoExistente}
-              title={pedidoExistente ? "Não é possível editar pois já existe um pedido vinculado." : ""}
-            >
-              <Edit className="size-4 mr-2" />
-              Editar Proposta
-            </Button>
-          ) : (
-            <Button onClick={handleSalvarEdicao} disabled={isSaving} className="bg-green-600 hover:bg-green-700 text-white">
-              <Save className="size-4 mr-2" />
-              {isSaving ? "Salvando..." : "Salvar Alterações"}
-            </Button>
-          )}
-
-          {cliente && !isEditing && (
-            <PDFDownloadQuotationButton
-              orcamento={orcamento}
-              cliente={cliente}
-              vendedor={vendedor}
-              variant="outline"
-            />
-          )}
-
-          {status !== "recusado" && !isEditing && !pedidoExistente && (
-            <Link href={`/pedidos/novo?orcamentoId=${orcamento.id}`}>
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm">
-                <ArrowRight className="size-4 mr-2" />
-                Criar Pedido
+        <div className="relative z-10 flex flex-col gap-3 w-full">
+          <div className="flex items-start gap-3 w-full">
+            <Link href="/orcamentos" className="shrink-0">
+              <Button variant="outline" size="icon" className="h-10 w-10 rounded-full">
+                <ArrowLeft className="size-4" />
               </Button>
             </Link>
-          )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground">
+                  Proposta #{orcamento.numero}
+                </h1>
+                <StatusBadge statusObj={orcamento.statusObj} fallback={status} />
+              </div>
+            </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground space-y-0.5 pl-[52px] sm:pl-0">
+            <p>Criado em {orcamento.criadoEm ? new Date(orcamento.criadoEm).toLocaleDateString('pt-BR') : 'N/D'}</p>
+            <p>Editado em {orcamento.atualizadoEm ? new Date(orcamento.atualizadoEm).toLocaleDateString('pt-BR') : 'N/D'}</p>
+            {orcamento.ocCliente && (
+              <p>OC Cliente: <b className="text-foreground">{orcamento.ocCliente}</b></p>
+            )}
+          </div>
+
+          <div className="pl-[52px] sm:pl-0">
+            <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/20 text-[10px] uppercase font-bold px-2 py-0">
+              Prazo: {prazoEntrega ? new Date(prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}
+            </Badge>
+          </div>
+
+          <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:justify-end pt-1 border-t border-border/40 sm:border-0 sm:pt-0">
+            {!isEditing ? (
+              <Button
+                variant="secondary"
+                onClick={() => setIsEditing(true)}
+                className="w-full sm:w-auto bg-secondary/80 hover:bg-secondary"
+                disabled={!!pedidoExistente}
+                title={pedidoExistente ? "Não é possível editar pois já existe um pedido vinculado." : ""}
+              >
+                <Edit className="size-4 mr-2" />
+                Editar Proposta
+              </Button>
+            ) : (
+              <Button onClick={handleSalvarEdicao} disabled={isSaving} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
+                <Save className="size-4 mr-2" />
+                {isSaving ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            )}
+
+            {cliente && !isEditing && (
+              <div className="w-full sm:w-auto">
+                <PDFDownloadQuotationButton
+                  orcamento={orcamento}
+                  cliente={cliente}
+                  vendedor={vendedor}
+                  variant="outline"
+                />
+              </div>
+            )}
+
+            {status !== "recusado" && !isEditing && !pedidoExistente && (
+              <Link href={`/pedidos/novo?orcamentoId=${orcamento.id}`} className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm">
+                  <ArrowRight className="size-4 mr-2" />
+                  Criar Pedido
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="bg-card rounded-xl border border-border/50 shadow-sm p-6 mt-2 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent pointer-events-none" />
         <div className="relative z-10">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
             <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Funil Comercial</h3>
-            {status === 'enviado' && !isEditing && !pedidoExistente && (
-              <Button size="sm" variant="destructive" onClick={handleRejectStatus} disabled={isUpdatingStatus} className="h-7 text-xs px-4">
-                Sinalizar como Perdido ou Recusado
-              </Button>
-            )}
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              {status === 'enviado' && !isEditing && !pedidoExistente && (
+                <Button size="sm" variant="destructive" onClick={handleRejectStatus} disabled={isUpdatingStatus} className="h-8 text-xs px-4 w-full sm:w-auto">
+                  Marcar como Recusado
+                </Button>
+              )}
+              {!isEditing && !pedidoExistente && status !== "recusado" && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-8 text-xs px-4 w-full sm:w-auto border-destructive/40 text-destructive hover:bg-destructive/10">
+                      <Trash2 className="size-3.5 mr-1.5" />
+                      Cancelar Orçamento
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Cancelar orçamento?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O orçamento {orcamento.numero} será removido da lista ativa. Esta ação não pode ser desfeita pela interface.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="gap-2">
+                      <AlertDialogCancel className="w-full sm:w-auto">Voltar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={(e) => {
+                          e.preventDefault()
+                          handleCancelarOrcamento()
+                        }}
+                        disabled={isUpdatingStatus}
+                        className="w-full sm:w-auto bg-destructive text-white hover:bg-destructive/90"
+                      >
+                        {isUpdatingStatus ? "Cancelando..." : "Confirmar Cancelamento"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </div>
 
-          <div className="relative flex justify-between px-2 sm:px-8">
+          <div className="relative flex flex-col gap-6 sm:flex-row sm:justify-between px-0 sm:px-8">
             {/* Connecting line */}
             <div className="absolute top-5 left-[12%] right-[12%] h-[2px] bg-muted/50 -z-10 hidden sm:block" />
             <div
@@ -443,7 +527,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
               const isRejected = isActive && (status === 'recusado' || status === 'rejeitado')
 
               return (
-                <div key={step.id} className="flex flex-col items-center gap-3 w-1/3 text-center">
+                <div key={step.id} className="flex flex-row sm:flex-col items-center gap-3 sm:w-1/3 text-left sm:text-center">
                   <div className={`
                       size-10 rounded-full flex items-center justify-center border-2 bg-background transition-colors duration-300
                       ${isCompleted ? 'border-primary text-primary' : ''}
@@ -572,7 +656,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
           {/* Abas de Sugestões */}
           {(etiquetasSugeridas.length > 0 || itensExclusivosSugeridos.length > 0 || itensAnteriores.length > 0) && (
             <Tabs defaultValue={etiquetasSugeridas.length > 0 ? "matrizes" : itensExclusivosSugeridos.length > 0 ? "insumos" : "recompra"} className="w-full">
-              <TabsList className="grid w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
+              <TabsList className="grid w-full sm:w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
                 <TabsTrigger value="matrizes" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={etiquetasSugeridas.length === 0}>
                   <Sparkles className="size-3 mr-1.5" /> Etiquetas
                 </TabsTrigger>

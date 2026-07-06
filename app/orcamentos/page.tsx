@@ -51,32 +51,20 @@ export default function OrcamentosPage() {
     return () => clearTimeout(handler)
   }, [search])
 
-  const apiParams = useMemo(() => {
-    let statusFilter = fStatus || undefined
-    // For specific multiple selections
-    if (fStatus === 'parados') statusFilter = 'parados_flag'
-
-    return {
-      type: 'orcamentos',
-      page,
-      limit: 15,
-      search: debouncedSearch,
-      status: statusFilter,
-      dataInicio: dateRange?.from?.toISOString(),
-      dataFim: dateRange?.to?.toISOString(),
-      requesterId: currentUser?.id
-    }
-  }, [page, debouncedSearch, fStatus, dateRange, isVendedor, vendedor, currentUser])
+  const apiParams = useMemo(() => ({
+    type: 'orcamentos',
+    page,
+    limit: 15,
+    search: debouncedSearch,
+    status: fStatus || undefined,
+    dataInicio: dateRange?.from?.toISOString(),
+    dataFim: dateRange?.to?.toISOString(),
+    requesterId: currentUser?.id
+  }), [page, debouncedSearch, fStatus, dateRange, currentUser])
 
   const { data: dbData, isLoading: loading } = useDataQuery<any>({
     key: apiParams,
-    fetcher: () => {
-      // O parados_flag tem que ser desmembrado ou podemos buscar rascunho.
-      // Vamos ignorar a customização 'parados_flag' na ação e apenas passar.
-      let pStatus = apiParams.status
-      if (pStatus === 'parados_flag') pStatus = 'rascunho' // aproximação para não dar erro
-      return getOrcamentos({ ...apiParams, status: pStatus })
-    }
+    fetcher: () => getOrcamentos(apiParams)
   })
 
   const orcamentosList = dbData?.data || []
@@ -177,9 +165,10 @@ export default function OrcamentosPage() {
               <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fStatus} onChange={e => handleStatusFilter(e.target.value)}>
                 <option value="">Todos Status</option>
                 <option value="rascunho">Rascunho</option>
-                <option value="enviado">Vigente</option>
+                <option value="enviado">Vigente / Enviado</option>
                 <option value="aprovado">Aprovado</option>
                 <option value="recusado">Recusado</option>
+                <option value="parados">Parados (Rascunho + Recusado)</option>
               </select>
             </div>
           </CardHeader>
@@ -208,7 +197,7 @@ export default function OrcamentosPage() {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="py-4 border-t border-border/50">
+              <div className="py-4 border-t border-border/50 overflow-x-auto">
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>

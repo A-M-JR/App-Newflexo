@@ -24,6 +24,7 @@ function mapPrismaToEmpresa(dbEmpresa: any): Empresa {
       estado: dbEmpresa.estado,
     },
     corSidebar: dbEmpresa.corSidebar || undefined,
+    pularDiretoSeparacao: dbEmpresa.pularDiretoSeparacao,
   }
 }
 
@@ -41,6 +42,7 @@ function mapEmpresaToPrisma(empresa: Partial<Empresa>) {
     if (estado) data.estado = estado
     delete data.endereco
   }
+  delete data.id
   return data
 }
 

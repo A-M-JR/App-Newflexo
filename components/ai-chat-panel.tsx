@@ -299,7 +299,7 @@ export function AIChatPanel() {
             )}
 
             {isOpen && (
-                <div className="fixed bottom-6 right-6 z-50 w-[380px] max-h-[600px] flex flex-col rounded-2xl border border-border/50 bg-background shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
+                <div className="fixed bottom-4 right-4 left-4 sm:left-auto sm:bottom-6 sm:right-6 z-50 w-auto sm:w-[380px] max-w-[calc(100vw-2rem)] max-h-[min(600px,calc(100vh-2rem))] flex flex-col rounded-2xl border border-border/50 bg-background shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4">
                     <div className="flex items-center justify-between px-4 py-3 bg-primary text-white">
                         <div className="flex items-center gap-2">
                             <Bot className="size-5" />
