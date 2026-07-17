@@ -16,9 +16,11 @@ import {
 } from "@/components/ui/table"
 import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2 } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
+import { formatDateBR } from "@/lib/utils"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidoById, updatePedidoStatus, cancelarPedido } from "@/lib/actions/pedidos"
 import { useAuth } from "@/lib/auth-context"
+import { clearDataCache } from "@/hooks/use-data-query"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { use, useState, useEffect } from "react"
@@ -51,6 +53,7 @@ export default function PedidoDetailPage({
   const [loading, setLoading] = useState(true)
   const [currentStatus, setCurrentStatus] = useState<Pedido['status']>('em_analise')
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -78,7 +81,7 @@ export default function PedidoDetailPage({
       })
 
     return () => { cancelled = true }
-  }, [id, currentUser, authLoading])
+  }, [id, currentUser?.id, authLoading])
 
   if (loading) {
     return (
@@ -181,9 +184,13 @@ export default function PedidoDetailPage({
     setIsUpdatingStatus(true)
     try {
       await cancelarPedido(pedido.id, currentUser?.id)
+      setCancelOpen(false)
+      // Invalida o cache em memória para a lista/orçamentos refletirem o cancelamento na hora.
+      clearDataCache()
       toast.success("Pedido cancelado com sucesso.")
       router.push("/pedidos")
     } catch (err: any) {
+      console.error("Erro ao cancelar pedido:", err)
       toast.error(err?.message || "Erro ao cancelar pedido.")
     } finally {
       setIsUpdatingStatus(false)
@@ -235,7 +242,7 @@ export default function PedidoDetailPage({
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-6">
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Progresso da Produção</h3>
               {!isCancelado && currentStatus !== 'entregue' && (
-                <AlertDialog>
+                <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
                   <AlertDialogTrigger asChild>
                     <Button size="sm" variant="outline" className="h-8 text-xs px-4 w-full sm:w-auto border-destructive/40 text-destructive hover:bg-destructive/10">
                       <Trash2 className="size-3.5 mr-1.5" />
@@ -389,7 +396,7 @@ export default function PedidoDetailPage({
                       <div className="mt-4 pt-4 border-t border-amber-200 dark:border-amber-800/50 flex flex-col gap-3 sm:flex-row sm:justify-between">
                         <div>
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Prazo Acordado</span>
-                          <span className="text-sm font-black text-foreground">{pedido.prazoEntrega ? new Date(pedido.prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}</span>
+                          <span className="text-sm font-black text-foreground">{pedido.prazoEntrega ? formatDateBR(pedido.prazoEntrega) : 'A definir'}</span>
                         </div>
                         <div className="sm:text-right">
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Tipo de Frete</span>

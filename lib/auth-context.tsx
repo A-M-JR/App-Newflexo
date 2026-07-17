@@ -52,8 +52,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const result = await verifySession(userId)
         if (result && result.user) {
-          setCurrentUser(result.user)
-          setVendedor(result.vendor)
+          // Só atualiza o estado quando algo realmente mudou. O checkSession roda a
+          // cada 60s; se recriássemos os objetos toda vez, todas as telas que dependem
+          // de `currentUser`/`vendedor` seriam re-renderizadas/recarregadas sem necessidade
+          // (causava o "refresh" nos pedidos e as travadas no orçamento).
+          setCurrentUser(prev => {
+            const next = result.user
+            if (
+              prev &&
+              next &&
+              prev.id === next.id &&
+              prev.role === next.role &&
+              (prev as any).ativo === (next as any).ativo &&
+              (prev as any).vendedorId === (next as any).vendedorId
+            ) {
+              return prev
+            }
+            return next
+          })
+          setVendedor(prev => {
+            const next = result.vendor
+            if (!prev && !next) return prev
+            if (prev && next && prev.id === next.id) return prev
+            return next ?? null
+          })
         } else {
           logout() // Usuário foi deletado ou inativado
         }

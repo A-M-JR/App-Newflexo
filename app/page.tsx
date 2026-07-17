@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { Search, Eye, Clock, Users, FileText, Factory, ArrowUpRight, DollarSign } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
+import { formatDateBR } from "@/lib/utils"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getDashboardMetrics } from "@/lib/actions/dashboard"
 import { useState, useMemo } from "react"
@@ -151,7 +152,7 @@ function DashboardContent() {
                         <TableCell className="hidden lg:table-cell">
                           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                             <Clock className="size-3" />
-                            {ped.prazoEntrega ? new Date(ped.prazoEntrega).toLocaleDateString('pt-BR') : 'N/D'}
+                            {ped.prazoEntrega ? formatDateBR(ped.prazoEntrega) : 'N/D'}
                           </span>
                         </TableCell>
                         <TableCell className="text-right font-semibold text-foreground">{formatCurrency(ped.totalGeral)}</TableCell>

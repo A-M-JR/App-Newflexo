@@ -1,4 +1,5 @@
 import { Pedido, Cliente, Vendedor } from '@/lib/types';
+import { formatDateBR } from '@/lib/utils';
 
 interface PDFOrderProps {
   pedido: Pedido;
@@ -8,7 +9,7 @@ interface PDFOrderProps {
 
 export function PDFOrder({ pedido, cliente, vendedor }: PDFOrderProps) {
   const dataEmissao = new Date(pedido.dataEmissao || pedido.criadoEm).toLocaleDateString('pt-BR');
-  const dataEntrega = new Date(pedido.dataEntrega || pedido.prazoEntrega).toLocaleDateString('pt-BR');
+  const dataEntrega = formatDateBR(pedido.dataEntrega || pedido.prazoEntrega);
   const valorTotal = pedido.itens.reduce((sum, item) => sum + item.precoUnitario * item.quantidade, 0);
 
   return (

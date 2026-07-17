@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
+import { formatDateBR } from "@/lib/utils"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidos } from "@/lib/actions/pedidos"
 import { useState, useMemo, useEffect } from "react"
@@ -90,9 +91,12 @@ export default function PedidosPage() {
     if (status === 'entregue' || status === 'cancelado') return { class: '', icon: null, text: status === 'cancelado' ? 'Cancelado' : 'Entregue', urgent: false, isLate: false }
     if (!prazo) return { class: '', icon: null, text: 'Sem prazo', urgent: false, isLate: false }
 
-    const prazoDate = new Date(prazo)
+    // Constrói a data a partir da parte "YYYY-MM-DD" como data local (meia-noite),
+    // evitando o deslocamento de fuso que colocava o prazo um dia antes.
+    const [py, pm, pd] = String(prazo).slice(0, 10).split('-').map(Number)
+    const prazoDate = new Date(py, (pm || 1) - 1, pd || 1)
     if (isNaN(prazoDate.getTime())) return { class: '', icon: null, text: 'Prazo inválido', urgent: false, isLate: false }
-    
+
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
@@ -230,7 +234,7 @@ export default function PedidosPage() {
                           <div className="flex flex-col gap-1">
                             <span className="flex items-center gap-1.5 text-[12px] font-medium text-foreground">
                               <Clock className="size-3.5 text-muted-foreground" />
-                              {ped.prazoEntrega ? new Date(ped.prazoEntrega).toLocaleDateString('pt-BR') : 'N/D'}
+                              {ped.prazoEntrega ? formatDateBR(ped.prazoEntrega) : 'N/D'}
                             </span>
                             {sla.urgent && (
                               <span className={`flex items-center gap-1 text-[10px] font-bold ${sla.isLate ? 'text-red-600' : 'text-orange-600'}`}>

@@ -256,7 +256,7 @@ export async function cancelarPedido(id: number, requesterId?: number) {
 
   const existing = await prisma.pedido.findUnique({
     where: { id },
-    select: { ativo: true, clienteId: true, statusObj: { select: { nome: true } } }
+    select: { ativo: true, clienteId: true, orcamentoId: true, statusObj: { select: { nome: true } } }
   })
   if (!existing || !existing.ativo) throw new Error("Pedido não encontrado ou já cancelado.")
 
@@ -271,6 +271,20 @@ export async function cancelarPedido(id: number, requesterId?: number) {
     where: { id },
     data: { ativo: false, statusId },
   })
+
+  // Ao cancelar o pedido, devolve o orçamento vinculado para "Enviado ao cliente",
+  // liberando-o novamente no funil (edição e nova conversão em pedido).
+  if (existing.orcamentoId) {
+    const statusEnviado = await prisma.status.findFirst({
+      where: { modulo: 'orcamento', nome: { contains: 'Enviado', mode: 'insensitive' } }
+    })
+    await prisma.orcamento.update({
+      where: { id: existing.orcamentoId },
+      data: { statusId: statusEnviado?.id ?? 4 }
+    })
+    revalidatePath("/orcamentos")
+    revalidatePath(`/orcamentos/${existing.orcamentoId}`)
+  }
 
   await updateClienteUltimaCompra(existing.clienteId)
   revalidatePath("/pedidos")

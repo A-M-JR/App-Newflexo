@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles, Wallet, RotateCcw, Check } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
+import { formatDateBR } from "@/lib/utils"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus, getOrcamentos, deleteOrcamento } from "@/lib/actions/orcamentos"
 import { useAuth } from "@/lib/auth-context"
@@ -213,7 +214,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
       })
 
     return () => { cancelled = true }
-  }, [id, currentUser, authLoading])
+  }, [id, currentUser?.id, authLoading])
 
   if (loading) {
     return <div className="flex justify-center py-20 animate-pulse text-muted-foreground">Carregando orçamento...</div>
@@ -231,7 +232,10 @@ function OrcamentoDetailContent({ id }: { id: string }) {
   }
 
   const cliente = orcamento.cliente
-  const pedidoExistente = orcamento.pedidos?.[0]
+  // Só considera "pedido vinculado" os pedidos ATIVOS. Assim, se o pedido gerado
+  // for cancelado, o orçamento volta a permitir edição e nova conversão em pedido.
+  const pedidoExistente = orcamento.pedidos?.find((p: any) => p.ativo !== false)
+  const pedidoCancelado = orcamento.pedidos?.find((p: any) => p.ativo === false)
   const vendedor = orcamento.vendedor
 
   // Totalizador dinâmico na edição
@@ -421,7 +425,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
           <div className="pl-[52px] sm:pl-0">
             <Badge variant="secondary" className="bg-primary/5 text-primary border-primary/20 text-[10px] uppercase font-bold px-2 py-0">
-              Prazo: {prazoEntrega ? new Date(prazoEntrega).toLocaleDateString('pt-BR') : 'A definir'}
+              Prazo: {prazoEntrega ? formatDateBR(prazoEntrega) : 'A definir'}
             </Badge>
           </div>
 
@@ -595,6 +599,27 @@ function OrcamentoDetailContent({ id }: { id: string }) {
           <Link href={`/pedidos/${pedidoExistente.id}`}>
             <Button variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/20 w-full sm:w-auto">
               Acessar Pedido <ArrowRight className="size-3 ml-2" />
+            </Button>
+          </Link>
+        </div>
+      )}
+
+      {pedidoCancelado && !pedidoExistente && !isEditing && (
+        <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="bg-destructive/20 p-2 rounded-full hidden sm:block">
+              <Trash2 className="size-5 text-destructive" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-destructive">Pedido Cancelado</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Já existiu um pedido para este orçamento que foi cancelado: <span className="font-mono font-medium text-foreground">{pedidoCancelado.numero}</span>. O orçamento voltou para o funil e pode ser editado ou convertido novamente.
+              </p>
+            </div>
+          </div>
+          <Link href={`/pedidos/${pedidoCancelado.id}`}>
+            <Button variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/20 w-full sm:w-auto">
+              Ver Pedido Cancelado <ArrowRight className="size-3 ml-2" />
             </Button>
           </Link>
         </div>
@@ -1057,7 +1082,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                 />
               ) : (
                 <div className="text-sm font-medium p-2 bg-blue-500/5 rounded border border-blue-500/10 text-blue-700 inline-flex items-center gap-2">
-                  {prazoEntrega ? new Date(prazoEntrega).toLocaleDateString('pt-BR') : "A definir"}
+                  {prazoEntrega ? formatDateBR(prazoEntrega) : "A definir"}
                 </div>
               )}
             </div>

@@ -14,6 +14,21 @@ export function formatCurrency(value: number, decimals: number = 2) {
   }).format(value)
 }
 
+/**
+ * Formata uma data "somente dia" (string "YYYY-MM-DD", ISO ou Date) em DD/MM/AAAA
+ * SEM aplicar fuso horário. Usa a parte da data da string, evitando o clássico
+ * "volta um dia" que acontece quando `new Date("2026-08-07")` é lido como UTC e
+ * depois exibido em horário local (UTC-3).
+ */
+export function formatDateBR(value?: string | Date | null): string {
+  if (!value) return ''
+  const s = typeof value === 'string' ? value : value.toISOString()
+  const datePart = s.slice(0, 10)
+  const [y, m, d] = datePart.split('-')
+  if (!y || !m || !d) return ''
+  return `${d}/${m}/${y}`
+}
+
 export function maskCurrency(value: string, decimals: number = 2) {
   const cleanValue = value.replace(/\D/g, '')
   if (!cleanValue) return ''

@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check, CreditCard, Wallet, MinusCircle, AlertCircle } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check, CreditCard, Wallet, MinusCircle, AlertCircle, CalendarIcon } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
 import { formatCurrency, formatEtiquetaMedida } from "@/lib/utils"
 import { getClientes, getClienteById } from "@/lib/actions/clientes"
 import { getVendedores } from "@/lib/actions/vendedores"
@@ -73,11 +75,14 @@ function NovoOrcamentoContent() {
   const [isSaving, setIsSaving] = useState(false)
   const [formasPagamento, setFormasPagamento] = useState<any[]>([])
   const [formaPagamentoId, setFormaPagamentoId] = useState<string>("")
-  const [prazoEntrega, setPrazoEntrega] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() + 15)
-    return d.toISOString().split('T')[0]
-  })
+  const [prazoEntrega, setPrazoEntrega] = useState("")
+  const [openPrazo, setOpenPrazo] = useState(false)
+
+  // Cadastro rápido de forma de pagamento (sem sair do orçamento)
+  const [openNovaForma, setOpenNovaForma] = useState(false)
+  const [novaFormaNome, setNovaFormaNome] = useState("")
+  const [novaFormaParcelas, setNovaFormaParcelas] = useState(1)
+  const [savingForma, setSavingForma] = useState(false)
 
   // Estados de Crédito
   const [descontoCredito, setDescontoCredito] = useState<number>(0)
@@ -293,6 +298,43 @@ function NovoOrcamentoContent() {
 
   const totalEtiquetasNoCredito = Object.values(itensCreditoQtd).reduce((sum, q) => sum + q, 0)
 
+  async function handleCriarFormaPagamento() {
+    if (!novaFormaNome.trim()) {
+      toast.error("Informe o nome da forma de pagamento.")
+      return
+    }
+    setSavingForma(true)
+    try {
+      const res = await fetch("/api/formas-pagamento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: novaFormaNome.trim(),
+          quantidadeParcelas: Number(novaFormaParcelas) || 1,
+          ativo: true,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.details || err?.error || "Falha ao salvar a forma de pagamento.")
+      }
+      const created = await res.json()
+      setFormasPagamento(prev =>
+        [...prev, created].sort((a: any, b: any) => a.nome.localeCompare(b.nome))
+      )
+      setFormaPagamentoId(created.id.toString())
+      toast.success("Forma de pagamento cadastrada e selecionada!")
+      setNovaFormaNome("")
+      setNovaFormaParcelas(1)
+      setOpenNovaForma(false)
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e?.message || "Erro ao cadastrar forma de pagamento.")
+    } finally {
+      setSavingForma(false)
+    }
+  }
+
   async function handleSalvar() {
     if (isSaving) return
     if (!clienteId) {
@@ -305,6 +347,10 @@ function NovoOrcamentoContent() {
     }
     if (itens.length === 0) {
       toast.error("Adicione pelo menos um item.")
+      return
+    }
+    if (!prazoEntrega) {
+      toast.error("Informe o prazo de entrega.")
       return
     }
 
@@ -491,19 +537,6 @@ function NovoOrcamentoContent() {
                 </p>
               </div>
             )}
-
-            <div className="space-y-2 pt-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Prazo de Entrega Estimado</Label>
-              <div className="relative">
-                <Calculator className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground z-10" />
-                <Input
-                  type="date"
-                  value={prazoEntrega}
-                  onChange={(e) => setPrazoEntrega(e.target.value)}
-                  className="pl-9 h-10 bg-muted/30 border-border/50 focus-visible:ring-primary/50"
-                />
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -839,11 +872,65 @@ function NovoOrcamentoContent() {
           <CardContent className="pt-4 flex flex-col gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-semibold flex items-center gap-2">
-                <CreditCard className="size-4 text-primary" />
-                Forma de Pagamento Padronizada
+                <CalendarIcon className="size-4 text-primary" />
+                Prazo de Entrega Estimado <span className="text-destructive">*</span>
               </Label>
+              <div className="relative">
+                <Input
+                  type="date"
+                  value={prazoEntrega}
+                  onChange={(e) => setPrazoEntrega(e.target.value)}
+                  className="w-full h-10 bg-muted/10 border-border/50 focus-visible:ring-primary/50 pr-10 [&::-webkit-calendar-picker-indicator]:hidden"
+                />
+                <Popover open={openPrazo} onOpenChange={setOpenPrazo}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 size-8 text-muted-foreground hover:text-primary hover:bg-primary/5"
+                    >
+                      <CalendarIcon className="size-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                      mode="single"
+                      selected={prazoEntrega ? new Date(`${prazoEntrega}T00:00:00`) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          const y = date.getFullYear()
+                          const m = String(date.getMonth() + 1).padStart(2, '0')
+                          const d = String(date.getDate()).padStart(2, '0')
+                          setPrazoEntrega(`${y}-${m}-${d}`)
+                        }
+                        setOpenPrazo(false)
+                      }}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-border/50 pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <CreditCard className="size-4 text-primary" />
+                  Forma de Pagamento Padronizada
+                </Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOpenNovaForma(true)}
+                  className="h-7 text-xs text-primary hover:bg-primary/5 px-2 shrink-0"
+                >
+                  <Plus className="size-3.5 mr-1" /> Nova forma
+                </Button>
+              </div>
               <Select value={formaPagamentoId} onValueChange={setFormaPagamentoId}>
-                <SelectTrigger className="bg-muted/10 border-border/50">
+                <SelectTrigger className="w-full bg-muted/10 border-border/50">
                   <SelectValue placeholder="Selecione uma forma de pagamento..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -853,6 +940,53 @@ function NovoOrcamentoContent() {
                 </SelectContent>
               </Select>
             </div>
+
+            <Dialog open={openNovaForma} onOpenChange={setOpenNovaForma}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Nova forma de pagamento</DialogTitle>
+                  <DialogDescription>
+                    Cadastre sem sair do orçamento — ela já fica selecionada aqui.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="nova-forma-nome">Nome da Forma *</Label>
+                    <Input
+                      id="nova-forma-nome"
+                      placeholder="Ex: 30/60/90 Dias"
+                      value={novaFormaNome}
+                      onChange={(e) => setNovaFormaNome(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleCriarFormaPagamento()
+                        }
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="nova-forma-parcelas">Parcelas</Label>
+                    <Input
+                      id="nova-forma-parcelas"
+                      type="number"
+                      min={1}
+                      value={novaFormaParcelas}
+                      onChange={(e) => setNovaFormaParcelas(Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+                <DialogFooter className="gap-2">
+                  <Button type="button" variant="outline" onClick={() => setOpenNovaForma(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="button" onClick={handleCriarFormaPagamento} disabled={savingForma}>
+                    {savingForma ? "Salvando..." : "Cadastrar e usar"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <div className="space-y-2 border-t border-border/50 pt-4">
               <Label className="text-sm font-semibold">OC do Cliente</Label>
