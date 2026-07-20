@@ -45,32 +45,7 @@ export async function getOrcamentos(params: {
   else if (params.status === 'recusado') statusFilterSql = Prisma.sql`p."statusId" = 5`
   else if (params.status === 'parados') statusFilterSql = Prisma.sql`p."statusId" IN (1, 5)`
 
-  const counts: any[] = await prisma.$queryRaw`
-    SELECT 
-      COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
-      COUNT(*) FILTER (WHERE p."statusId" = 4)::int as vigentes,
-      COUNT(*) FILTER (WHERE p."statusId" = 2)::int as aprovados,
-      COUNT(*) FILTER (WHERE p."statusId" IN (1, 5))::int as parados,
-      COALESCE(SUM(p."totalGeral") FILTER (WHERE p."statusId" <> 5), 0)::float as total_valor
-    FROM "Orcamento" p
-    LEFT JOIN "Cliente" c ON p."clienteId" = c.id
-    WHERE (
-      p."numero" ILIKE ${searchPattern} 
-      OR c."razaoSocial" ILIKE ${searchPattern}
-      OR EXISTS (
-        SELECT 1 FROM "ItemOrcamento" io
-        LEFT JOIN "Etiqueta" e ON io."etiquetaId" = e.id
-        WHERE io."orcamentoId" = p.id 
-          AND (io."descricao" ILIKE ${searchPattern} OR e."nome" ILIKE ${searchPattern} OR e."codigo" ILIKE ${searchPattern})
-      )
-    )
-      AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
-      AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
-      AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
-      AND p."ativo" = TRUE
-  `
-  const stats = counts[0] || { total_filtrado: 0, vigentes: 0, aprovados: 0, parados: 0, total_valor: 0 }
-
+  // Monta o filtro antes, para rodar contagem e busca em paralelo.
   const where: any = { ativo: true }
   if (params.search) {
     where.OR = [
@@ -102,28 +77,61 @@ export async function getOrcamentos(params: {
     }
   }
 
+  const countPromise = prisma.$queryRaw<any[]>`
+    SELECT
+      COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
+      COUNT(*) FILTER (WHERE p."statusId" = 4)::int as vigentes,
+      COUNT(*) FILTER (WHERE p."statusId" = 2)::int as aprovados,
+      COUNT(*) FILTER (WHERE p."statusId" IN (1, 5))::int as parados,
+      COALESCE(SUM(p."totalGeral") FILTER (WHERE p."statusId" <> 5), 0)::float as total_valor
+    FROM "Orcamento" p
+    LEFT JOIN "Cliente" c ON p."clienteId" = c.id
+    WHERE (
+      p."numero" ILIKE ${searchPattern}
+      OR c."razaoSocial" ILIKE ${searchPattern}
+      OR EXISTS (
+        SELECT 1 FROM "ItemOrcamento" io
+        LEFT JOIN "Etiqueta" e ON io."etiquetaId" = e.id
+        WHERE io."orcamentoId" = p.id
+          AND (io."descricao" ILIKE ${searchPattern} OR e."nome" ILIKE ${searchPattern} OR e."codigo" ILIKE ${searchPattern})
+      )
+    )
+      AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
+      AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
+      AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
+      AND p."ativo" = TRUE
+  `
+
   if (mode === 'history') {
-    const dbOrcs = await prisma.orcamento.findMany({
-      where,
-      orderBy: { id: "desc" },
-      take: limit,
-      select: { id: true, clienteId: true, itens: true }
-    })
+    const [counts, dbOrcs] = await Promise.all([
+      countPromise,
+      prisma.orcamento.findMany({
+        where,
+        orderBy: { id: "desc" },
+        take: limit,
+        select: { id: true, clienteId: true, itens: true }
+      })
+    ])
+    const stats = counts[0] || { total_filtrado: 0, vigentes: 0, aprovados: 0, parados: 0, total_valor: 0 }
     return { data: dbOrcs, total: stats.total_filtrado, page: 1, totalPages: 1, kpis: null }
   }
 
-  const dbOrcs = await prisma.orcamento.findMany({
-    where,
-    orderBy: { id: "desc" },
-    skip: (page - 1) * limit,
-    take: limit,
-    include: {
-      cliente: true,
-      vendedor: true,
-      statusObj: true,
-      _count: { select: { itens: true } }
-    }
-  })
+  const [counts, dbOrcs] = await Promise.all([
+    countPromise,
+    prisma.orcamento.findMany({
+      where,
+      orderBy: { id: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        cliente: { select: { razaoSocial: true, cnpj: true } },
+        vendedor: { select: { nome: true } },
+        statusObj: true,
+        _count: { select: { itens: true } }
+      }
+    })
+  ])
+  const stats = counts[0] || { total_filtrado: 0, vigentes: 0, aprovados: 0, parados: 0, total_valor: 0 }
   
   return {
     data: dbOrcs.map((o: any) => ({

@@ -32,10 +32,12 @@ export async function getPedidos(params: {
   const page = params.page || 1
   const limit = params.limit || 20
   
-  const statusEmAnalise = await getOrCreateStatus('em_analise')
-  const statusEmProducao = await getOrCreateStatus('em_producao')
-  const statusSeparacao = await getOrCreateStatus('separacao')
-  const statusEntregue = await getOrCreateStatus('entregue')
+  const [statusEmAnalise, statusEmProducao, statusSeparacao, statusEntregue] = await Promise.all([
+    getOrCreateStatus('em_analise'),
+    getOrCreateStatus('em_producao'),
+    getOrCreateStatus('separacao'),
+    getOrCreateStatus('entregue'),
+  ])
 
   const searchPattern = `%${params.search || ""}%`
   const dataInicio = params.dataInicio ? new Date(params.dataInicio) : null
@@ -69,31 +71,7 @@ export async function getPedidos(params: {
   else if (params.status === 'separacao') statusFilterSql = Prisma.sql`p."statusId" = ${statusSeparacao}`
   else if (params.status === 'entregue') statusFilterSql = Prisma.sql`p."statusId" = ${statusEntregue}`
 
-  const counts: any[] = await prisma.$queryRaw`
-    SELECT 
-      COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
-      COUNT(*) FILTER (WHERE p."statusId" = ${statusEmAnalise})::int as em_analise,
-      COUNT(*) FILTER (WHERE p."statusId" IN (${statusEmProducao}, ${statusSeparacao}))::int as em_producao_soma,
-      COUNT(*) FILTER (WHERE p."statusId" = ${statusSeparacao})::int as separacao,
-      COUNT(*) FILTER (WHERE p."statusId" = ${statusEntregue})::int as entregue,
-      COUNT(*) FILTER (WHERE 
-        p."statusId" <> ${statusEntregue}
-        AND p."prazoEntrega" IS NOT NULL
-        AND (p."prazoEntrega"::date - CURRENT_DATE) <= 3
-      )::int as sla_alerta,
-      COUNT(*) FILTER (WHERE p."ativo" = FALSE)::int as cancelados,
-      COALESCE(SUM(p."totalGeral"), 0)::float as total_valor
-    FROM "Pedido" p
-    LEFT JOIN "Cliente" c ON p."clienteId" = c.id
-    WHERE (p."numero" ILIKE ${searchPattern} OR c."razaoSocial" ILIKE ${searchPattern})
-      AND (${params.status === 'cancelado'}::boolean = TRUE OR p."ativo" = TRUE)
-      AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
-      AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
-      AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
-  `
-  const stats = counts[0] || { total_filtrado: 0, em_analise: 0, em_producao_soma: 0, entregue: 0, separacao: 0, sla_alerta: 0, cancelados: 0, total_valor: 0 }
-
-  // 2. Busca paginada dos registros
+  // 2. Monta o filtro da busca paginada
   const where: any = {}
   if (params.status === 'cancelado') {
     where.ativo = false
@@ -130,18 +108,44 @@ export async function getPedidos(params: {
     }
   }
 
-  const dbPedidos = await prisma.pedido.findMany({
-    where,
-    orderBy: params.apenasSla ? { prazoEntrega: 'asc' } : { id: 'desc' },
-    skip: (page - 1) * limit,
-    take: limit,
-    include: {
-      cliente: true,
-      vendedor: true,
-      statusObj: true,
-      _count: { select: { itens: true } }
-    }
-  })
+  // 3. Contagem (KPIs) e busca paginada em paralelo — são independentes.
+  const [counts, dbPedidos] = await Promise.all([
+    prisma.$queryRaw<any[]>`
+      SELECT
+        COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
+        COUNT(*) FILTER (WHERE p."statusId" = ${statusEmAnalise})::int as em_analise,
+        COUNT(*) FILTER (WHERE p."statusId" IN (${statusEmProducao}, ${statusSeparacao}))::int as em_producao_soma,
+        COUNT(*) FILTER (WHERE p."statusId" = ${statusSeparacao})::int as separacao,
+        COUNT(*) FILTER (WHERE p."statusId" = ${statusEntregue})::int as entregue,
+        COUNT(*) FILTER (WHERE
+          p."statusId" <> ${statusEntregue}
+          AND p."prazoEntrega" IS NOT NULL
+          AND (p."prazoEntrega"::date - CURRENT_DATE) <= 3
+        )::int as sla_alerta,
+        COUNT(*) FILTER (WHERE p."ativo" = FALSE)::int as cancelados,
+        COALESCE(SUM(p."totalGeral"), 0)::float as total_valor
+      FROM "Pedido" p
+      LEFT JOIN "Cliente" c ON p."clienteId" = c.id
+      WHERE (p."numero" ILIKE ${searchPattern} OR c."razaoSocial" ILIKE ${searchPattern})
+        AND (${params.status === 'cancelado'}::boolean = TRUE OR p."ativo" = TRUE)
+        AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
+        AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
+        AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
+    `,
+    prisma.pedido.findMany({
+      where,
+      orderBy: params.apenasSla ? { prazoEntrega: 'asc' } : { id: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        cliente: { select: { razaoSocial: true, cnpj: true } },
+        vendedor: { select: { nome: true } },
+        statusObj: true,
+        _count: { select: { itens: true } }
+      }
+    })
+  ])
+  const stats = counts[0] || { total_filtrado: 0, em_analise: 0, em_producao_soma: 0, entregue: 0, separacao: 0, sla_alerta: 0, cancelados: 0, total_valor: 0 }
   
   const pedidos = dbPedidos.map(p => ({
     ...p,

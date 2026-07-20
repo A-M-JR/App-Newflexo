@@ -13,14 +13,28 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as { prisma?: PrismaClient; pool?: Pool };
 
 const connectionString = process.env.DB_URL_OFFICIAL || process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
+
+// Reutiliza o mesmo pool entre reloads (dev) para não vazar conexões, e define
+// limites saudáveis: teto de conexões, encerra conexões ociosas e falha rápido
+// em vez de ficar pendurado quando o banco não responde.
+const pool =
+  globalForPrisma.pool ??
+  new Pool({
+    connectionString,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
 const adapter = new PrismaPg(pool as any);
 
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({ adapter });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+  globalForPrisma.pool = pool;
+}
