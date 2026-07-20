@@ -6,6 +6,15 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -14,11 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2, Edit, Save } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { formatDateBR } from "@/lib/utils"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { getPedidoById, updatePedidoStatus, cancelarPedido } from "@/lib/actions/pedidos"
+import { getPedidoById, updatePedidoStatus, cancelarPedido, savePedido } from "@/lib/actions/pedidos"
 import { useAuth } from "@/lib/auth-context"
 import { clearDataCache } from "@/hooks/use-data-query"
 import Link from "next/link"
@@ -39,6 +48,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 export default function PedidoDetailPage({
   params,
@@ -54,6 +64,29 @@ export default function PedidoDetailPage({
   const [currentStatus, setCurrentStatus] = useState<Pedido['status']>('em_analise')
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+
+  // --- Edição do pedido ---
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [formasPagamento, setFormasPagamento] = useState<any[]>([])
+  const [editItens, setEditItens] = useState<any[]>([])
+  const [editPrazo, setEditPrazo] = useState("")
+  const [editFormaPagamentoId, setEditFormaPagamentoId] = useState("")
+  const [editOcCliente, setEditOcCliente] = useState("")
+  const [editFrete, setEditFrete] = useState("")
+  const [editSentido, setEditSentido] = useState("")
+  const [editTubete, setEditTubete] = useState("")
+  const [editGap, setEditGap] = useState("")
+  const [editPistas, setEditPistas] = useState<number | string>(1)
+  const [editObsGerais, setEditObsGerais] = useState("")
+  const [editObsEmbalagem, setEditObsEmbalagem] = useState("")
+  const [editObsFaturamento, setEditObsFaturamento] = useState("")
+
+  // Cadastro rápido de forma de pagamento (sem sair da edição do pedido)
+  const [openNovaForma, setOpenNovaForma] = useState(false)
+  const [novaFormaNome, setNovaFormaNome] = useState("")
+  const [novaFormaParcelas, setNovaFormaParcelas] = useState(1)
+  const [savingForma, setSavingForma] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
@@ -82,6 +115,13 @@ export default function PedidoDetailPage({
 
     return () => { cancelled = true }
   }, [id, currentUser?.id, authLoading])
+
+  useEffect(() => {
+    fetch("/api/formas-pagamento")
+      .then(res => res.json())
+      .then(data => setFormasPagamento(Array.isArray(data) ? data : []))
+      .catch(() => setFormasPagamento([]))
+  }, [])
 
   if (loading) {
     return (
@@ -197,7 +237,158 @@ export default function PedidoDetailPage({
     }
   }
 
+  const parseNum = (v: any) =>
+    typeof v === 'string' ? (parseFloat(v.replace(',', '.')) || 0) : (Number(v) || 0)
+
+  const iniciarEdicao = () => {
+    setEditItens((pedido.itens || []).map((it: any) => ({
+      id: it.id,
+      etiquetaId: it.etiquetaId ?? null,
+      descricao: it.descricao ?? "",
+      quantidade: it.quantidade ?? 0,
+      unidade: it.unidade ?? "",
+      precoUnitario: it.precoUnitario ?? 0,
+      observacao: it.observacao ?? "",
+    })))
+    setEditPrazo(pedido.prazoEntrega ? String(pedido.prazoEntrega).slice(0, 10) : "")
+    setEditFormaPagamentoId(pedido.formaPagamentoId ? String(pedido.formaPagamentoId) : "")
+    setEditOcCliente(pedido.ocCliente || "")
+    setEditFrete(pedido.frete || "")
+    setEditSentido(pedido.sentidoSaidaRolo || "")
+    setEditTubete(pedido.tipoTubete || "")
+    setEditGap(pedido.gapEntreEtiquetas || "")
+    setEditPistas(pedido.numeroPistas ?? 1)
+    setEditObsGerais(pedido.observacoesGerais || "")
+    setEditObsEmbalagem(pedido.observacoesEmbalagem || "")
+    setEditObsFaturamento(pedido.observacoesFaturamento || "")
+    setIsEditing(true)
+  }
+
+  const atualizarItemEdit = (id: any, field: string, value: any) => {
+    setEditItens(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it))
+  }
+
+  const removerItemEdit = (id: any) => {
+    setEditItens(prev => prev.length <= 1 ? prev : prev.filter(it => it.id !== id))
+  }
+
+  const adicionarItemEdit = () => {
+    setEditItens(prev => [...prev, {
+      id: `novo-${Math.random().toString(36).slice(2, 9)}`,
+      etiquetaId: null,
+      descricao: "",
+      quantidade: 1,
+      unidade: "unid",
+      precoUnitario: 0,
+      observacao: "",
+    }])
+  }
+
+  const editTotalGeral = editItens.reduce(
+    (s, it) => s + parseNum(it.quantidade) * parseNum(it.precoUnitario), 0
+  )
+
+  const handleSalvarEdicao = async () => {
+    if (isSaving) return
+    if (editItens.length === 0) {
+      toast.error("O pedido precisa ter pelo menos 1 item.")
+      return
+    }
+    if (!editPrazo) {
+      toast.error("Informe o prazo de entrega.")
+      return
+    }
+    setIsSaving(true)
+    try {
+      await savePedido({
+        id: pedido.id,
+        numero: pedido.numero,
+        orcamentoId: pedido.orcamentoId,
+        clienteId: pedido.clienteId,
+        vendedorId: pedido.vendedorId,
+        statusId: pedido.statusId,
+        nomeVendedor: pedido.nomeVendedor,
+        nomeComprador: pedido.nomeComprador,
+        formaPagamento: pedido.formaPagamento,
+        formaPagamentoId: editFormaPagamentoId ? Number(editFormaPagamentoId) : null,
+        prazoEntrega: editPrazo || null,
+        ocCliente: editOcCliente || null,
+        frete: editFrete,
+        sentidoSaidaRolo: editSentido,
+        tipoTubete: editTubete,
+        gapEntreEtiquetas: editGap,
+        numeroPistas: Number(editPistas) || 1,
+        observacoesGerais: editObsGerais,
+        observacoesEmbalagem: editObsEmbalagem,
+        observacoesFaturamento: editObsFaturamento,
+        totalGeral: editTotalGeral,
+        itens: editItens.map(it => ({
+          id: typeof it.id === 'number' ? it.id : undefined,
+          etiquetaId: it.etiquetaId ?? null,
+          descricao: it.descricao,
+          quantidade: parseNum(it.quantidade),
+          unidade: it.unidade,
+          precoUnitario: parseNum(it.precoUnitario),
+          total: parseNum(it.quantidade) * parseNum(it.precoUnitario),
+          observacao: it.observacao || "",
+        })),
+      }, currentUser?.id)
+
+      const refreshed = await getPedidoById(Number(id), currentUser?.id)
+      if (refreshed) {
+        setPedido(refreshed)
+        setCurrentStatus(refreshed.status as Pedido['status'])
+      }
+      clearDataCache()
+      setIsEditing(false)
+      toast.success("Pedido atualizado com sucesso!")
+    } catch (err: any) {
+      console.error("Erro ao salvar pedido:", err)
+      toast.error(err?.message || "Erro ao salvar as alterações.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCriarFormaPagamento = async () => {
+    if (!novaFormaNome.trim()) {
+      toast.error("Informe o nome da forma de pagamento.")
+      return
+    }
+    setSavingForma(true)
+    try {
+      const res = await fetch("/api/formas-pagamento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: novaFormaNome.trim(),
+          quantidadeParcelas: Number(novaFormaParcelas) || 1,
+          ativo: true,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.details || err?.error || "Falha ao salvar a forma de pagamento.")
+      }
+      const created = await res.json()
+      setFormasPagamento(prev =>
+        [...prev, created].sort((a: any, b: any) => a.nome.localeCompare(b.nome))
+      )
+      setEditFormaPagamentoId(created.id.toString())
+      toast.success("Forma de pagamento cadastrada e selecionada!")
+      setNovaFormaNome("")
+      setNovaFormaParcelas(1)
+      setOpenNovaForma(false)
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e?.message || "Erro ao cadastrar forma de pagamento.")
+    } finally {
+      setSavingForma(false)
+    }
+  }
+
   const isCancelado = currentStatus === 'cancelado' || pedido.ativo === false
+  const podeEditar = !isCancelado && currentStatus !== 'entregue'
 
   return (
     <AppShell>
@@ -223,16 +414,40 @@ export default function PedidoDetailPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <PDFProductionOrderButton
-              pedido={pedido}
-              cliente={cliente as Cliente}
-              vendedor={vendedor as Vendedor}
-            />
-            <PDFDownloadButton
-              pedido={pedido}
-              cliente={cliente as Cliente}
-              vendedor={vendedor as Vendedor}
-            />
+            {isEditing ? (
+              <>
+                <Button
+                  onClick={handleSalvarEdicao}
+                  disabled={isSaving}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Save className="size-4 mr-2" />
+                  {isSaving ? "Salvando..." : "Salvar Alterações"}
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                  Cancelar
+                </Button>
+              </>
+            ) : (
+              <>
+                {podeEditar && (
+                  <Button variant="secondary" onClick={iniciarEdicao} className="bg-secondary/80 hover:bg-secondary">
+                    <Edit className="size-4 mr-2" />
+                    Editar Pedido
+                  </Button>
+                )}
+                <PDFProductionOrderButton
+                  pedido={pedido}
+                  cliente={cliente as Cliente}
+                  vendedor={vendedor as Vendedor}
+                />
+                <PDFDownloadButton
+                  pedido={pedido}
+                  cliente={cliente as Cliente}
+                  vendedor={vendedor as Vendedor}
+                />
+              </>
+            )}
           </div>
         </div>
 
@@ -396,11 +611,29 @@ export default function PedidoDetailPage({
                       <div className="mt-4 pt-4 border-t border-amber-200 dark:border-amber-800/50 flex flex-col gap-3 sm:flex-row sm:justify-between">
                         <div>
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Prazo Acordado</span>
-                          <span className="text-sm font-black text-foreground">{pedido.prazoEntrega ? formatDateBR(pedido.prazoEntrega) : 'A definir'}</span>
+                          {isEditing ? (
+                            <Input
+                              type="date"
+                              value={editPrazo}
+                              onChange={(e) => setEditPrazo(e.target.value)}
+                              className="h-8 w-full sm:w-40 bg-background"
+                            />
+                          ) : (
+                            <span className="text-sm font-black text-foreground">{pedido.prazoEntrega ? formatDateBR(pedido.prazoEntrega) : 'A definir'}</span>
+                          )}
                         </div>
                         <div className="sm:text-right">
                           <span className="text-[10px] uppercase text-amber-600 dark:text-amber-400 font-bold block mb-0.5">Tipo de Frete</span>
-                          <span className="text-sm font-bold text-foreground">{pedido.frete}</span>
+                          {isEditing ? (
+                            <Input
+                              value={editFrete}
+                              onChange={(e) => setEditFrete(e.target.value)}
+                              placeholder="CIF / FOB..."
+                              className="h-8 w-full sm:w-32 bg-background sm:text-right"
+                            />
+                          ) : (
+                            <span className="text-sm font-bold text-foreground">{pedido.frete}</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -416,11 +649,98 @@ export default function PedidoDetailPage({
             </CardHeader>
             <CardContent className="pt-6 flex-1 flex flex-col gap-5">
               <div>
-                <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Forma de Pagamento</h4>
-                <div className="bg-background border border-border/60 rounded-lg p-3 text-sm font-medium shadow-sm flex items-center gap-2">
-                  <CreditCard className="size-4 text-primary" />
-                  {pedido.formaPagamentoObj?.nome || pedido.formaPagamento}
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider">Forma de Pagamento</h4>
+                  {isEditing && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setOpenNovaForma(true)}
+                      className="h-6 text-[11px] text-primary hover:bg-primary/5 px-1.5"
+                    >
+                      <Plus className="size-3 mr-1" /> Nova forma
+                    </Button>
+                  )}
                 </div>
+                {isEditing ? (
+                  <Select value={editFormaPagamentoId} onValueChange={setEditFormaPagamentoId}>
+                    <SelectTrigger className="w-full bg-background">
+                      <SelectValue placeholder="Selecione uma forma de pagamento..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formasPagamento.filter((f: any) => f.ativo).map((f: any) => (
+                        <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="bg-background border border-border/60 rounded-lg p-3 text-sm font-medium shadow-sm flex items-center gap-2">
+                    <CreditCard className="size-4 text-primary" />
+                    {pedido.formaPagamentoObj?.nome || pedido.formaPagamento}
+                  </div>
+                )}
+
+                <Dialog open={openNovaForma} onOpenChange={setOpenNovaForma}>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Nova forma de pagamento</DialogTitle>
+                      <DialogDescription>
+                        Cadastre sem sair da edição do pedido — ela já fica selecionada aqui.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-4 py-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ped-nova-forma-nome">Nome da Forma *</Label>
+                        <Input
+                          id="ped-nova-forma-nome"
+                          placeholder="Ex: 30/60/90 Dias"
+                          value={novaFormaNome}
+                          onChange={(e) => setNovaFormaNome(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              handleCriarFormaPagamento()
+                            }
+                          }}
+                          autoFocus
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ped-nova-forma-parcelas">Parcelas</Label>
+                        <Input
+                          id="ped-nova-forma-parcelas"
+                          type="number"
+                          min={1}
+                          value={novaFormaParcelas}
+                          onChange={(e) => setNovaFormaParcelas(Number(e.target.value))}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter className="gap-2">
+                      <Button type="button" variant="outline" onClick={() => setOpenNovaForma(false)}>
+                        Cancelar
+                      </Button>
+                      <Button type="button" onClick={handleCriarFormaPagamento} disabled={savingForma}>
+                        {savingForma ? "Salvando..." : "Cadastrar e usar"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              <div>
+                <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">OC do Cliente</h4>
+                {isEditing ? (
+                  <Input
+                    value={editOcCliente}
+                    onChange={(e) => setEditOcCliente(e.target.value)}
+                    placeholder="Número da OC do cliente..."
+                    className="h-9 bg-background"
+                  />
+                ) : (
+                  <div className="text-sm font-medium text-foreground">{pedido.ocCliente || "Não informada"}</div>
+                )}
               </div>
               <Separator />
               <div>
@@ -447,19 +767,35 @@ export default function PedidoDetailPage({
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div className="bg-muted/20 p-3 rounded-lg border border-border/40">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">Sentido de Saída</p>
-                <p className="text-sm font-medium text-foreground">{pedido.sentidoSaidaRolo}</p>
+                {isEditing ? (
+                  <Input value={editSentido} onChange={(e) => setEditSentido(e.target.value)} className="h-8 bg-background" />
+                ) : (
+                  <p className="text-sm font-medium text-foreground">{pedido.sentidoSaidaRolo}</p>
+                )}
               </div>
               <div className="bg-muted/20 p-3 rounded-lg border border-border/40">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">Tipo de Tubete</p>
-                <p className="text-sm font-medium text-foreground">{pedido.tipoTubete}</p>
+                {isEditing ? (
+                  <Input value={editTubete} onChange={(e) => setEditTubete(e.target.value)} className="h-8 bg-background" />
+                ) : (
+                  <p className="text-sm font-medium text-foreground">{pedido.tipoTubete}</p>
+                )}
               </div>
               <div className="bg-muted/20 p-3 rounded-lg border border-border/40">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">Gap entre Etiquetas</p>
-                <p className="text-sm font-medium text-foreground">{pedido.gapEntreEtiquetas}</p>
+                {isEditing ? (
+                  <Input value={editGap} onChange={(e) => setEditGap(e.target.value)} className="h-8 bg-background" />
+                ) : (
+                  <p className="text-sm font-medium text-foreground">{pedido.gapEntreEtiquetas}</p>
+                )}
               </div>
               <div className="bg-muted/20 p-3 rounded-lg border border-border/40">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1 font-semibold">Número de Pistas</p>
-                <p className="text-sm font-medium text-foreground">{pedido.numeroPistas}</p>
+                {isEditing ? (
+                  <Input type="number" min={1} value={editPistas} onChange={(e) => setEditPistas(e.target.value)} className="h-8 bg-background" />
+                ) : (
+                  <p className="text-sm font-medium text-foreground">{pedido.numeroPistas}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -467,58 +803,146 @@ export default function PedidoDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Itens do Pedido</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Itens do Pedido</CardTitle>
+              {isEditing && (
+                <Button variant="outline" size="sm" onClick={adicionarItemEdit} className="h-8 text-xs text-primary">
+                  <Plus className="size-3.5 mr-1" /> Adicionar item
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-20">Quant.</TableHead>
-                    <TableHead className="w-16">Unid.</TableHead>
-                    <TableHead>Descricao</TableHead>
-                    <TableHead className="text-right w-24">P.Unit.</TableHead>
-                    <TableHead className="text-right w-24">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pedido.itens.map((item: any) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-foreground">
-                        {item.quantidade.toLocaleString("pt-BR")}
+            {isEditing ? (
+              <div className="flex flex-col gap-4">
+                {editItens.map((item, idx) => (
+                  <div key={item.id} className="relative rounded-xl border border-border/60 bg-card p-4 pt-6 shadow-sm">
+                    <div className="absolute -top-3 -left-3 size-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shadow-md border-4 border-background">
+                      {idx + 1}
+                    </div>
+                    <div className="absolute top-2 right-2">
+                      <Button variant="ghost" size="icon" onClick={() => removerItemEdit(item.id)} className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-1">
+                      <div className="md:col-span-12">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Descrição</Label>
+                        <Textarea
+                          rows={2}
+                          value={item.descricao}
+                          onChange={(e) => atualizarItemEdit(item.id, "descricao", e.target.value)}
+                          className="bg-muted/10 resize-none text-sm"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <Label className="text-xs font-semibold mb-1 block">Quantidade</Label>
+                        <Input type="number" value={item.quantidade} onChange={(e) => atualizarItemEdit(item.id, "quantidade", e.target.value)} className="bg-muted/20" />
+                      </div>
+                      <div className="md:col-span-3">
+                        <Label className="text-xs font-semibold mb-1 block">Unidade</Label>
+                        <Input value={item.unidade} onChange={(e) => atualizarItemEdit(item.id, "unidade", e.target.value)} className="bg-muted/20" />
+                      </div>
+                      <div className="md:col-span-3">
+                        <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
+                        <Input type="text" inputMode="decimal" value={item.precoUnitario} onChange={(e) => atualizarItemEdit(item.id, "precoUnitario", e.target.value)} className="bg-muted/20 font-mono" />
+                      </div>
+                      <div className="md:col-span-3">
+                        <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
+                        <div className="flex h-10 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
+                          {formatCurrency(parseNum(item.quantidade) * parseNum(item.precoUnitario))}
+                        </div>
+                      </div>
+                      <div className="md:col-span-12">
+                        <Label className="text-[11px] font-semibold text-muted-foreground uppercase mb-1 block">Observação do Item</Label>
+                        <Input value={item.observacao || ""} onChange={(e) => atualizarItemEdit(item.id, "observacao", e.target.value)} className="bg-muted/10 h-8 text-xs border-dashed border-border/60" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-end items-center gap-3 border-t border-border/50 pt-4">
+                  <span className="text-sm font-bold text-foreground">Total R$</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(editTotalGeral)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-20">Quant.</TableHead>
+                      <TableHead className="w-16">Unid.</TableHead>
+                      <TableHead>Descricao</TableHead>
+                      <TableHead className="text-right w-24">P.Unit.</TableHead>
+                      <TableHead className="text-right w-24">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pedido.itens.map((item: any) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="text-foreground">
+                          {item.quantidade.toLocaleString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{item.unidade}</TableCell>
+                        <TableCell className="text-foreground whitespace-pre-line">
+                          {item.descricao}
+                          {item.observacao && (
+                            <span className="block mt-1 text-xs text-muted-foreground italic">
+                              Obs: {item.observacao}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-foreground">
+                          {formatCurrency(item.precoUnitario)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-foreground">
+                          {formatCurrency(item.total)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-right font-bold text-foreground">
+                        Total R$
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{item.unidade}</TableCell>
-                      <TableCell className="text-foreground whitespace-pre-line">
-                        {item.descricao}
-                        {item.observacao && (
-                          <span className="block mt-1 text-xs text-muted-foreground italic">
-                            Obs: {item.observacao}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right text-foreground">
-                        {formatCurrency(item.precoUnitario)}
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-foreground">
-                        {formatCurrency(item.total)}
+                      <TableCell className="text-right font-bold text-lg text-primary">
+                        {formatCurrency(pedido.totalGeral)}
                       </TableCell>
                     </TableRow>
-                  ))}
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-right font-bold text-foreground">
-                      Total R$
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-lg text-primary">
-                      {formatCurrency(pedido.totalGeral)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {pedido.observacoesGerais && (
+        {isEditing && (
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader className="bg-muted/10 border-b border-border/50 pb-4">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="size-4 text-primary" />
+                Observações
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="lg:col-span-3">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Observações Gerais</Label>
+                <Textarea rows={3} value={editObsGerais} onChange={(e) => setEditObsGerais(e.target.value)} className="bg-muted/10 resize-none" />
+              </div>
+              <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Instruções de Embalagem</Label>
+                  <Textarea rows={2} value={editObsEmbalagem} onChange={(e) => setEditObsEmbalagem(e.target.value)} className="bg-muted/10 resize-none" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Instruções de Faturamento</Label>
+                  <Textarea rows={2} value={editObsFaturamento} onChange={(e) => setEditObsFaturamento(e.target.value)} className="bg-muted/10 resize-none" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!isEditing && pedido.observacoesGerais && (
           <Card className="border-2 border-foreground/20">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -534,7 +958,7 @@ export default function PedidoDetailPage({
           </Card>
         )}
 
-        {(pedido.observacoesEmbalagem || pedido.observacoesFaturamento) && (
+        {!isEditing && (pedido.observacoesEmbalagem || pedido.observacoesFaturamento) && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {pedido.observacoesEmbalagem && (
               <Card className="border-border/50 shadow-sm">

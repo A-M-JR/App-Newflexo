@@ -36,55 +36,102 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval)
   }, [])
 
+  const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000
+
+  // Grava/renova a sessão com uma janela deslizante de 8h e guarda um snapshot
+  // (sem a senha) do usuário. Esse snapshot deixa o login sobreviver a falhas
+  // transitórias de verificação (banco/rede) sem derrubar o usuário.
+  const persistSession = (userId: number, user: any, vendor: any) => {
+    let safeUser = user ?? null
+    if (safeUser && typeof safeUser === 'object') {
+      const { senha, ...rest } = safeUser as any
+      safeUser = rest
+    }
+    localStorage.setItem("flexo_session", JSON.stringify({
+      userId,
+      expiresAt: Date.now() + EIGHT_HOURS_MS,
+      user: safeUser,
+      vendor: vendor ?? null,
+    }))
+  }
+
+  // Atualiza o estado só quando algo muda de fato (evita re-render/recarga
+  // desnecessária das telas a cada verificação de 60s).
+  const applyUser = (nextUser: any, nextVendor: any) => {
+    setCurrentUser(prev => {
+      const next = nextUser
+      if (
+        prev &&
+        next &&
+        prev.id === next.id &&
+        prev.role === next.role &&
+        (prev as any).ativo === (next as any).ativo &&
+        (prev as any).vendedorId === (next as any).vendedorId
+      ) {
+        return prev
+      }
+      return next
+    })
+    setVendedor(prev => {
+      const next = nextVendor
+      if (!prev && !next) return prev
+      if (prev && next && prev.id === next.id) return prev
+      return next ?? null
+    })
+  }
+
   const checkSession = async () => {
     const sessionData = localStorage.getItem("flexo_session")
-
-    if (sessionData) {
-      try {
-        const { userId, expiresAt } = JSON.parse(sessionData)
-
-        // Verifica se a sessão de 12 horas expirou
-        if (Date.now() > expiresAt) {
-          logout()
-          setIsLoading(false)
-          return
-        }
-
-        const result = await verifySession(userId)
-        if (result && result.user) {
-          // Só atualiza o estado quando algo realmente mudou. O checkSession roda a
-          // cada 60s; se recriássemos os objetos toda vez, todas as telas que dependem
-          // de `currentUser`/`vendedor` seriam re-renderizadas/recarregadas sem necessidade
-          // (causava o "refresh" nos pedidos e as travadas no orçamento).
-          setCurrentUser(prev => {
-            const next = result.user
-            if (
-              prev &&
-              next &&
-              prev.id === next.id &&
-              prev.role === next.role &&
-              (prev as any).ativo === (next as any).ativo &&
-              (prev as any).vendedorId === (next as any).vendedorId
-            ) {
-              return prev
-            }
-            return next
-          })
-          setVendedor(prev => {
-            const next = result.vendor
-            if (!prev && !next) return prev
-            if (prev && next && prev.id === next.id) return prev
-            return next ?? null
-          })
-        } else {
-          logout() // Usuário foi deletado ou inativado
-        }
-      } catch (e) {
-        logout() // Objeto corrompido
-      }
+    if (!sessionData) {
+      setIsLoading(false)
+      return
     }
 
-    setIsLoading(false)
+    let parsed: any
+    try {
+      parsed = JSON.parse(sessionData)
+    } catch {
+      logout() // Objeto corrompido
+      setIsLoading(false)
+      return
+    }
+
+    const { userId, expiresAt, user: cachedUser, vendor: cachedVendor } = parsed || {}
+
+    // Só derruba de verdade quando a janela de 8h realmente expirou.
+    if (!userId || (expiresAt && Date.now() > expiresAt)) {
+      logout()
+      setIsLoading(false)
+      return
+    }
+
+    // Autentica na hora pelo snapshot salvo (evita o "flash" de login e mantém
+    // logado mesmo se a verificação no servidor falhar por um erro transitório).
+    // Se já temos o snapshot, autentica na hora e libera a tela; sem snapshot
+    // (sessão antiga), mantém o loading até a verificação terminar para não
+    // redirecionar ao login indevidamente.
+    if (cachedUser) {
+      setCurrentUser(prev => prev ?? cachedUser)
+      setVendedor(prev => prev ?? (cachedVendor ?? null))
+      setIsLoading(false)
+    }
+
+    // Valida no servidor e desliza a janela de 8h.
+    try {
+      const result = await verifySession(userId)
+      if (result && result.user) {
+        applyUser(result.user, result.vendor)
+        persistSession(userId, result.user, result.vendor)
+      } else {
+        logout() // Usuário foi realmente deletado ou inativado
+      }
+    } catch (e) {
+      // Erro transitório (rede/banco): NÃO desloga — mantém a sessão e renova a janela.
+      console.error("Sessão: verificação falhou, mantendo o login.", e)
+      persistSession(userId, cachedUser, cachedVendor)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const login = async (email: string, senha?: string): Promise<LoginResult> => {
@@ -103,20 +150,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { user, vendor: dbVendor } = await response.json()
       setCurrentUser(user)
+      setVendedor(dbVendor || null)
 
-      // Cria Sessão de 12 Horas em Milissegundos
-      const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
-      const sessionObject = {
-        userId: user.id,
-        expiresAt: Date.now() + TWELVE_HOURS_MS
-      }
-
-      localStorage.setItem("flexo_session", JSON.stringify(sessionObject))
+      // Cria a sessão de 8h (janela deslizante) já com o snapshot do usuário.
+      persistSession(user.id, user, dbVendor || null)
 
       // Limpa cache de dados anteriores para a nova sessão
       clearDataCache()
 
-      setVendedor(dbVendor || null)
       return "success"
     } catch (error) {
       console.error("Login Error:", error)

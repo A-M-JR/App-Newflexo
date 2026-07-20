@@ -6,6 +6,7 @@ import { FileDown, Loader2 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import { Orcamento, Cliente, Vendedor } from '@/lib/types'
 import { getEmpresa } from '@/lib/actions/config'
+import { formatDateBR } from '@/lib/utils'
 
 interface PDFDownloadQuotationButtonProps {
   orcamento: Orcamento
@@ -181,10 +182,14 @@ export function PDFDownloadQuotationButton({
       const colRightLabels = midPage + 10
       const colRightValues = midPage + 40
 
+      const prazoEntrega = (orcamento as any).prazoEntrega
+      const ocCliente = (orcamento as any).ocCliente
       const comerciais = [
         { label: 'Vendedor Responsável:', value: vendedor?.nome || 'N/D' },
-        { label: 'Validade da Proposta:', value: '15 Dias Corridos' },
         { label: 'Forma de Pagamento:', value: orcamento.formaPagamentoObj?.nome || 'Conforme Notas' },
+        { label: 'Prazo de Entrega:', value: prazoEntrega ? formatDateBR(prazoEntrega) : 'A definir' },
+        { label: 'Validade da Proposta:', value: '15 Dias Corridos' },
+        ...(ocCliente ? [{ label: 'OC do Cliente:', value: String(ocCliente) }] : []),
       ]
 
       comerciais.forEach(c => {

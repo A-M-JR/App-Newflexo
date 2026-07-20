@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import type { Pedido, Cliente, Vendedor } from "./types";
 import { getEmpresa } from "@/lib/actions/config";
+import { formatDateBR } from "@/lib/utils";
 
 // Premium Colors
 const PRIMARY_BLUE = [15, 38, 74] as [number, number, number]; // Very dark, elegant blue
@@ -142,10 +143,11 @@ export async function gerarPDFPedido(pedido: Pedido, cliente: Cliente, vendedor?
   y += 4;
   doc.text(`${cliente.cidade}/${cliente.estado} - CEP: ${cliente.cep}`, margin, y);
 
-  if (pedido.comprador) {
+  const compradorNome = (pedido as any).nomeComprador || (pedido as any).comprador;
+  if (compradorNome) {
     y += 4;
     doc.setFont("helvetica", "bold");
-    doc.text(`A/C: ${pedido.comprador}`, margin, y);
+    doc.text(`A/C: ${compradorNome}`, margin, y);
   }
 
   // Bloco Comercial (Direita)
@@ -161,9 +163,10 @@ export async function gerarPDFPedido(pedido: Pedido, cliente: Cliente, vendedor?
 
   const comerciais = [
     { label: "Vendedor Rsp.:", value: vendedor?.nome || "Não definido" },
-    { label: "Pagamento:", value: pedido.formaPagamentoObj?.nome || pedido.formaPagamento },
-    { label: "Prazo de Entrega:", value: pedido.prazoEntrega ? new Date(pedido.prazoEntrega).toLocaleDateString('pt-BR') : "A definir" },
-    { label: "Termos de Frete:", value: pedido.frete },
+    { label: "Pagamento:", value: pedido.formaPagamentoObj?.nome || pedido.formaPagamento || "A combinar" },
+    { label: "Prazo de Entrega:", value: pedido.prazoEntrega ? formatDateBR(pedido.prazoEntrega as any) : "A definir" },
+    { label: "Termos de Frete:", value: pedido.frete || "A combinar" },
+    ...((pedido as any).ocCliente ? [{ label: "OC Cliente:", value: String((pedido as any).ocCliente) }] : []),
   ];
 
   comerciais.forEach(c => {
@@ -283,6 +286,8 @@ export async function gerarPDFPedido(pedido: Pedido, cliente: Cliente, vendedor?
 
   const obsText = [
     pedido.observacoesGerais && `Notas Adicionais: ${pedido.observacoesGerais}`,
+    (pedido as any).observacoesEmbalagem && `Embalagem: ${(pedido as any).observacoesEmbalagem}`,
+    (pedido as any).observacoesFaturamento && `Faturamento: ${(pedido as any).observacoesFaturamento}`,
   ].filter(Boolean).join("\n");
 
   if (obsText) {
