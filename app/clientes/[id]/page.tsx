@@ -285,7 +285,13 @@ export default function ClienteDetailPage({
 
     setIsSaving(true)
     try {
-      await saveCliente({ id: Number(id), ...formData })
+      const result = await saveCliente({ id: Number(id), ...formData })
+      if (result && (result as any).error) {
+        setErrors(prev => ({ ...prev, cnpj: (result as any).error }))
+        toast.error((result as any).error)
+        setIsSaving(false)
+        return
+      }
       toast.success("Cliente atualizado com sucesso!", {
         description: `Os dados de ${formData.razaoSocial} foram salvos.`
       })
@@ -427,6 +433,14 @@ export default function ClienteDetailPage({
                       <div className="space-y-2">
                         <Label>Fone Empresa</Label>
                         <Input id="telefone" name="telefone" value={formData.telefone} onChange={handleChange} className="bg-muted/30" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>E-mail</Label>
+                        <Input name="email" type="email" value={formData.email} onChange={handleChange} className="bg-muted/30" placeholder="contato@empresa.com" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Nome do Comprador</Label>
+                        <Input name="compradorNome" value={formData.compradorNome} onChange={handleChange} className="bg-muted/30" placeholder="João Silva" />
                       </div>
                       <div className="space-y-2">
                         <Label>Fone Comprador</Label>

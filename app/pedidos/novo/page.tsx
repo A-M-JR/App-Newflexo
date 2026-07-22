@@ -57,6 +57,10 @@ function NovoPedidoForm() {
                     if ((data as any).ocCliente) {
                         setOcCliente((data as any).ocCliente)
                     }
+                    // Puxa as observações preenchidas no orçamento para o pedido
+                    if ((data as any).observacoes) {
+                        setObsGerais((data as any).observacoes)
+                    }
                 }
                 setFormasPagamento(formas || [])
             })

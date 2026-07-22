@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Save, Building2, MapPin, Contact, UserCircle, Sparkles, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, Save, Building2, MapPin, Contact, UserCircle, Sparkles, Plus, Trash2, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
-import { saveCliente } from "@/lib/actions/clientes"
+import { saveCliente, checkClienteDuplicado } from "@/lib/actions/clientes"
 
 // Utils simples para mascaras
 const maskCNPJ = (value: string) => {
@@ -102,9 +102,11 @@ function NovoClienteContent() {
                 estado: aiUf ? maskUF(aiUf) : prev.estado,
             }))
 
-            // 🚀 AUTOMATIZAÇÃO: Se temos o CNPJ, dispara a busca detalhada imediatamente
+            // 🚀 AUTOMATIZAÇÃO: Se temos o CNPJ, checa duplicidade e só então busca na Receita
             if (cleanCnpj.length === 14) {
-                fetchCNPJ(cleanCnpj)
+                checkDuplicado(cleanCnpj).then(isDup => {
+                    if (!isDup) fetchCNPJ(cleanCnpj)
+                })
             } else {
                 toast.info("Ficha de cliente preparada pela IA", {
                     description: "Verifique os dados antes de salvar."
@@ -116,6 +118,34 @@ function NovoClienteContent() {
     // Erros simples
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [isSaving, setIsSaving] = useState(false)
+    const [duplicado, setDuplicado] = useState<{ id: number; razaoSocial: string } | null>(null)
+
+    // Verifica se o CNPJ/CPF já existe assim que estiver completo, para não perder
+    // tempo preenchendo o resto do cadastro. Retorna true se for duplicado.
+    const checkDuplicado = async (cnpj: string) => {
+        const clean = cnpj.replace(/\D/g, "")
+        if (clean.length !== 14 && clean.length !== 11) {
+            setDuplicado(null)
+            return false
+        }
+        try {
+            const res = await checkClienteDuplicado(cnpj)
+            if (res.exists) {
+                setDuplicado({ id: res.id, razaoSocial: res.razaoSocial })
+                setErrors(prev => ({ ...prev, cnpj: "Cliente já existente" }))
+                toast.error("Cliente já existente", {
+                    description: `${res.razaoSocial} já está cadastrado com este CNPJ/CPF.`,
+                    action: { label: "Abrir cadastro", onClick: () => router.push(`/clientes/${res.id}`) }
+                })
+                return true
+            }
+            setDuplicado(null)
+            return false
+        } catch (error) {
+            console.error("Erro ao verificar duplicidade:", error)
+            return false
+        }
+    }
 
     // Busca de CNPJ via BrasilAPI
     const fetchCNPJ = async (cnpj: string) => {
@@ -193,8 +223,15 @@ function NovoClienteContent() {
 
         if (name === "cnpj") {
             value = maskCNPJ(value)
-            if (value.length === 18) {
-                fetchCNPJ(value)
+            const clean = value.replace(/\D/g, "")
+            if (clean.length === 14) {
+                // Primeiro checa duplicidade; só consulta a Receita se ainda não existir
+                checkDuplicado(value).then(isDup => {
+                    if (!isDup) fetchCNPJ(value)
+                })
+            } else {
+                // CNPJ incompleto/alterado: limpa o aviso de duplicidade
+                if (duplicado) setDuplicado(null)
             }
         }
         if (name === "telefone" || name === "compradorTelefone") value = maskPhone(value)
@@ -234,7 +271,13 @@ function NovoClienteContent() {
 
         setIsSaving(true)
         try {
-            await saveCliente(formData)
+            const result = await saveCliente(formData)
+            if (result && (result as any).error) {
+                setErrors(prev => ({ ...prev, cnpj: (result as any).error }))
+                toast.error((result as any).error)
+                setIsSaving(false)
+                return
+            }
             toast.success("Cliente salvo com sucesso!", {
                 description: `O cliente ${formData.razaoSocial} foi adicionado à carteira.`
             })
@@ -271,7 +314,7 @@ function NovoClienteContent() {
                         <Button type="button" variant="ghost" asChild>
                             <Link href="/clientes">Cancelar</Link>
                         </Button>
-                        <Button type="submit" disabled={isSaving} className="bg-primary text-primary-foreground shadow-sm hover:scale-[1.02] transition-transform">
+                        <Button type="submit" disabled={isSaving || !!duplicado} className="bg-primary text-primary-foreground shadow-sm hover:scale-[1.02] transition-transform">
                             {isSaving ? "Salvando..." : (
                                 <>
                                     <Save className="size-4 mr-2" />
@@ -338,6 +381,22 @@ function NovoClienteContent() {
                                     />
                                     {errors.cnpj && <p className="text-xs text-destructive">{errors.cnpj}</p>}
                                 </div>
+
+                                {duplicado && (
+                                    <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+                                        <div className="flex items-center gap-2 text-sm text-destructive">
+                                            <AlertTriangle className="size-4 shrink-0" />
+                                            <span>
+                                                <strong>Cliente já existente:</strong> {duplicado.razaoSocial} já está cadastrado com este CNPJ/CPF.
+                                            </span>
+                                        </div>
+                                        <Link href={`/clientes/${duplicado.id}`}>
+                                            <Button type="button" size="sm" variant="outline" className="shrink-0">
+                                                Abrir cadastro
+                                            </Button>
+                                        </Link>
+                                    </div>
+                                )}
 
                                 <div className="space-y-2">
                                     <Label htmlFor="ie">Inscrição Estadual</Label>

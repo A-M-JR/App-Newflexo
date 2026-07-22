@@ -139,6 +139,25 @@ export async function getClienteById(id: number) {
   }
 }
 
+// Verificação rápida de duplicidade de CNPJ/CPF (compara só os dígitos, ignora máscara).
+// Usada para avisar o usuário na hora, antes de terminar de preencher o cadastro.
+export async function checkClienteDuplicado(cnpj: string, excludeId?: number) {
+  const cnpjDigits = String(cnpj || "").replace(/\D/g, "")
+  if (!cnpjDigits) return { exists: false as const }
+
+  const rows = await prisma.$queryRaw<any[]>`
+    SELECT id, "razaoSocial" FROM "Cliente"
+    WHERE regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
+      ${excludeId ? Prisma.sql`AND id <> ${Number(excludeId)}` : Prisma.empty}
+    LIMIT 1
+  `
+
+  if (rows.length > 0) {
+    return { exists: true as const, id: rows[0].id as number, razaoSocial: rows[0].razaoSocial as string }
+  }
+  return { exists: false as const }
+}
+
 export async function saveCliente(data: any) {
   const { id, numero, ...rest } = data
   
@@ -165,6 +184,21 @@ export async function saveCliente(data: any) {
   }
 
   const itensExclusivos = rest.itensExclusivos || []
+
+  // Validação de duplicidade: compara apenas os dígitos do CNPJ/CPF,
+  // ignorando máscara (pontos, barras, traços) para evitar cadastro repetido.
+  const cnpjDigits = String(prismaData.cnpj || "").replace(/\D/g, "")
+  if (cnpjDigits) {
+    const existentes = await prisma.$queryRaw<any[]>`
+      SELECT id FROM "Cliente"
+      WHERE regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
+        ${id ? Prisma.sql`AND id <> ${Number(id)}` : Prisma.empty}
+      LIMIT 1
+    `
+    if (existentes.length > 0) {
+      return { error: "Cliente já existente (CNPJ/CPF já cadastrado)." }
+    }
+  }
 
   if (!id) {
     const created = await prisma.$transaction(async (tx) => {
