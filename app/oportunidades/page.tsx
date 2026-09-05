@@ -31,11 +31,13 @@ import {
 import { getOportunidadesData } from "@/lib/actions/oportunidades"
 import { formatCurrency } from "@/lib/mock-data"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAI } from "@/lib/ai-context"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 
 export default function OportunidadesPage() {
+    const router = useRouter()
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [analyzingIA, setAnalyzingIA] = useState(false)
@@ -406,7 +408,7 @@ export default function OportunidadesPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {(data?.clientesRisco || []).slice(0, 8).map((c: any) => (
-                                            <TableRow key={c.id} className="hover:bg-muted/30 transition-colors">
+                                            <TableRow key={c.id} onClick={() => router.push(`/clientes/${c.id}`)} className="hover:bg-muted/30 transition-colors cursor-pointer">
                                                 <TableCell className="text-sm font-medium">
                                                     <div className="flex flex-col">
                                                         <span>{c.razaoSocial}</span>
@@ -421,7 +423,7 @@ export default function OportunidadesPage() {
                                                         {c.nivel === 'critico' ? 'Risco Alto' : 'Follow-up'}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-end gap-2">
                                                         <Button 
                                                             size="sm" 

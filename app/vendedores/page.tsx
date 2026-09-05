@@ -6,6 +6,14 @@ import { ArrowLeft, Plus, Edit2, UserCog, Power, Users, UserCheck, UserX, Search
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Vendedor } from "@/lib/types"
 import { useAuth } from "@/lib/auth-context"
 import { getVendedores, saveVendedor, toggleVendedorActive } from "@/lib/actions/vendedores"
@@ -245,52 +253,46 @@ export default function VendedoresPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/30">
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Nome
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Telefone
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Comissão
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Região
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {vendedoresList.map((vendedor) => {
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent bg-muted/30">
+                  <TableHead>Nome</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                  <TableHead className="hidden lg:table-cell">Telefone</TableHead>
+                  <TableHead className="text-center">Comissão</TableHead>
+                  <TableHead className="hidden lg:table-cell">Região</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right pr-6">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading && vendedoresList.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
+                ) : vendedoresList.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground"><div className="flex flex-col items-center justify-center gap-2"><UserCog className="size-8 opacity-20" /><p>Nenhum vendedor cadastrado. Crie o primeiro vendedor para começar.</p></div></TableCell></TableRow>
+                ) : vendedoresList.map((vendedor) => {
                   const isActive = vendedor.ativo !== false;
                   return (
-                    <tr key={vendedor.id} className={`hover:bg-muted/30 transition-colors ${!isActive ? "opacity-60 bg-muted/50" : ""}`}>
-                      <td className="px-6 py-4 text-sm font-medium text-foreground">{vendedor.nome}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{vendedor.email}</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{vendedor.telefone}</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-foreground">{vendedor.comissao}%</td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{vendedor.regiao}</td>
-                      <td className="px-6 py-4 text-sm">
+                    <TableRow
+                      key={vendedor.id}
+                      onClick={() => handleEditVendedor(vendedor)}
+                      className={`hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer ${!isActive ? "opacity-60 bg-muted/50" : ""}`}
+                    >
+                      <TableCell className="text-[13px] font-medium text-foreground">{vendedor.nome}</TableCell>
+                      <TableCell className="hidden md:table-cell text-[12px] text-muted-foreground">{vendedor.email}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-[12px] text-muted-foreground">{vendedor.telefone}</TableCell>
+                      <TableCell className="text-center text-[13px] font-semibold text-foreground">{vendedor.comissao}%</TableCell>
+                      <TableCell className="hidden lg:table-cell text-[12px] text-muted-foreground">{vendedor.regiao}</TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={`flex h-2 w-2 rounded-full ${isActive ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-destructive"}`}></span>
                           <span className={`text-xs font-medium ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
                             {isActive ? "Ativo" : "Pausado"}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center gap-2">
+                      </TableCell>
+                      <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -310,24 +312,15 @@ export default function VendedoresPage() {
                             <Power className="size-[15px]" />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
 
-        {/* Empty State */}
-        {vendedoresList.length === 0 && (
-          <Card className="p-12 text-center border-dashed border-2 shadow-none">
-            <div className="flex flex-col items-center justify-center gap-2">
-              <UserCog className="size-8 text-muted-foreground/30" />
-              <p className="text-muted-foreground">Nenhum vendedor cadastrado. Crie o primeiro vendedor para começar.</p>
-            </div>
-          </Card>
-        )}
       </div>
     </AppShell>
   )

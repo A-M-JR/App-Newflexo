@@ -13,35 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { saveCliente, checkClienteDuplicado } from "@/lib/actions/clientes"
 
-// Utils simples para mascaras
-const maskCNPJ = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/^(\d{2})(\d)/, "$1.$2")
-        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-        .replace(/\.(\d{3})(\d)/, ".$1/$2")
-        .replace(/(\d{4})(\d)/, "$1-$2")
-        .substring(0, 18)
-}
-
-const maskPhone = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{4,5})(\d{4})/, "$1-$2")
-        .substring(0, 15)
-}
-
-const maskCEP = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/^(\d{5})(\d)/, "$1-$2")
-        .substring(0, 9)
-}
-
-const maskUF = (value: string) => {
-    return value.replace(/[^A-Za-z]/g, "").toUpperCase().substring(0, 2)
-}
+import { maskCNPJ, maskTelefone as maskPhone, maskCEP, maskUF } from "@/lib/masks"
 
 export default function NovoClientePage() {
     return (

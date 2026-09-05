@@ -7,6 +7,19 @@ import bcrypt from "bcryptjs"
 
 import { Prisma } from "@prisma/client"
 
+// Cache curto da permissão do usuário (ver getRequesterVendedorId).
+const globalForPerm = global as unknown as {
+  __permCache?: Map<number, { value: number | 'admin'; at: number }>
+}
+const permCache = globalForPerm.__permCache ?? new Map<number, { value: number | 'admin'; at: number }>()
+globalForPerm.__permCache = permCache
+const PERM_TTL_MS = 15000
+
+function invalidarPermissao(id?: number | null) {
+  if (id == null) permCache.clear()
+  else permCache.delete(Number(id))
+}
+
 export async function getUsers(params: {
   page?: number
   limit?: number
@@ -23,7 +36,7 @@ export async function getUsers(params: {
   if (status === 'ativo') statusFilterSql = Prisma.sql`"ativo" = TRUE`
   else if (status === 'inativo') statusFilterSql = Prisma.sql`"ativo" = FALSE`
 
-  const counts: any[] = await prisma.$queryRaw`
+  const countsPromise = prisma.$queryRaw<any[]>`
     SELECT 
       COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
       COUNT(*) FILTER (WHERE "ativo" = TRUE)::int as ativos,
@@ -32,7 +45,6 @@ export async function getUsers(params: {
     FROM "User"
     WHERE ("nome" ILIKE ${searchPattern} OR "email" ILIKE ${searchPattern})
   `
-  const stats = counts[0] || { total_filtrado: 0, ativos: 0, bloqueados: 0, total_global: 0 }
 
   // 2. Busca paginada
   const where: any = {}
@@ -45,12 +57,22 @@ export async function getUsers(params: {
   if (status === 'ativo') where.ativo = true
   else if (status === 'inativo') where.ativo = false
 
-  const dbUsers = await prisma.user.findMany({
-    where,
-    orderBy: { nome: "asc" },
-    skip: (page - 1) * limit,
-    take: limit,
-  })
+  // Contagem e página são independentes: rodam em paralelo.
+  const [counts, dbUsers] = await Promise.all([
+    countsPromise,
+    prisma.user.findMany({
+      where,
+      orderBy: { nome: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+      // Nunca trafegar o hash da senha até o cliente.
+      select: {
+        id: true, nome: true, email: true, role: true, ativo: true,
+        vendedorId: true, criadoEm: true, updatedAt: true,
+      },
+    }),
+  ])
+  const stats = counts[0] || { total_filtrado: 0, ativos: 0, bloqueados: 0, total_global: 0 }
 
   return {
     data: dbUsers.map(u => ({
@@ -88,11 +110,13 @@ export async function saveUser(data: Partial<User>, senha?: string) {
     // New user
     if (!senha) prismaData.senha = await bcrypt.hash("123456", 10) // Default password
     
+    invalidarPermissao()
     return prisma.user.create({
       data: prismaData
     })
   } else {
     // Update existing
+    invalidarPermissao(id as any)
     return prisma.user.update({
       where: { id: id as any },
       data: prismaData
@@ -108,6 +132,7 @@ export async function toggleUserActive(id: number) {
     where: { id: id as any },
     data: { ativo: !user.ativo },
   })
+  invalidarPermissao(id)
   revalidatePath("/usuarios")
   return updated
 }
@@ -122,6 +147,11 @@ export async function updateUserPassword(id: number, senha: string) {
 export async function verifySession(id: number) {
   const user = await prisma.user.findUnique({
     where: { id: id as any },
+    // Sem o hash da senha: esse retorno vai para o cliente e para o localStorage.
+    select: {
+      id: true, nome: true, email: true, role: true, ativo: true,
+      vendedorId: true, criadoEm: true, updatedAt: true,
+    },
   })
 
   if (!user || !user.ativo) return null
@@ -148,14 +178,28 @@ export async function verifySession(id: number) {
 /**
  * Retorna 'admin' se for administrador, ou o vendedorId se for um vendedor limitado.
  * Usado para forçar filtros de segurança no lado do servidor.
+ *
+ * Toda consulta de lista passa por aqui, então o resultado fica em cache por um
+ * intervalo curto: papéis/vínculos não mudam nesse tempo e economizamos um
+ * round-trip por requisição. Alterações em usuário invalidam o cache na hora.
  */
 export async function getRequesterVendedorId(userId: number): Promise<number | 'admin'> {
-  const user = await prisma.user.findUnique({ where: { id: Number(userId) } })
-  
+  const id = Number(userId)
+  const hit = permCache.get(id)
+  if (hit && Date.now() - hit.at < PERM_TTL_MS) return hit.value
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { ativo: true, role: true, vendedorId: true },
+  })
+
   // Se o usuário não existir, não estiver ativo ou não for admin e não tiver vendedorId,
   // retornamos -1 para garantir que ele não veja nada (filtro por ID inexistente).
-  if (!user || !user.ativo) return -1
-  if (user.role === 'admin') return 'admin'
-  
-  return user.vendedorId || -1
+  let value: number | 'admin' = -1
+  if (user && user.ativo) {
+    value = user.role === 'admin' ? 'admin' : (user.vendedorId || -1)
+  }
+
+  permCache.set(id, { value, at: Date.now() })
+  return value
 }

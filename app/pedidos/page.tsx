@@ -13,16 +13,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard } from "lucide-react"
+import { Search, Eye, Clock, AlertCircle, AlertTriangle, Truck, Factory, PackageOpen, LayoutDashboard, CheckCircle2, Loader2 } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { formatDateBR } from "@/lib/utils"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { getPedidos } from "@/lib/actions/pedidos"
+import { getPedidos, updatePedidoStatus } from "@/lib/actions/pedidos"
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FilterCombobox } from "@/components/ui/filter-combobox"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range"
 import { DateRange } from "react-day-picker"
 import {
@@ -43,7 +56,8 @@ export default function PedidosPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [page, setPage] = useState(1)
 
-  const { isVendedor, vendedor, currentUser } = useAuth()
+  const router = useRouter()
+  const { isVendedor, vendedor, currentUser, isLoading: authLoading } = useAuth()
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -66,13 +80,16 @@ export default function PedidosPage() {
       vendedorId: isVendedor ? vendedor?.id : undefined,
       requesterId: currentUser?.id
     }
-  }, [page, debouncedSearch, fStatus, fSlaOnly, dateRange, isVendedor, vendedor])
+  }, [page, debouncedSearch, fStatus, fSlaOnly, dateRange, isVendedor, vendedor, currentUser])
 
-  const { data: dbData, isLoading: loading } = useDataQuery<any>({
+  // A chave da consulta inclui o requesterId. Sem esperar a sessão resolver, a
+  // tela disparava a consulta duas vezes (uma sem usuário, outra com) — e a
+  // primeira ainda vinha sem o filtro de vendedor.
+  const { data: dbData, isLoading: loading, refetch } = useDataQuery<any>({
     key: apiParams,
-    fetcher: () => getPedidos({ 
-      page, 
-      limit: 15, 
+    fetcher: () => getPedidos({
+      page,
+      limit: 15,
       search: debouncedSearch,
       status: fStatus || undefined,
       apenasSla: fSlaOnly,
@@ -80,8 +97,28 @@ export default function PedidosPage() {
       dataFim: dateRange?.to?.toISOString(),
       vendedorId: isVendedor ? vendedor?.id : undefined,
       requesterId: currentUser?.id
-    })
+    }),
+    enabled: !authLoading,
   })
+
+  // Confirmação rápida de entrega direto da lista.
+  const [entregaPedido, setEntregaPedido] = useState<any | null>(null)
+  const [confirmandoEntrega, setConfirmandoEntrega] = useState(false)
+
+  const confirmarEntrega = async () => {
+    if (!entregaPedido) return
+    setConfirmandoEntrega(true)
+    try {
+      await updatePedidoStatus(entregaPedido.id, 'entregue', currentUser?.id)
+      toast.success(`Pedido ${entregaPedido.numero} marcado como entregue.`)
+      setEntregaPedido(null)
+      refetch()
+    } catch (e: any) {
+      toast.error(e?.message || "Não foi possível confirmar a entrega.")
+    } finally {
+      setConfirmandoEntrega(false)
+    }
+  }
 
   const pedidosList = dbData?.data || []
   const KPIs = dbData?.kpis || { totalValor: 0, emAnalise: 0, emProducao: 0, separacao: 0, entregue: 0, slaAlerta: 0 }
@@ -204,14 +241,20 @@ export default function PedidosPage() {
                 }}
                 className="w-full md:w-auto"
               />
-              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fStatus} onChange={e => handleStatusFilter(e.target.value)}>
-                <option value="">Todos Status</option>
-                <option value="em_analise">Em Análise</option>
-                <option value="em_producao">Em Produção</option>
-                <option value="separacao">Separação</option>
-                <option value="entregue">Entregue</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
+              <FilterCombobox
+                aria-label="Filtrar por status"
+                value={fStatus}
+                onChange={(v) => { setFStatus(v); setFSlaOnly(false); setPage(1) }}
+                options={[
+                  { value: "", label: "Todos Status" },
+                  { value: "em_analise", label: "Em Análise" },
+                  { value: "em_producao", label: "Em Produção" },
+                  { value: "separacao", label: "Separação" },
+                  { value: "entregue", label: "Entregue" },
+                  { value: "cancelado", label: "Cancelado" },
+                ]}
+                className="w-48 shrink-0"
+              />
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -226,7 +269,7 @@ export default function PedidosPage() {
                   ) : pedidosList.map((ped: any) => {
                     const sla = getSlaStatus(ped.prazoEntrega, ped.status)
                     return (
-                      <TableRow key={ped.id} className={`hover:bg-muted/10 transition-colors border-border/30 bg-card ${sla.class}`}>
+                      <TableRow key={ped.id} onClick={() => router.push(`/pedidos/${ped.id}`)} className={`hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer ${sla.class}`}>
                         <TableCell><div className="flex flex-col"><span className="font-medium font-mono text-blue-500 text-[13px]">{ped.numero}</span><span className="text-[11px] font-medium text-muted-foreground">R$ {ped.totalGeral.toFixed(2)}</span></div></TableCell>
                         <TableCell><div className="font-medium text-[13px] text-foreground truncate">{ped.cliente?.razaoSocial}</div><div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {ped.cliente?.cnpj}</div></TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-[12px]">{ped.vendedor?.nome || "N/A"}</TableCell>
@@ -244,7 +287,24 @@ export default function PedidosPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right"><StatusBadge statusObj={ped.statusObj} fallback={ped.status} /></TableCell>
-                        <TableCell className="text-right pr-6"><Link href={`/pedidos/${ped.id}`}><Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button></Link></TableCell>
+                        <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-2">
+                            {ped.status !== 'entregue' && ped.status !== 'cancelado' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Confirmar entrega"
+                                onClick={() => setEntregaPedido(ped)}
+                                className="h-8 w-8 p-0 border border-border/50 text-muted-foreground hover:text-emerald-600 hover:border-emerald-500/40 hover:bg-emerald-500/10"
+                              >
+                                <Truck className="size-4" />
+                              </Button>
+                            )}
+                            <Link href={`/pedidos/${ped.id}`}>
+                              <Button variant="ghost" size="sm" title="Abrir pedido" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button>
+                            </Link>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -294,6 +354,40 @@ export default function PedidosPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Confirmação de entrega */}
+        <AlertDialog open={!!entregaPedido} onOpenChange={(open) => !open && !confirmandoEntrega && setEntregaPedido(null)}>
+          <AlertDialogContent className="sm:max-w-md border-border/50 shadow-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <Truck className="size-5 text-emerald-600" />
+                Confirmar entrega?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm">
+                O pedido <span className="font-semibold text-foreground font-mono">{entregaPedido?.numero}</span> de{" "}
+                <span className="font-semibold text-foreground">{entregaPedido?.cliente?.razaoSocial}</span> passa para o status <strong>Entregue</strong>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel disabled={confirmandoEntrega} className="hover:bg-muted">Não</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  // Impede o AlertDialog de fechar antes da action responder.
+                  e.preventDefault()
+                  confirmarEntrega()
+                }}
+                disabled={confirmandoEntrega}
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+              >
+                {confirmandoEntrega ? (
+                  <><Loader2 className="size-4 mr-1.5 animate-spin" /> Confirmando...</>
+                ) : (
+                  <><CheckCircle2 className="size-4 mr-1.5" /> Sim</>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppShell>
   )

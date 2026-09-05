@@ -7,6 +7,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { getUsers, saveUser, toggleUserActive, updateUserPassword } from "@/lib/actions/users"
 import { getVendedores } from "@/lib/actions/vendedores"
@@ -285,44 +293,42 @@ export default function UsuariosPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/30">
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Nome / Acesso
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Função
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {usuariosList.map((usuario) => {
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent bg-muted/30">
+                  <TableHead>Nome / Acesso</TableHead>
+                  <TableHead className="hidden md:table-cell">Email</TableHead>
+                  <TableHead>Função</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right pr-6">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading && usuariosList.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
+                ) : usuariosList.length === 0 ? (
+                  <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground"><div className="flex flex-col items-center justify-center gap-2"><Users className="size-8 opacity-20" /><p>Nenhum usuário cadastrado em sua base.</p></div></TableCell></TableRow>
+                ) : usuariosList.map((usuario) => {
                   const vendedor = usuario.vendedorId ? getVendedorById(usuario.vendedorId) : null
                   const isActive = usuario.ativo !== false;
                   return (
-                    <tr key={usuario.id} className={`hover:bg-muted/30 transition-colors ${!isActive ? "opacity-60 bg-muted/50" : ""}`}>
-                      <td className="px-6 py-4">
+                    <TableRow
+                      key={usuario.id}
+                      onClick={() => handleEditUsuario(usuario)}
+                      className={`hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer ${!isActive ? "opacity-60 bg-muted/50" : ""}`}
+                    >
+                      <TableCell>
                         <div className="flex flex-col">
-                          <span className="text-sm font-semibold text-foreground">{usuario.nome}</span>
+                          <span className="text-[13px] font-semibold text-foreground">{usuario.nome}</span>
                           {usuario.role === "vendedor" && vendedor && (
                             <span className="text-[11px] text-muted-foreground mt-0.5 max-w-[200px] truncate" title={`Vinculado a: ${vendedor.nome}`}>
                               🔗 Perfil Vendas: {vendedor.nome}
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{usuario.email}</td>
-                      <td className="px-6 py-4 text-sm">
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-[12px] text-muted-foreground">{usuario.email}</TableCell>
+                      <TableCell>
                         <span
                           className={`inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${usuario.role === "admin"
                             ? "bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20"
@@ -331,17 +337,17 @@ export default function UsuariosPage() {
                         >
                           {usuario.role === "admin" ? "Administrador" : "Acesso Vendedor"}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
+                      </TableCell>
+                      <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={`flex h-2 w-2 rounded-full ${isActive ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-destructive"}`}></span>
                           <span className={`text-xs font-medium ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
                             {isActive ? "Ativo" : "Bloqueado"}
                           </span>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center gap-1">
+                      </TableCell>
+                      <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -370,24 +376,15 @@ export default function UsuariosPage() {
                             <Power className="size-[15px]" />
                           </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
 
-        {/* Empty State */}
-        {usuariosList.length === 0 && (
-          <Card className="p-12 text-center border-dashed border-2 shadow-none">
-            <div className="flex flex-col items-center justify-center gap-2">
-              <Users className="size-8 text-muted-foreground/30" />
-              <p className="text-muted-foreground">Nenhum usuário cadastrado em sua base.</p>
-            </div>
-          </Card>
-        )}
 
         {/* Change Password Dialog */}
         <Dialog open={!!passwordUser} onOpenChange={(open) => !open && setPasswordUser(null)}>

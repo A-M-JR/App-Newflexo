@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+import { maskTelefone as maskPhone } from "@/lib/masks"
 
 interface VendedorFormDialogProps {
   vendedor: Vendedor | null
@@ -17,14 +18,6 @@ interface VendedorFormDialogProps {
 }
 
 const REGIOES = ["Centro-Oeste", "Nordeste", "Norte", "Sudeste", "Sul"]
-
-const maskPhone = (value: string) => {
-    return value
-        .replace(/\D/g, "")
-        .replace(/(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{4,5})(\d{4})/, "$1-$2")
-        .substring(0, 15)
-}
 
 export function VendedorFormDialog({ vendedor, onSave, onClose }: VendedorFormDialogProps) {
   const [nome, setNome] = useState(vendedor?.nome || "")

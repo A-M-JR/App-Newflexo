@@ -39,12 +39,19 @@ export async function getComissoes(vendedorIdParam?: number, mes?: number, ano?:
   const pedidos = await prisma.pedido.findMany({
     where,
     orderBy: { criadoEm: "desc" },
-    include: {
-      vendedor: true,
-      cliente: true,
+    select: {
+      id: true,
+      numero: true,
+      criadoEm: true,
+      totalGeral: true,
+      vendedorId: true,
+      formaPagamento: true,
+      vendedor: { select: { id: true, nome: true, comissao: true } },
+      cliente: { select: { id: true, razaoSocial: true } },
       statusObj: true,
       formaPagamentoObj: true,
-      itens: true // Necessário para cálculo do valor bruto
+      // 'itens' não entra aqui: a comissão é calculada sobre ped.totalGeral, então
+      // carregar todos os itens de todos os pedidos do período era peso puro.
     }
   })
 

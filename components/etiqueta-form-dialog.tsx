@@ -19,7 +19,8 @@ import { getClientes } from "@/lib/actions/clientes"
 import { saveEtiqueta, getNextEtiquetaCode } from "@/lib/actions/etiquetas"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Check, X, Info, Sparkles, Box, Ruler, Palette, Layers, MousePointer2, Loader2, DollarSign, Circle, Square } from "lucide-react"
-import { maskCurrency, parseCurrencyToNumber, formatEtiquetaMedida, formatUnidadeVenda } from "@/lib/utils"
+import { formatEtiquetaMedida, formatUnidadeVenda } from "@/lib/utils"
+import { maskCurrency, currencyParaMascara, parseDecimalBR } from "@/lib/masks"
 import type { Etiqueta, FormatoEtiqueta, UnidadeVendaEtiqueta } from "@/lib/types"
 import { LabelPreview } from "./etiqueta-preview"
 import { Separator } from "@/components/ui/separator"
@@ -133,7 +134,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
             numeroCores: etiquetaToEdit.numeroCores ?? undefined,
             tipoTubete: etiquetaToEdit.tipoTubete || "",
             quantidadePorRolo: etiquetaToEdit.quantidadePorRolo ?? undefined,
-            preco: etiquetaToEdit.preco ? maskCurrency(etiquetaToEdit.preco.toFixed(4).replace('.', ''), 4) : "",
+            preco: etiquetaToEdit.preco ? currencyParaMascara(etiquetaToEdit.preco, 4) : "",
             observacoesTecnicas: etiquetaToEdit.observacoesTecnicas || "",
             pasta: etiquetaToEdit.pasta || "",
             metragem: etiquetaToEdit.metragem ?? undefined,
@@ -141,7 +142,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
           })
           setSelectedClientes(etiquetaToEdit.clientesVinculados?.map(cv => ({
             id: cv.id,
-            preco: cv.preco ? maskCurrency(cv.preco.toFixed(4).replace('.', ''), 4) : null
+            preco: cv.preco ? currencyParaMascara(cv.preco, 4) : null
           })) || [])
           setSelectedAplicacoes(etiquetaToEdit.aplicacoesEspeciais || [])
         } else {
@@ -207,10 +208,10 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
       const finalData = {
         ...data,
         id: etiquetaToEdit?.id,
-        preco: typeof data.preco === 'string' && data.preco ? parseCurrencyToNumber(data.preco) : (typeof data.preco === 'number' ? data.preco : 0),
+        preco: typeof data.preco === 'string' && data.preco ? parseDecimalBR(data.preco) : (typeof data.preco === 'number' ? data.preco : 0),
         clientes: selectedClientes.map(c => ({
           ...c,
-          preco: typeof c.preco === 'string' ? parseCurrencyToNumber(c.preco) : c.preco
+          preco: typeof c.preco === 'string' ? parseDecimalBR(c.preco) : c.preco
         })),
         aplicacoesEspeciais: selectedAplicacoes
       }
@@ -515,7 +516,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
                                 <Input
                                   type="text"
                                   placeholder="0,0000"
-                                  value={sel.preco ? (typeof sel.preco === 'number' ? maskCurrency(sel.preco.toString().replace('.', ''), 4) : sel.preco) : ""}
+                                  value={sel.preco ? (typeof sel.preco === 'number' ? currencyParaMascara(sel.preco, 4) : sel.preco) : ""}
                                   onChange={(e) => updateClientePreco(sel.id, e.target.value)}
                                   className="h-7 text-[11px] px-1 bg-background border-primary/20 focus-visible:ring-primary/50 font-mono"
                                 />

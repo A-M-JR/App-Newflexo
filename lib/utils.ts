@@ -29,20 +29,8 @@ export function formatDateBR(value?: string | Date | null): string {
   return `${d}/${m}/${y}`
 }
 
-export function maskCurrency(value: string, decimals: number = 2) {
-  const cleanValue = value.replace(/\D/g, '')
-  if (!cleanValue) return ''
-  const numberValue = Number(cleanValue) / Math.pow(10, decimals)
-  return numberValue.toLocaleString('pt-BR', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  })
-}
-
-export function parseCurrencyToNumber(value: string): number {
-  if (!value) return 0
-  return Number(value.replace(/\D/g, '')) / 10000 // Fixo para 4 casas no parse de etiquetas
-}
+// maskCurrency/parseCurrencyToNumber foram para lib/masks.ts, junto com as
+// demais máscaras de campo.
 
 export function formatEtiquetaMedida(etiqueta: {
   formato?: string | null

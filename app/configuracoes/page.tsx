@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
+import { maskCNPJ, maskCEP, maskTelefone } from "@/lib/masks"
 
 function ConfiguracoesForm() {
     const { isAdmin, isLoading } = useAuth()
@@ -38,37 +39,10 @@ function ConfiguracoesForm() {
     // ── Módulo IA ──────────────────────────────────────
     const { config: aiConfig, usage: aiUsage, updateConfig: updateAIConfig, resetUsage: resetAIUsage } = useAI()
 
-    // Funções de formatação (Máscaras)
-    const formatCNPJ = (value: string) => {
-        return value
-            .replace(/\D/g, "")
-            .replace(/^(\d{2})(\d)/, "$1.$2")
-            .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-            .replace(/\.(\d{3})(\d)/, ".$1/$2")
-            .replace(/(\d{4})(\d)/, "$1-$2")
-            .slice(0, 18)
-    }
-
-    const formatCEP = (value: string) => {
-        return value
-            .replace(/\D/g, "")
-            .replace(/^(\d{5})(\d)/, "$1-$2")
-            .slice(0, 9)
-    }
-
-    const formatPhone = (value: string) => {
-        const numbers = value.replace(/\D/g, "");
-        if (numbers.length <= 10) {
-            return numbers
-                .replace(/^(\d{2})(\d)/, "($1) $2")
-                .replace(/(\d{4})(\d)/, "$1-$2")
-                .slice(0, 14);
-        }
-        return numbers
-            .replace(/^(\d{2})(\d)/, "($1) $2")
-            .replace(/(\d{5})(\d)/, "$1-$2")
-            .slice(0, 15);
-    }
+    // Máscaras compartilhadas (lib/masks.ts)
+    const formatCNPJ = maskCNPJ
+    const formatCEP = maskCEP
+    const formatPhone = maskTelefone
 
     // Buscas em API
     const fetchCNPJ = async (numeroCnpj?: string) => {

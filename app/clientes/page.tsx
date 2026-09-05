@@ -17,6 +17,7 @@ import { Search, Plus, Eye, Users, Clock, AlertTriangle, Building2 } from "lucid
 import { getClientes } from "@/lib/actions/clientes"
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/pagination"
 
 export default function ClientesPage() {
+  const router = useRouter()
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [fRetencao, setFRetencao] = useState<"todos" | "30d" | "60d">("todos")
@@ -167,7 +169,7 @@ export default function ClientesPage() {
                     const numOrcamentos = cliente._count?.orcamentos || 0
                     const numPedidos = cliente._count?.pedidos || 0
                     return (
-                      <TableRow key={cliente.id} className="group hover:bg-muted/30 transition-colors">
+                      <TableRow key={cliente.id} onClick={() => router.push(`/clientes/${cliente.id}`)} className="group hover:bg-muted/30 transition-colors cursor-pointer">
                         <TableCell className="font-medium text-foreground max-w-[200px] truncate">{cliente.razaoSocial}</TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-xs">{cliente.cnpj}</TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{cliente.cidade} / <span className="text-foreground">{cliente.estado}</span></TableCell>
@@ -178,7 +180,7 @@ export default function ClientesPage() {
                             <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-200 dark:border-blue-900 shadow-none">{numPedidos} ped.</Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right pr-6">
+                        <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
                             <Link href={`/clientes/${cliente.id}`}>
                                 <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
                                     <Eye className="size-4" />

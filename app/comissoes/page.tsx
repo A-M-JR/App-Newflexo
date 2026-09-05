@@ -21,11 +21,13 @@ import { useAuth } from "@/lib/auth-context"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 export default function ComissoesPage() {
+  const router = useRouter()
   const [search, setSearch] = useState("")
-  const { isVendedor, vendedor, isAdmin, currentUser } = useAuth()
+  const { isVendedor, vendedor, isAdmin, currentUser, isLoading: authLoading } = useAuth()
   
   // Controle de Mês Atual
   const now = new Date()
@@ -38,12 +40,15 @@ export default function ComissoesPage() {
   // Se for vendedor, busca apenas as comissões dele
   const vendedorId = isVendedor ? vendedor?.id : undefined
 
+  // Espera a sessão resolver: sem isso a primeira consulta sai sem usuário
+  // (e sem o filtro de vendedor) e é refeita logo em seguida.
   const { data: dbData, isLoading: loading } = useDataQuery<any>({
-    key: `comissoes-${vendedorId || 'admin'}-${periodo}`,
+    key: `comissoes-${vendedorId || 'admin'}-${periodo}-${currentUser?.id ?? 'anon'}`,
     fetcher: () => {
       const [ano, mes] = periodo.split('-').map(Number)
       return getComissoes(vendedorId, mes, ano, currentUser?.id)
-    }
+    },
+    enabled: !authLoading,
   })
 
   const todasParcelas = dbData?.dados || []
@@ -281,7 +286,7 @@ export default function ComissoesPage() {
                               </TableHeader>
                               <TableBody>
                                 {grupo.parcelas.map((c: any) => (
-                                  <TableRow key={c.id} className="group hover:bg-muted/30 transition-colors border-border/30">
+                                  <TableRow key={c.id} onClick={() => router.push(`/pedidos/${c.pedidoId}`)} className="group hover:bg-muted/30 transition-colors border-border/30 cursor-pointer">
                                     <TableCell className="font-medium font-mono text-xs">
                                       <Link 
                                         href={`/pedidos/${c.pedidoId}`}

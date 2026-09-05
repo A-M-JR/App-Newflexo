@@ -5,6 +5,7 @@ import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 import { getOrCreateStatus } from "./status"
 import { getRequesterVendedorId } from "./users"
 import { Prisma } from "@prisma/client"
+import { parseDecimalBR } from "@/lib/masks"
 
 // Helper function map statusId string names to clean strings if they contain "Analise" "Produção" etc.
 function mapStatusIdToStr(statusName: string) {
@@ -32,28 +33,34 @@ export async function getPedidos(params: {
   const page = params.page || 1
   const limit = params.limit || 20
   
-  const [statusEmAnalise, statusEmProducao, statusSeparacao, statusEntregue] = await Promise.all([
-    getOrCreateStatus('em_analise'),
-    getOrCreateStatus('em_producao'),
-    getOrCreateStatus('separacao'),
-    getOrCreateStatus('entregue'),
+  // Status e permissão do usuário são independentes entre si: resolvemos os dois
+  // na mesma rodada em vez de esperar um bloco depois do outro.
+  const [
+    [statusEmAnalise, statusEmProducao, statusSeparacao, statusEntregue],
+    perm,
+  ] = await Promise.all([
+    Promise.all([
+      getOrCreateStatus('em_analise'),
+      getOrCreateStatus('em_producao'),
+      getOrCreateStatus('separacao'),
+      getOrCreateStatus('entregue'),
+    ]),
+    params.requesterId ? getRequesterVendedorId(params.requesterId) : Promise.resolve(null),
   ])
 
+  const temBusca = Boolean(params.search && params.search.trim())
   const searchPattern = `%${params.search || ""}%`
   const dataInicio = params.dataInicio ? new Date(params.dataInicio) : null
   const dataFim = params.dataFim ? new Date(params.dataFim) : null
   if (dataFim) {
     dataFim.setDate(dataFim.getDate() + 1)
   }
-  
+
   let vendedorId = params.vendedorId ? Number(params.vendedorId) : null
-  
-  // SEGURANÇA: Se houver um requesterId, verifica se ele é vendedor limitado
-  if (params.requesterId) {
-    const perm = await getRequesterVendedorId(params.requesterId)
-    if (perm !== 'admin') {
-      vendedorId = perm as number // Força o vendedorId dele
-    }
+
+  // SEGURANÇA: se o requisitante for vendedor limitado, força o vendedorId dele
+  if (perm !== null && perm !== 'admin') {
+    vendedorId = perm as number
   }
 
   // 1. Otimização Global: Busca de todos os contadores em UMA ÚNICA query SQL.
@@ -97,7 +104,9 @@ export async function getPedidos(params: {
     else if (params.status === 'separacao') where.statusId = statusSeparacao
     else if (params.status === 'entregue') where.statusId = statusEntregue
   }
-  if (params.vendedorId) where.vendedorId = params.vendedorId
+  // O filtro de vendedor precisa vir da variável já resolvida pela regra de
+  // segurança — senão o vendedor recebe a lista inteira mesmo com o KPI filtrado.
+  if (vendedorId != null) where.vendedorId = vendedorId
   if (params.dataInicio || params.dataFim) {
     where.criadoEm = {}
     if (params.dataInicio) where.criadoEm.gte = new Date(params.dataInicio)
@@ -107,6 +116,27 @@ export async function getPedidos(params: {
       where.criadoEm.lt = ends
     }
   }
+
+  // WHERE montado por partes: sem busca não entra o JOIN com Cliente nem o ILIKE,
+  // que antes rodavam para cada linha mesmo com o campo vazio (ILIKE '%%'). Os
+  // filtros opcionais só entram quando têm valor, em vez do padrão
+  // `$1 IS NULL OR coluna = $1`, que impede o Postgres de usar índice.
+  const filtrosSql: Prisma.Sql[] = []
+  filtrosSql.push(
+    params.status === 'cancelado' ? Prisma.sql`TRUE` : Prisma.sql`p."ativo" = TRUE`
+  )
+  if (temBusca) {
+    filtrosSql.push(Prisma.sql`(
+      p."numero" ILIKE ${searchPattern}
+      OR EXISTS (
+        SELECT 1 FROM "Cliente" c
+        WHERE c.id = p."clienteId" AND c."razaoSocial" ILIKE ${searchPattern}
+      )
+    )`)
+  }
+  if (vendedorId != null) filtrosSql.push(Prisma.sql`p."vendedorId" = ${vendedorId}`)
+  if (dataInicio) filtrosSql.push(Prisma.sql`p."criadoEm" >= ${dataInicio}`)
+  if (dataFim) filtrosSql.push(Prisma.sql`p."criadoEm" < ${dataFim}`)
 
   // 3. Contagem (KPIs) e busca paginada em paralelo — são independentes.
   const [counts, dbPedidos] = await Promise.all([
@@ -125,23 +155,29 @@ export async function getPedidos(params: {
         COUNT(*) FILTER (WHERE p."ativo" = FALSE)::int as cancelados,
         COALESCE(SUM(p."totalGeral"), 0)::float as total_valor
       FROM "Pedido" p
-      LEFT JOIN "Cliente" c ON p."clienteId" = c.id
-      WHERE (p."numero" ILIKE ${searchPattern} OR c."razaoSocial" ILIKE ${searchPattern})
-        AND (${params.status === 'cancelado'}::boolean = TRUE OR p."ativo" = TRUE)
-        AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
-        AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
-        AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
+      WHERE ${Prisma.join(filtrosSql, ' AND ')}
     `,
     prisma.pedido.findMany({
       where,
       orderBy: params.apenasSla ? { prazoEntrega: 'asc' } : { id: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-      include: {
+      // Só as colunas que a lista mostra. A tabela Pedido tem vários campos de
+      // texto longo (observações, embalagem, faturamento) que essa tela não usa.
+      select: {
+        id: true,
+        numero: true,
+        criadoEm: true,
+        atualizadoEm: true,
+        prazoEntrega: true,
+        totalGeral: true,
+        ativo: true,
+        clienteId: true,
+        vendedorId: true,
+        statusId: true,
         cliente: { select: { razaoSocial: true, cnpj: true } },
         vendedor: { select: { nome: true } },
         statusObj: true,
-        _count: { select: { itens: true } }
       }
     })
   ])
@@ -395,8 +431,8 @@ export async function savePedido(data: any, requesterId?: number) {
         ...prismaData,
         itens: {
           create: itens.map((it: any) => {
-            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
-            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            const qty = parseDecimalBR(it.quantidade)
+            const price = parseDecimalBR(it.precoUnitario)
             return {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,
@@ -445,8 +481,8 @@ export async function savePedido(data: any, requesterId?: number) {
         itens: {
           deleteMany: { id: { notIn: itens.filter((i: any) => i.id).map((i: any) => Number(i.id)) } },
           upsert: itens.map((it: any) => {
-            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
-            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            const qty = parseDecimalBR(it.quantidade)
+            const price = parseDecimalBR(it.precoUnitario)
             const itemData = {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,

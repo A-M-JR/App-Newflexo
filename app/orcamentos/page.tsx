@@ -19,9 +19,11 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { getOrcamentos } from "@/lib/actions/orcamentos"
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useDataQuery } from "@/hooks/use-data-query"
 import { Skeleton } from "@/components/ui/skeleton"
+import { FilterCombobox } from "@/components/ui/filter-combobox"
 import { DatePickerWithRange } from "@/components/ui/date-picker-with-range"
 import { DateRange } from "react-day-picker"
 import {
@@ -41,7 +43,8 @@ export default function OrcamentosPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
   const [page, setPage] = useState(1)
 
-  const { isVendedor, vendedor, currentUser } = useAuth()
+  const router = useRouter()
+  const { isVendedor, vendedor, currentUser, isLoading: authLoading } = useAuth()
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -62,9 +65,13 @@ export default function OrcamentosPage() {
     requesterId: currentUser?.id
   }), [page, debouncedSearch, fStatus, dateRange, currentUser])
 
+  // A chave da consulta inclui o requesterId. Sem esperar a sessão resolver, a
+  // tela disparava a consulta duas vezes (uma sem usuário, outra com) — e a
+  // primeira ainda vinha sem o filtro de vendedor.
   const { data: dbData, isLoading: loading } = useDataQuery<any>({
     key: apiParams,
-    fetcher: () => getOrcamentos(apiParams)
+    fetcher: () => getOrcamentos(apiParams),
+    enabled: !authLoading,
   })
 
   const orcamentosList = dbData?.data || []
@@ -162,14 +169,20 @@ export default function OrcamentosPage() {
                 }}
                 className="w-full md:w-auto"
               />
-              <select className="h-8 rounded-md border border-input bg-background px-2 py-1 text-xs" value={fStatus} onChange={e => handleStatusFilter(e.target.value)}>
-                <option value="">Todos Status</option>
-                <option value="rascunho">Rascunho</option>
-                <option value="enviado">Vigente / Enviado</option>
-                <option value="aprovado">Aprovado</option>
-                <option value="recusado">Recusado</option>
-                <option value="parados">Parados (Rascunho + Recusado)</option>
-              </select>
+              <FilterCombobox
+                aria-label="Filtrar por status"
+                value={fStatus}
+                onChange={(v) => { setFStatus(v); setPage(1) }}
+                options={[
+                  { value: "", label: "Todos Status" },
+                  { value: "rascunho", label: "Rascunho" },
+                  { value: "enviado", label: "Vigente / Enviado" },
+                  { value: "aprovado", label: "Aprovado" },
+                  { value: "recusado", label: "Recusado" },
+                  { value: "parados", label: "Parados (Rascunho + Recusado)" },
+                ]}
+                className="w-52 shrink-0"
+              />
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -182,13 +195,13 @@ export default function OrcamentosPage() {
                   ) : orcamentosList.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground"><p>Nenhum orçamento encontrado.</p></TableCell></TableRow>
                   ) : orcamentosList.map((orc: any) => (
-                    <TableRow key={orc.id} className="hover:bg-muted/10 transition-colors border-border/30 bg-card">
+                    <TableRow key={orc.id} onClick={() => router.push(`/orcamentos/${orc.id}`)} className="hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer">
                       <TableCell><div className="flex flex-col"><span className="font-medium font-mono text-blue-500 text-[13px]">{orc.numero}</span><span className="text-[11px] text-muted-foreground">{new Date(orc.criadoEm).toLocaleDateString()}</span></div></TableCell>
                       <TableCell className="max-w-[200px]"><div className="font-medium text-[13px] text-foreground truncate">{orc.cliente?.razaoSocial}</div><div className="text-[11px] text-muted-foreground truncate font-mono font-normal">CNPJ: {orc.cliente?.cnpj}</div></TableCell>
                       <TableCell className="hidden sm:table-cell text-center"><Badge variant="outline" className="font-mono text-[10px]">{orc._count?.itens || 0}</Badge></TableCell>
                       <TableCell className="text-center"><StatusBadge statusObj={orc.statusObj} fallback={orc.status} /></TableCell>
                       <TableCell className="text-right font-bold text-foreground text-[13px]">{formatCurrency(orc.totalGeral)}</TableCell>
-                      <TableCell className="text-right pr-6"><Link href={`/orcamentos/${orc.id}`}><Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button></Link></TableCell>
+                      <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}><Link href={`/orcamentos/${orc.id}`}><Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button></Link></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

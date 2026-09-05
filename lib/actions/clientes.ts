@@ -9,7 +9,7 @@ export async function getClientes(params: {
   limit?: number
   search?: string
   filter?: 'todos' | '30d' | '60d'
-  mode?: 'full' | 'dropdown'
+  mode?: 'full' | 'dropdown' | 'list'
 } = {}) {
   
   const page = params.page || 1
@@ -31,7 +31,7 @@ export async function getClientes(params: {
       ? Prisma.sql`"ultimaCompra" < ${sessentaDiasAtras} OR ("ultimaCompra" IS NULL AND "criadoEm" < ${sessentaDiasAtras})`
       : Prisma.sql`TRUE`
 
-  const counts: any[] = await prisma.$queryRaw`
+  const countsPromise = prisma.$queryRaw<any[]>`
     SELECT 
       COUNT(*)::int as total_global,
       COUNT(*) FILTER (WHERE ("ultimaCompra" < ${trintaDiasAtras} AND "ultimaCompra" >= ${sessentaDiasAtras}) OR ("ultimaCompra" IS NULL AND "criadoEm" < ${trintaDiasAtras} AND "criadoEm" >= ${sessentaDiasAtras}))::int as sem_compra_30,
@@ -40,8 +40,6 @@ export async function getClientes(params: {
     FROM "Cliente"
     WHERE ("razaoSocial" ILIKE ${searchPattern} OR "cnpj" ILIKE ${searchPattern} OR "cidade" ILIKE ${searchPattern})
   `
-  
-  const stats = counts[0] || { total_global: 0, sem_compra_30: 0, sem_compra_60: 0, total_filtrado: 0 }
 
   // 2. Busca dos dados via Prisma para garantir integridade das relações
   const where: Prisma.ClienteWhereInput = {
@@ -65,27 +63,36 @@ export async function getClientes(params: {
     ]
   }
 
-  const dbClientes = await prisma.cliente.findMany({
-    where,
-    include: {
-      etiquetasExclusivas: {
-        include: {
-          etiqueta: true
+  // As etiquetas exclusivas (com o objeto Etiqueta inteiro de cada vínculo) só
+  // interessam ao modo 'full'. Na lista paginada isso puxava dezenas de linhas
+  // extras por cliente sem que a tela mostrasse nenhuma delas.
+  const comEtiquetas = mode === 'full'
+
+  // Contagem e página são independentes: rodam em paralelo.
+  const [counts, dbClientes] = await Promise.all([
+    countsPromise,
+    prisma.cliente.findMany({
+      where,
+      include: {
+        ...(comEtiquetas
+          ? { etiquetasExclusivas: { include: { etiqueta: true } } }
+          : {}),
+        _count: {
+          select: { orcamentos: true, pedidos: true }
         }
       },
-      _count: {
-        select: { orcamentos: true, pedidos: true }
-      }
-    },
-    orderBy: { razaoSocial: 'asc' },
-    skip: (page - 1) * limit,
-    take: limit,
-  })
-  
+      orderBy: { razaoSocial: 'asc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ])
+
+  const stats = counts[0] || { total_global: 0, sem_compra_30: 0, sem_compra_60: 0, total_filtrado: 0 }
+
   return {
     data: dbClientes.map((c: any) => ({
       ...c,
-      etiquetasVinculadas: c.etiquetasExclusivas.map((ee: any) => ee.etiqueta),
+      etiquetasVinculadas: (c.etiquetasExclusivas || []).map((ee: any) => ee.etiqueta),
       criadoEm: c.criadoEm.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
       ultimaCompra: c.ultimaCompra ? c.ultimaCompra.toISOString() : null,
@@ -101,32 +108,34 @@ export async function getClientes(params: {
   }
 }
 
+// Teto do histórico carregado na ficha do cliente. Sem limite, um cliente antigo
+// puxava a base inteira de orçamentos/pedidos dele em uma tacada só.
+const HISTORICO_LIMITE = 200
+
 export async function getClienteById(id: number) {
-  // Busca via Raw SQL para garantir que pegamos os campos novos (nomeFantasia, etc)
-  const results = await prisma.$queryRaw`
-    SELECT * FROM "Cliente" WHERE id = ${id}
-  ` as any[]
+  // As quatro consultas são independentes — uma rodada só em vez de quatro idas
+  // sequenciais ao banco.
+  const [results, orcamentos, pedidos, itensExclusivos] = await Promise.all([
+    // Busca via Raw SQL para garantir que pegamos os campos novos (nomeFantasia, etc)
+    prisma.$queryRaw`SELECT * FROM "Cliente" WHERE id = ${id}` as Promise<any[]>,
+    prisma.orcamento.findMany({
+      where: { clienteId: id },
+      include: { statusObj: true },
+      orderBy: { id: 'desc' },
+      take: HISTORICO_LIMITE,
+    }),
+    prisma.pedido.findMany({
+      where: { clienteId: id },
+      include: { statusObj: true },
+      orderBy: { id: 'desc' },
+      take: HISTORICO_LIMITE,
+    }),
+    // Fallback para itens exclusivos via raw query devido a cache do Prisma
+    prisma.$queryRaw`SELECT * FROM "ItemExclusivoCliente" WHERE "clienteId" = ${id}` as Promise<any[]>,
+  ])
 
   if (results.length === 0) return null
   const cliente = results[0]
-
-  // Busca orçamentos e pedidos separadamente (fallback total para Raw SQL/Selective ORM)
-  const orcamentos = await prisma.orcamento.findMany({
-    where: { clienteId: id },
-    include: { statusObj: true },
-    orderBy: { id: 'desc' }
-  })
-
-  const pedidos = await prisma.pedido.findMany({
-    where: { clienteId: id },
-    include: { statusObj: true },
-    orderBy: { id: 'desc' }
-  })
-
-  // Falback para itens exclusivos via raw query devido a cache do Prisma
-  const itensExclusivos = await prisma.$queryRaw`
-    SELECT * FROM "ItemExclusivoCliente" WHERE "clienteId" = ${id}
-  ` as any[]
 
   return {
     ...cliente,

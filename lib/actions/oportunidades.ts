@@ -22,21 +22,75 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
 
     const searchVendedor = vendedorId ? Number(vendedorId) : null
 
-    // 1. Dados de Faturamento e Ranking
-    const pedidos = await prisma.pedido.findMany({
-        where: { 
-            ativo: true,
-            vendedorId: searchVendedor ? searchVendedor : undefined
-        },
-        include: { vendedor: true, statusObj: true, cliente: true }
-    })
+    // As quatro consultas são independentes: uma rodada só em vez de quatro idas
+    // sequenciais ao banco. Cada uma traz apenas as colunas efetivamente usadas
+    // aqui embaixo (o `include` anterior puxava vendedor/cliente inteiros).
+    const [pedidos, vendedores, clientes, todosOrcamentos] = await Promise.all([
+        // 1. Dados de Faturamento e Ranking
+        prisma.pedido.findMany({
+            where: {
+                ativo: true,
+                vendedorId: searchVendedor ? searchVendedor : undefined
+            },
+            select: {
+                id: true,
+                numero: true,
+                clienteId: true,
+                vendedorId: true,
+                prazoEntrega: true,
+                totalGeral: true,
+                statusObj: { select: { nome: true } },
+                cliente: { select: { razaoSocial: true } },
+            }
+        }),
 
-    const vendedores = await prisma.vendedor.findMany({ 
-        where: { 
-            ativo: true,
-            id: searchVendedor ? searchVendedor : undefined
-        } 
-    })
+        prisma.vendedor.findMany({
+            where: {
+                ativo: true,
+                id: searchVendedor ? searchVendedor : undefined
+            },
+            select: { id: true, nome: true }
+        }),
+
+        // 2. Oportunidades de Reativação (Novos critérios: Sem compra OU +30 dias sem orçamento)
+        prisma.cliente.findMany({
+            where: {
+                ativo: true,
+                OR: searchVendedor ? [
+                    { pedidos: { some: { vendedorId: searchVendedor } } },
+                    { orcamentos: { some: { vendedorId: searchVendedor } } }
+                ] : undefined
+            },
+            select: {
+                id: true,
+                razaoSocial: true,
+                telefone: true,
+                ultimaCompra: true,
+                criadoEm: true,
+            }
+        }),
+
+        prisma.orcamento.findMany({
+            where: {
+                ativo: true,
+                vendedorId: searchVendedor ? searchVendedor : undefined
+            },
+            orderBy: { criadoEm: 'desc' },
+            select: { clienteId: true, criadoEm: true }
+        }),
+    ])
+
+    // Índices em memória. Antes cada cliente varria a lista inteira de orçamentos
+    // e de pedidos (custo clientes × orçamentos), o que dominava o tempo da tela
+    // assim que a base cresceu.
+    const ultimoOrcamentoPorCliente = new Map<number, Date>()
+    for (const o of todosOrcamentos) {
+        // A lista já vem ordenada por criadoEm desc: o primeiro de cada cliente é o mais recente.
+        if (!ultimoOrcamentoPorCliente.has(o.clienteId)) {
+            ultimoOrcamentoPorCliente.set(o.clienteId, o.criadoEm)
+        }
+    }
+    const clientesComPedido = new Set<number>(pedidos.map(p => p.clienteId))
 
     const rankingVendedores = vendedores.map(v => {
         const pedidosVendedor = pedidos.filter(p => p.vendedorId === v.id && p.statusObj?.nome === 'Entregue')
@@ -49,40 +103,19 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
         }
     }).sort((a, b) => b.total - a.total)
 
-    // 2. Oportunidades de Reativação (Novos critérios: Sem compra OU +30 dias sem orçamento)
-    const clientes = await prisma.cliente.findMany({ 
-        where: { 
-            ativo: true,
-            OR: searchVendedor ? [
-                { pedidos: { some: { vendedorId: searchVendedor } } },
-                { orcamentos: { some: { vendedorId: searchVendedor } } }
-            ] : undefined
-        } 
-    })
-    const todosOrcamentos = await prisma.orcamento.findMany({ 
-        where: { 
-            ativo: true,
-            vendedorId: searchVendedor ? searchVendedor : undefined
-        },
-        orderBy: { criadoEm: 'desc' },
-        select: { clienteId: true, criadoEm: true }
-    })
-    
     const clientesRisco = clientes.filter(c => {
         // 1. Nunca comprou
         if (!c.ultimaCompra) return true
-        
+
         // 2. Último orçamento foi há mais de 30 dias
-        const orcamentosDoCliente = todosOrcamentos.filter(o => o.clienteId === c.id)
-        const ultimoOrcamento = orcamentosDoCliente[0]?.criadoEm
-        
+        const ultimoOrcamento = ultimoOrcamentoPorCliente.get(c.id)
+
         if (!ultimoOrcamento) return true // Se nunca orçou também entra
-        
+
         return ultimoOrcamento < trintaDiasAtras
     }).map(c => {
-        const orcamentosDoCliente = todosOrcamentos.filter(o => o.clienteId === c.id)
-        const ultimoOrcamento = orcamentosDoCliente[0]?.criadoEm
-        
+        const ultimoOrcamento = ultimoOrcamentoPorCliente.get(c.id)
+
         const dataReferencia = ultimoOrcamento || c.criadoEm
         const diasSemAtividade = Math.floor((today.getTime() - dataReferencia.getTime()) / (1000 * 3600 * 24))
         
@@ -99,9 +132,8 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
 
     // 3. Clientes sem Orçamento ou Pedido (Totalmente "zerados")
     const clientesSemHistorico = clientes.filter(c => {
-        const temOrcamento = pedidos.some(p => p.clienteId === c.id) // Simplificando: se tem pedido, tem orçamento no histórico
-        // Na verdade, vamos checar orçamentos também para ser preciso
-        return !temOrcamento
+        // Simplificando: se tem pedido, tem orçamento no histórico
+        return !clientesComPedido.has(c.id)
     }).map(c => ({
         id: c.id,
         razaoSocial: c.razaoSocial,

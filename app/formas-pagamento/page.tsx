@@ -6,6 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { AppShell } from "@/components/app-shell"
 import { toast } from "sonner"
@@ -185,40 +193,43 @@ export default function FormasPagamentoPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/30">
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Nome</th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Parcelas</th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent bg-muted/30">
+                  <TableHead>Nome</TableHead>
+                  <TableHead className="text-center">Parcelas</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right pr-6">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {isLoading ? (
-                  [1, 2, 3].map(i => (
-                    <tr key={i}>
-                      <td colSpan={3} className="px-6 py-4"><Skeleton className="h-4 w-full" /></td>
-                    </tr>
-                  ))
+                  <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
+                ) : filteredFormas.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground"><div className="flex flex-col items-center justify-center gap-2"><CreditCard className="size-8 opacity-20" /><p>Nenhuma forma de pagamento encontrada.</p></div></TableCell></TableRow>
                 ) : filteredFormas.map((forma) => (
-                  <tr key={forma.id} className={`hover:bg-muted/30 transition-colors ${!forma.ativo ? "opacity-60" : ""}`}>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-semibold text-foreground">{forma.nome}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-muted-foreground">{forma.quantidadeParcelas || 1}x</span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
+                  <TableRow
+                    key={forma.id}
+                    onClick={() => {
+                      setEditingForma(forma)
+                      setNome(forma.nome)
+                      setQuantidadeParcelas(forma.quantidadeParcelas || 1)
+                      setShowForm(true)
+                    }}
+                    className={`hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer ${!forma.ativo ? "opacity-60" : ""}`}
+                  >
+                    <TableCell><span className="text-[13px] font-semibold text-foreground">{forma.nome}</span></TableCell>
+                    <TableCell className="text-center text-[13px] text-muted-foreground">{forma.quantidadeParcelas || 1}x</TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
                         <span className={`flex h-2 w-2 rounded-full ${forma.ativo ? "bg-emerald-500" : "bg-destructive"}`}></span>
                         <span className={`text-xs font-medium ${forma.ativo ? "text-emerald-600" : "text-destructive"}`}>
                           {forma.ativo ? "Ativo" : "Inativo"}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex items-center gap-1">
+                    </TableCell>
+                    <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -249,11 +260,11 @@ export default function FormasPagamentoPage() {
                           <Trash2 className="size-[15px]" />
                         </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </Card>
 

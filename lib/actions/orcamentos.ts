@@ -5,6 +5,7 @@ import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 import { getRequesterVendedorId } from "./users"
 import { Orcamento } from "@/lib/types"
 import { Prisma } from "@prisma/client"
+import { parseDecimalBR } from "@/lib/masks"
 
 export async function getOrcamentos(params: {
   page?: number
@@ -22,6 +23,7 @@ export async function getOrcamentos(params: {
   const limit = params.limit || 20
   const mode = params.mode || 'full'
 
+  const temBusca = Boolean(params.search && params.search.trim())
   const searchPattern = `%${params.search || ""}%`
   const dataInicio = params.dataInicio ? new Date(params.dataInicio) : null
   const dataFim = params.dataFim ? new Date(params.dataFim) : null
@@ -65,7 +67,9 @@ export async function getOrcamentos(params: {
     else if (params.status === 'parados') where.statusId = { in: [1, 5] }
   }
 
-  if (params.vendedorId) where.vendedorId = params.vendedorId
+  // O filtro de vendedor precisa vir da variável já resolvida pela regra de
+  // segurança — senão o vendedor recebe a lista inteira mesmo com o KPI filtrado.
+  if (vendedorId != null) where.vendedorId = vendedorId
 
   if (params.dataInicio || params.dataFim) {
     where.criadoEm = {}
@@ -77,6 +81,32 @@ export async function getOrcamentos(params: {
     }
   }
 
+  // O WHERE é montado por partes: sem busca não entra o JOIN com Cliente nem o
+  // EXISTS em ItemOrcamento, que antes rodavam para cada linha da tabela mesmo
+  // com o campo de busca vazio (ILIKE '%%'). Os filtros opcionais só aparecem
+  // quando têm valor, em vez do padrão `$1 IS NULL OR coluna = $1`, que impede
+  // o Postgres de usar índice.
+  const filtrosSql: Prisma.Sql[] = [Prisma.sql`p."ativo" = TRUE`]
+
+  if (temBusca) {
+    filtrosSql.push(Prisma.sql`(
+      p."numero" ILIKE ${searchPattern}
+      OR EXISTS (
+        SELECT 1 FROM "Cliente" c
+        WHERE c.id = p."clienteId" AND c."razaoSocial" ILIKE ${searchPattern}
+      )
+      OR EXISTS (
+        SELECT 1 FROM "ItemOrcamento" io
+        LEFT JOIN "Etiqueta" e ON io."etiquetaId" = e.id
+        WHERE io."orcamentoId" = p.id
+          AND (io."descricao" ILIKE ${searchPattern} OR e."nome" ILIKE ${searchPattern} OR e."codigo" ILIKE ${searchPattern})
+      )
+    )`)
+  }
+  if (vendedorId != null) filtrosSql.push(Prisma.sql`p."vendedorId" = ${vendedorId}`)
+  if (dataInicio) filtrosSql.push(Prisma.sql`p."criadoEm" >= ${dataInicio}`)
+  if (dataFim) filtrosSql.push(Prisma.sql`p."criadoEm" < ${dataFim}`)
+
   const countPromise = prisma.$queryRaw<any[]>`
     SELECT
       COUNT(*) FILTER (WHERE ${statusFilterSql})::int as total_filtrado,
@@ -85,21 +115,7 @@ export async function getOrcamentos(params: {
       COUNT(*) FILTER (WHERE p."statusId" IN (1, 5))::int as parados,
       COALESCE(SUM(p."totalGeral") FILTER (WHERE p."statusId" <> 5), 0)::float as total_valor
     FROM "Orcamento" p
-    LEFT JOIN "Cliente" c ON p."clienteId" = c.id
-    WHERE (
-      p."numero" ILIKE ${searchPattern}
-      OR c."razaoSocial" ILIKE ${searchPattern}
-      OR EXISTS (
-        SELECT 1 FROM "ItemOrcamento" io
-        LEFT JOIN "Etiqueta" e ON io."etiquetaId" = e.id
-        WHERE io."orcamentoId" = p.id
-          AND (io."descricao" ILIKE ${searchPattern} OR e."nome" ILIKE ${searchPattern} OR e."codigo" ILIKE ${searchPattern})
-      )
-    )
-      AND (${vendedorId}::int IS NULL OR p."vendedorId" = ${vendedorId})
-      AND (${dataInicio}::timestamp IS NULL OR p."criadoEm" >= ${dataInicio})
-      AND (${dataFim}::timestamp IS NULL OR p."criadoEm" < ${dataFim})
-      AND p."ativo" = TRUE
+    WHERE ${Prisma.join(filtrosSql, ' AND ')}
   `
 
   if (mode === 'history') {
@@ -123,7 +139,17 @@ export async function getOrcamentos(params: {
       orderBy: { id: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: {
+      // Só as colunas que a lista mostra. Evita trafegar observações e demais
+      // campos longos que ninguém usa nessa tela.
+      select: {
+        id: true,
+        numero: true,
+        criadoEm: true,
+        atualizadoEm: true,
+        totalGeral: true,
+        clienteId: true,
+        vendedorId: true,
+        statusId: true,
         cliente: { select: { razaoSocial: true, cnpj: true } },
         vendedor: { select: { nome: true } },
         statusObj: true,
@@ -347,8 +373,8 @@ export async function saveOrcamento(data: any, requesterId?: number) {
           ...prismaData,
           itens: {
             create: itens.map((it: any) => {
-              const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
-              const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+              const qty = parseDecimalBR(it.quantidade)
+              const price = parseDecimalBR(it.precoUnitario)
               return {
                 etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
                 descricao: it.descricao,
@@ -413,8 +439,8 @@ export async function saveOrcamento(data: any, requesterId?: number) {
         itens: {
           deleteMany: { id: { notIn: itens.filter((i: any) => i.id).map((i: any) => Number(i.id)) } },
           upsert: itens.map((it: any) => {
-            const qty = Number(typeof it.quantidade === 'string' ? it.quantidade.replace(',', '.') : it.quantidade) || 0
-            const price = Number(typeof it.precoUnitario === 'string' ? it.precoUnitario.replace(',', '.') : it.precoUnitario) || 0
+            const qty = parseDecimalBR(it.quantidade)
+            const price = parseDecimalBR(it.precoUnitario)
             const itemData = {
               etiquetaId: it.etiquetaId ? Number(it.etiquetaId) : null,
               descricao: it.descricao,

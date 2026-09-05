@@ -5,7 +5,16 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Search, Plus, Ruler, Palette, Layers, Loader2 } from "lucide-react"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Search, Plus, Ruler, Palette, Layers, Eye } from "lucide-react"
+import { FilterCombobox, type FilterOption } from "@/components/ui/filter-combobox"
 import { useState, useMemo } from "react"
 import { EtiquetaFormDialog } from "@/components/etiqueta-form-dialog"
 import { EtiquetaDetailDialog } from "@/components/etiqueta-detail-dialog"
@@ -24,6 +33,8 @@ export default function EtiquetasPage() {
   const [etiquetaToEdit, setEtiquetaToEdit] = useState<Etiqueta | null>(null)
   const [fMaterial, setFMaterial] = useState("")
   const [fTubete, setFTubete] = useState("")
+  // "" = todas | "geral" = sem cliente vinculado | "<id>" = exclusivas do cliente
+  const [fCliente, setFCliente] = useState("")
 
   const { data: etiquetasList, isLoading: loading, refetch: revalidate } = useDataQuery<Etiqueta[]>({
     key: 'etiquetas',
@@ -34,20 +45,94 @@ export default function EtiquetasPage() {
     const list = etiquetasList || []
     return list.filter(
         (e) => {
-          const matchSearch = e.nome.toLowerCase().includes(search.toLowerCase()) ||
-            e.codigo.toLowerCase().includes(search.toLowerCase()) ||
-            e.material.toLowerCase().includes(search.toLowerCase())
+          const termo = search.toLowerCase()
+          const matchSearch = e.nome.toLowerCase().includes(termo) ||
+            e.codigo.toLowerCase().includes(termo) ||
+            e.material.toLowerCase().includes(termo) ||
+            (e.clientesVinculados || []).some(cv => cv.razaoSocial.toLowerCase().includes(termo))
     
           const matchMaterial = fMaterial ? e.material.toLowerCase() === fMaterial.toLowerCase() : true
-          const matchTubete = fTubete ? e.tipoTubete.includes(fTubete) : true
-    
-          return matchSearch && matchMaterial && matchTubete
+          // Comparação exata sem diferenciar caixa, igual à do material: as opções
+          // do filtro já são os valores distintos que existem no cadastro.
+          const matchTubete = fTubete ? (e.tipoTubete || "").trim().toLowerCase() === fTubete.toLowerCase() : true
+
+          const vinculos = e.clientesVinculados || []
+          const matchCliente = !fCliente
+            ? true
+            : fCliente === "geral"
+              ? vinculos.length === 0
+              : vinculos.some(cv => String(cv.id) === fCliente)
+
+          return matchSearch && matchMaterial && matchTubete && matchCliente
         }
       )
-  }, [etiquetasList, search, fMaterial, fTubete])
+  }, [etiquetasList, search, fMaterial, fTubete, fCliente])
 
-  const uniqueMaterials = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.material).filter(Boolean))), [etiquetasList])
-  const uniqueTubetes = useMemo(() => Array.from(new Set((etiquetasList || []).map(e => e.tipoTubete).filter(Boolean))), [etiquetasList])
+  /**
+   * Agrupa valores ignorando maiúsculas/minúsculas e espaços sobrando. O
+   * cadastro tem o mesmo material gravado de várias formas ("Pead" e "PEAD",
+   * "Bopp Metal" e "BOPP METAL"), o que enchia o filtro de opções repetidas.
+   * O filtro em si já compara sem diferenciar caixa, então mostrar uma linha
+   * por valor distinto é suficiente — a grafia exibida é a mais frequente.
+   */
+  const agruparPorTexto = (valores: string[]) => {
+    const mapa = new Map<string, Map<string, number>>()
+    for (const bruto of valores) {
+      const valor = (bruto || "").trim()
+      if (!valor) continue
+      const chave = valor.toLowerCase()
+      const grafias = mapa.get(chave) ?? new Map<string, number>()
+      grafias.set(valor, (grafias.get(valor) || 0) + 1)
+      mapa.set(chave, grafias)
+    }
+    return Array.from(mapa.values())
+      .map(grafias => {
+        const ordenadas = Array.from(grafias.entries()).sort((a, b) => b[1] - a[1])
+        const total = ordenadas.reduce((soma, [, n]) => soma + n, 0)
+        return { label: ordenadas[0][0], total }
+      })
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+  }
+
+  const opcoesMaterial = useMemo<FilterOption[]>(() => [
+    { value: "", label: "Todos os materiais" },
+    ...agruparPorTexto((etiquetasList || []).map(e => e.material)).map(m => ({
+      value: m.label, label: m.label, hint: m.total,
+    })),
+  ], [etiquetasList])
+
+  const opcoesTubete = useMemo<FilterOption[]>(() => [
+    { value: "", label: "Todos os tubetes" },
+    ...agruparPorTexto((etiquetasList || []).map(e => e.tipoTubete)).map(t => ({
+      value: t.label, label: t.label, hint: t.total,
+    })),
+  ], [etiquetasList])
+
+  // Empresas que têm etiqueta exclusiva, com a contagem de matrizes de cada uma.
+  const empresas = useMemo(() => {
+    const mapa = new Map<number, { id: number; razaoSocial: string; total: number }>()
+    for (const e of etiquetasList || []) {
+      for (const cv of e.clientesVinculados || []) {
+        const atual = mapa.get(cv.id)
+        if (atual) atual.total++
+        else mapa.set(cv.id, { id: cv.id, razaoSocial: cv.razaoSocial, total: 1 })
+      }
+    }
+    return Array.from(mapa.values()).sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial, 'pt-BR'))
+  }, [etiquetasList])
+
+  const totalSemCliente = useMemo(
+    () => (etiquetasList || []).filter(e => (e.clientesVinculados || []).length === 0).length,
+    [etiquetasList]
+  )
+
+  const opcoesEmpresa = useMemo<FilterOption[]>(() => [
+    { value: "", label: "Todas as empresas" },
+    { value: "geral", label: "Catálogo geral", hint: totalSemCliente },
+    ...empresas.map(emp => ({
+      value: String(emp.id), label: emp.razaoSocial, hint: emp.total, group: "Empresas",
+    })),
+  ], [empresas, totalSemCliente])
 
   const handleEdit = () => {
     setEtiquetaToEdit(detailEtiqueta)
@@ -81,7 +166,7 @@ export default function EtiquetasPage() {
             <div className="flex items-center gap-2 flex-1 relative">
               <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome da etiqueta, código ou faca..."
+                placeholder="Buscar por nome, código, material ou empresa..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 bg-muted/50 focus-visible:bg-background border-border w-full"
@@ -89,32 +174,39 @@ export default function EtiquetasPage() {
             </div>
 
             <div className="flex items-center gap-3 overflow-x-auto pb-1 md:pb-0">
-              <div className="flex items-center gap-2 shrink-0">
-                <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Mat:</label>
-                <select
-                  className="h-9 rounded-md border border-input bg-background/50 px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring w-32"
-                  value={fMaterial}
-                  onChange={e => setFMaterial(e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  {uniqueMaterials.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+              <FilterCombobox
+                aria-label="Filtrar por empresa"
+                value={fCliente}
+                onChange={setFCliente}
+                options={opcoesEmpresa}
+                searchPlaceholder="Buscar empresa..."
+                emptyText="Nenhuma empresa encontrada."
+                className="w-56 shrink-0"
+                contentClassName="w-[320px]"
+              />
 
-              <div className="flex items-center gap-2 shrink-0">
-                <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Tub:</label>
-                <select
-                  className="h-9 rounded-md border border-input bg-background/50 px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring w-28"
-                  value={fTubete}
-                  onChange={e => setFTubete(e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  {uniqueTubetes.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
+              <FilterCombobox
+                aria-label="Filtrar por material"
+                value={fMaterial}
+                onChange={setFMaterial}
+                options={opcoesMaterial}
+                searchPlaceholder="Buscar material..."
+                emptyText="Nenhum material encontrado."
+                className="w-44 shrink-0"
+              />
 
-              {(fMaterial || fTubete) && (
-                <Button variant="ghost" size="sm" onClick={() => { setFMaterial(""); setFTubete("") }} className="shrink-0 h-9 px-2">
+              <FilterCombobox
+                aria-label="Filtrar por tubete"
+                value={fTubete}
+                onChange={setFTubete}
+                options={opcoesTubete}
+                searchPlaceholder="Buscar tubete..."
+                emptyText="Nenhum tubete encontrado."
+                className="w-40 shrink-0"
+              />
+
+              {(fMaterial || fTubete || fCliente) && (
+                <Button variant="ghost" size="sm" onClick={() => { setFMaterial(""); setFTubete(""); setFCliente("") }} className="shrink-0 h-9 px-2">
                   Limpar
                 </Button>
               )}
@@ -122,83 +214,69 @@ export default function EtiquetasPage() {
 
           </CardHeader>
 
-          <CardContent className="bg-muted/5 border-t border-border/50 pt-6">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {loading && (!etiquetasList || etiquetasList.length === 0) ? (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <Card key={i} className="border-border/50"><CardContent className="p-6 space-y-4"><Skeleton className="h-4 w-[120px]" /><Skeleton className="h-12 w-full" /><Skeleton className="h-4 w-full" /></CardContent></Card>
-                ))
-              ) : filtered.map((etiqueta) => (
-                <Card
-                  key={etiqueta.id}
-                  className="group hover:shadow-md transition-all cursor-pointer border-border/50 hover:border-primary/30 relative overflow-hidden"
-                  onClick={() => setDetailEtiqueta(etiqueta)}
-                >
-                  <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity pointer-events-none">
-                    <Layers className="size-24" />
-                  </div>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold text-foreground leading-tight truncate group-hover:text-primary transition-colors">
-                          {etiqueta.nome}
-                        </h3>
-                        <p className="text-[11px] text-muted-foreground font-mono mt-1 px-1.5 py-0.5 bg-muted rounded inline-block">
-                          REF: {etiqueta.codigo}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-[10px] bg-background shadow-sm shrink-0">
-                        {etiqueta.formato === "REDONDA" ? "Redonda" : "Retangular"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col gap-3">
-                      <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1.5 bg-muted/30 p-1.5 rounded-md">
-                          <Ruler className="size-3 text-primary/70" />
-                          {formatEtiquetaMedida(etiqueta)}
-                        </span>
-                        <span className="flex items-center gap-1.5 bg-muted/30 p-1.5 rounded-md">
-                          <Palette className="size-3 text-primary/70" />
-                          {etiqueta.numeroCores != null ? `${etiqueta.numeroCores} cor(es)` : "—"}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-2 pt-3 border-t border-border/50">
+          <CardContent className="p-0 border-t border-border/50">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Etiqueta</TableHead><TableHead>Empresa</TableHead><TableHead className="hidden sm:table-cell">Medida</TableHead><TableHead className="hidden lg:table-cell text-center">Cores</TableHead><TableHead className="hidden md:table-cell text-center">Tubete</TableHead><TableHead className="hidden xl:table-cell text-right">Volume Rolo</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-right pr-6">Ações</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {loading && (!etiquetasList || etiquetasList.length === 0) ? (
+                    <TableRow><TableCell colSpan={8} className="h-24 text-center text-muted-foreground"><div className="flex justify-center items-center gap-2"><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div> Carregando dados...</div></TableCell></TableRow>
+                  ) : filtered.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground"><div className="flex flex-col items-center justify-center gap-2"><Layers className="size-8 opacity-20" /><p>Nenhuma etiqueta encontrada.</p></div></TableCell></TableRow>
+                  ) : filtered.map((etiqueta) => (
+                    <TableRow
+                      key={etiqueta.id}
+                      onClick={() => setDetailEtiqueta(etiqueta)}
+                      className="hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer"
+                    >
+                      <TableCell className="max-w-[260px]">
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold">
-                            {etiqueta.unidadeVenda === "MILHEIRO" ? "Valor / Mil" : "Valor Unitário"}
-                          </span>
-                          <span className="text-xs font-bold text-primary flex items-center gap-1">
-                            {etiqueta.preco ? `R$ ${etiqueta.preco.toFixed(4)}` : "R$ 0,0000"}
-                          </span>
+                          <span className="font-medium text-[13px] text-foreground truncate">{etiqueta.nome}</span>
+                          <span className="text-[11px] text-muted-foreground font-mono">REF: {etiqueta.codigo}</span>
                         </div>
-                        <div className="flex flex-col items-end">
-                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold text-right">Volume Rolo</span>
-                          <span className="text-xs font-medium text-right">{etiqueta.quantidadePorRolo != null ? `${etiqueta.quantidadePorRolo} un` : "—"}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-end gap-1.5 pt-2">
-                        <Badge variant="secondary" className="text-[9px] bg-primary/10 text-primary hover:bg-primary/20">
-                          Tb. {etiqueta.tipoTubete}
-                        </Badge>
-                        {etiqueta.clientesIds && etiqueta.clientesIds.length > 0 && (
-                          <Badge variant="outline" className="text-[9px] border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-400">
-                            Exclusiva ({etiqueta.clientesIds.length})
-                          </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[220px]">
+                        {(etiqueta.clientesVinculados || []).length === 0 ? (
+                          <span className="text-[11px] text-muted-foreground/60 italic">Catálogo geral</span>
+                        ) : (
+                          <div className="flex flex-col">
+                            <span className="text-[12px] text-foreground truncate" title={(etiqueta.clientesVinculados || []).map(cv => cv.razaoSocial).join(", ")}>
+                              {etiqueta.clientesVinculados![0].razaoSocial}
+                            </span>
+                            {etiqueta.clientesVinculados!.length > 1 && (
+                              <span className="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
+                                +{etiqueta.clientesVinculados!.length - 1} outra(s)
+                              </span>
+                            )}
+                          </div>
                         )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {!loading && filtered.length === 0 && (
-                <div className="col-span-full flex flex-col items-center justify-center py-12 text-muted-foreground bg-background rounded-lg border border-dashed">
-                  <Layers className="size-8 opacity-20 mb-2" />
-                  <p>Nenhuma etiqueta encontrada.</p>
-                </div>
-              )}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <div className="flex flex-col">
+                          <span className="flex items-center gap-1.5 text-[12px] text-foreground"><Ruler className="size-3 text-primary/70" />{formatEtiquetaMedida(etiqueta)}</span>
+                          <span className="text-[10px] text-muted-foreground/70">{etiqueta.formato === "REDONDA" ? "Redonda" : "Retangular"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center text-[12px] text-muted-foreground">
+                        <span className="inline-flex items-center gap-1.5"><Palette className="size-3 text-primary/70" />{etiqueta.numeroCores != null ? etiqueta.numeroCores : "—"}</span>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-center">
+                        <Badge variant="secondary" className="text-[9px] bg-primary/10 text-primary hover:bg-primary/20">Tb. {etiqueta.tipoTubete}</Badge>
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell text-right text-[12px] text-muted-foreground">{etiqueta.quantidadePorRolo != null ? `${etiqueta.quantidadePorRolo} un` : "—"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-foreground text-[13px]">{etiqueta.preco ? `R$ ${etiqueta.preco.toFixed(4)}` : "R$ 0,0000"}</span>
+                          <span className="text-[10px] text-muted-foreground/70 uppercase font-semibold">{etiqueta.unidadeVenda === "MILHEIRO" ? "por mil" : "unitário"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right pr-6" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="sm" onClick={() => setDetailEtiqueta(etiqueta)} className="h-8 w-8 p-0 border border-border/50"><Eye className="size-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </CardContent>
         </Card>

@@ -21,6 +21,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles, Wallet, RotateCcw, Check } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { formatDateBR } from "@/lib/utils"
+import { parseDecimalBR } from "@/lib/masks"
+import { NumeroBRInput } from "@/components/ui/numero-br-input"
+import { UnidadeSelect } from "@/components/ui/unidade-select"
+import { unidadeDaEtiqueta } from "@/lib/unidades"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getOrcamentoById, saveOrcamento, updateOrcamentoStatus, getOrcamentos, deleteOrcamento } from "@/lib/actions/orcamentos"
 import { useAuth } from "@/lib/auth-context"
@@ -240,8 +244,8 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
   // Totalizador dinâmico na edição
   const totalGeral = itens.reduce((sum, item) => {
-    const qtd = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',', '.')) || 0 : item.quantidade
-    const preco = typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',', '.')) || 0 : item.precoUnitario
+    const qtd = parseDecimalBR(item.quantidade)
+    const preco = parseDecimalBR(item.precoUnitario)
     return sum + qtd * preco
   }, 0)
 
@@ -277,10 +281,10 @@ function OrcamentoDetailContent({ id }: { id: string }) {
           descricao: it.descricao,
           unidade: it.unidade,
           observacao: it.observacao || "",
-          quantidade: typeof it.quantidade === 'string' ? parseFloat(String(it.quantidade).replace(',', '.')) || 0 : it.quantidade,
-          precoUnitario: typeof it.precoUnitario === 'string' ? parseFloat(String(it.precoUnitario).replace(',', '.')) || 0 : it.precoUnitario,
-          total: (typeof it.quantidade === 'string' ? parseFloat(String(it.quantidade).replace(',', '.')) || 0 : it.quantidade) *
-            (typeof it.precoUnitario === 'string' ? parseFloat(String(it.precoUnitario).replace(',', '.')) || 0 : it.precoUnitario)
+          quantidade: parseDecimalBR(it.quantidade),
+          precoUnitario: parseDecimalBR(it.precoUnitario),
+          total: (parseDecimalBR(it.quantidade)) *
+            (parseDecimalBR(it.precoUnitario))
         }))
       })
 
@@ -343,7 +347,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
       etiquetaId: etq.id,
       descricao,
       quantidade: 1,
-      unidade: "unid",
+      unidade: unidadeDaEtiqueta(etq.unidadeVenda),
       precoUnitario: precoSugerido,
       observacao: ""
     }])
@@ -353,7 +357,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
   function adicionarRecompra(descricao: string, precoUnitario: number | string) {
     const nextId = Math.max(0, ...itens.map(i => i.id)) + 1
-    const finalPreco = typeof precoUnitario === 'string' ? parseFloat(precoUnitario.replace(',', '.')) || 0 : precoUnitario
+    const finalPreco = parseDecimalBR(precoUnitario)
     setItens([...itens, {
       id: nextId,
       descricao,
@@ -744,7 +748,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                               etiquetaId: etq.id,
                               descricao: desc,
                               quantidade: 1,
-                              unidade: "unid",
+                              unidade: unidadeDaEtiqueta(etq.unidadeVenda),
                               precoUnitario: precoSugerido,
                               observacao: ""
                             }])
@@ -907,40 +911,41 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold mb-1 block">Quantidade</Label>
-                      <Input
-                        type="number"
+                      <NumeroBRInput
+                        aria-label="Quantidade do item"
+                        casas={0}
                         value={item.quantidade}
-                        onChange={(e) => atualizarItem(item.id, "quantidade", e.target.value)}
+                        onValueChange={(v) => atualizarItem(item.id, "quantidade", v)}
                         className="bg-muted/20"
                       />
                     </div>
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold mb-1 block">Unidade</Label>
-                      <Input
+                      <UnidadeSelect
+                        aria-label="Unidade do item"
                         value={item.unidade}
-                        onChange={(e) => atualizarItem(item.id, "unidade", e.target.value)}
-                        className="bg-muted/20"
+                        onChange={(v) => atualizarItem(item.id, "unidade", v)}
                       />
                     </div>
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
+                      <NumeroBRInput
+                        aria-label="Valor unitário do item"
+                        casas={4}
                         value={item.precoUnitario}
-                        onChange={(e) => atualizarItem(item.id, "precoUnitario", e.target.value)}
+                        onValueChange={(v) => atualizarItem(item.id, "precoUnitario", v)}
                         className="bg-muted/20 font-mono"
                       />
                     </div>
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
-                      <div className="flex h-10 items-center justify-end rounded-md bg-primary/10 px-3 text-lg font-bold text-primary border border-primary/20">
+                      <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
                         {formatCurrency(
-                          (typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',', '.')) || 0 : item.quantidade) *
-                          (typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',', '.')) || 0 : item.precoUnitario)
+                          (parseDecimalBR(item.quantidade)) *
+                          (parseDecimalBR(item.precoUnitario))
                         )}
                       </div>
                     </div>

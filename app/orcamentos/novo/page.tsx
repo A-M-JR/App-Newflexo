@@ -22,6 +22,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ArrowLeft, Plus, Trash2, RotateCcw, ChevronDown, Tag, Sparkles, Building2, MapPin, Calculator, UserCircle, Save, Check, CreditCard, Wallet, MinusCircle, AlertCircle, CalendarIcon } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { formatCurrency, formatEtiquetaMedida } from "@/lib/utils"
+import { parseDecimalBR } from "@/lib/masks"
+import { NumeroBRInput } from "@/components/ui/numero-br-input"
+import { UnidadeSelect } from "@/components/ui/unidade-select"
+import { unidadeDaEtiqueta } from "@/lib/unidades"
 import { getClientes, getClienteById } from "@/lib/actions/clientes"
 import { getVendedores } from "@/lib/actions/vendedores"
 import { getOrcamentos, saveOrcamento } from "@/lib/actions/orcamentos"
@@ -212,7 +216,7 @@ function NovoOrcamentoContent() {
     const item = itens.find(it => it.id === id)
     if (!item) return
 
-    const qtdTotal = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',', '.')) || 0 : item.quantidade
+    const qtdTotal = parseDecimalBR(item.quantidade)
 
     if (qtd < 0) qtd = 0
     if (qtd > qtdTotal) {
@@ -266,7 +270,7 @@ function NovoOrcamentoContent() {
       id: Math.random().toString(36).substr(2, 9),
       descricao,
       quantidade: 1,
-      unidade: etq.unidadeVenda === "MILHEIRO" ? "mil" : "unid",
+      unidade: unidadeDaEtiqueta(etq.unidadeVenda),
       precoUnitario: precoSugerido,
       observacao: ""
     }])
@@ -288,9 +292,9 @@ function NovoOrcamentoContent() {
 
   const totalGeralBruto = itens.reduce((sum, item) => {
     const qtdBonificada = itensCreditoQtd[item.id] || 0
-    const qtdTotal = typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',', '.')) || 0 : item.quantidade
+    const qtdTotal = parseDecimalBR(item.quantidade)
     const qtdCobrada = Math.max(0, qtdTotal - qtdBonificada)
-    const price = typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',', '.')) || 0 : item.precoUnitario
+    const price = parseDecimalBR(item.precoUnitario)
     return sum + (qtdCobrada * price)
   }, 0)
 
@@ -368,8 +372,8 @@ function NovoOrcamentoContent() {
         etiquetasCredito: totalEtiquetasNoCredito,
         itens: itens.map(it => {
           const qCredito = itensCreditoQtd[it.id] || 0
-          const qtyTotal = typeof it.quantidade === 'string' ? parseFloat(it.quantidade.replace(',', '.')) || 0 : it.quantidade
-          const price = typeof it.precoUnitario === 'string' ? parseFloat(it.precoUnitario.replace(',', '.')) || 0 : it.precoUnitario
+          const qtyTotal = parseDecimalBR(it.quantidade)
+          const price = parseDecimalBR(it.precoUnitario)
           const itemTotal = (qtyTotal - qCredito) * price
 
           return {
@@ -769,41 +773,41 @@ function NovoOrcamentoContent() {
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold mb-1 block">Quantidade</Label>
-                      <Input
-                        type="number"
+                      <NumeroBRInput
+                        aria-label="Quantidade do item"
+                        casas={0}
                         value={item.quantidade}
-                        onChange={(e) => atualizarItem(item.id, "quantidade", e.target.value)}
+                        onValueChange={(v) => atualizarItem(item.id, "quantidade", v)}
                         className="bg-muted/20"
                       />
                     </div>
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold mb-1 block">Unidade</Label>
-                      <Input
+                      <UnidadeSelect
+                        aria-label="Unidade do item"
                         value={item.unidade}
-                        onChange={(e) => atualizarItem(item.id, "unidade", e.target.value)}
-                        className="bg-muted/20"
-                        placeholder="Ex: Milheiro, Rolo..."
+                        onChange={(v) => atualizarItem(item.id, "unidade", v)}
                       />
                     </div>
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
-                      <Input
-                        type="text"
-                        inputMode="decimal"
+                      <NumeroBRInput
+                        aria-label="Valor unitário do item"
+                        casas={4}
                         value={item.precoUnitario}
-                        onChange={(e) => atualizarItem(item.id, "precoUnitario", e.target.value)}
+                        onValueChange={(v) => atualizarItem(item.id, "precoUnitario", v)}
                         className="bg-muted/20 font-mono"
                       />
                     </div>
 
                     <div className="md:col-span-3">
                       <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
-                      <div className="flex h-10 items-center justify-end rounded-md bg-primary/10 px-3 text-lg font-bold text-primary border border-primary/20">
+                      <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
                         {formatCurrency(
-                          (typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',', '.')) || 0 : item.quantidade) *
-                          (typeof item.precoUnitario === 'string' ? parseFloat(item.precoUnitario.replace(',', '.')) || 0 : item.precoUnitario)
+                          (parseDecimalBR(item.quantidade)) *
+                          (parseDecimalBR(item.precoUnitario))
                         )}
                       </div>
                     </div>
@@ -842,7 +846,7 @@ function NovoOrcamentoContent() {
                             <Label className="text-xs font-bold text-blue-700">Abatimento do Saldo</Label>
                             <p className="text-[10px] text-muted-foreground italic">
                               {(itensCreditoQtd[item.id] || 0) > 0
-                                ? `Cobrando apenas ${((typeof item.quantidade === 'string' ? parseFloat(item.quantidade.replace(',', '.')) || 0 : item.quantidade) - (itensCreditoQtd[item.id] || 0)).toLocaleString()} un.`
+                                ? `Cobrando apenas ${((parseDecimalBR(item.quantidade)) - (itensCreditoQtd[item.id] || 0)).toLocaleString()} un.`
                                 : "Nenhuma bonificação aplicada"}
                             </p>
                           </div>

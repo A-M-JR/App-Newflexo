@@ -26,6 +26,9 @@ import {
 import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2, Edit, Save } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { formatDateBR } from "@/lib/utils"
+import { parseDecimalBR } from "@/lib/masks"
+import { NumeroBRInput } from "@/components/ui/numero-br-input"
+import { UnidadeSelect } from "@/components/ui/unidade-select"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { getPedidoById, updatePedidoStatus, cancelarPedido, savePedido } from "@/lib/actions/pedidos"
 import { useAuth } from "@/lib/auth-context"
@@ -238,7 +241,7 @@ export default function PedidoDetailPage({
   }
 
   const parseNum = (v: any) =>
-    typeof v === 'string' ? (parseFloat(v.replace(',', '.')) || 0) : (Number(v) || 0)
+    parseDecimalBR(v)
 
   const iniciarEdicao = () => {
     setEditItens((pedido.itens || []).map((it: any) => ({
@@ -837,19 +840,19 @@ export default function PedidoDetailPage({
                       </div>
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold mb-1 block">Quantidade</Label>
-                        <Input type="number" value={item.quantidade} onChange={(e) => atualizarItemEdit(item.id, "quantidade", e.target.value)} className="bg-muted/20" />
+                        <NumeroBRInput aria-label="Quantidade do item" casas={0} value={item.quantidade} onValueChange={(v) => atualizarItemEdit(item.id, "quantidade", v)} className="bg-muted/20" />
                       </div>
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold mb-1 block">Unidade</Label>
-                        <Input value={item.unidade} onChange={(e) => atualizarItemEdit(item.id, "unidade", e.target.value)} className="bg-muted/20" />
+                        <UnidadeSelect aria-label="Unidade do item" value={item.unidade} onChange={(v) => atualizarItemEdit(item.id, "unidade", v)} />
                       </div>
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
-                        <Input type="text" inputMode="decimal" value={item.precoUnitario} onChange={(e) => atualizarItemEdit(item.id, "precoUnitario", e.target.value)} className="bg-muted/20 font-mono" />
+                        <NumeroBRInput aria-label="Valor unitário do item" casas={4} value={item.precoUnitario} onValueChange={(v) => atualizarItemEdit(item.id, "precoUnitario", v)} className="bg-muted/20 font-mono" />
                       </div>
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
-                        <div className="flex h-10 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
+                        <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
                           {formatCurrency(parseNum(item.quantidade) * parseNum(item.precoUnitario))}
                         </div>
                       </div>

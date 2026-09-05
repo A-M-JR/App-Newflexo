@@ -18,6 +18,10 @@ import { useAuth } from "@/lib/auth-context"
 import { getEmpresa } from "@/lib/actions/config"
 import { Loader2 } from "lucide-react"
 
+// A cor da sidebar já vem do localStorage; a leitura no banco serve só para
+// captar mudanças e roda uma única vez por carregamento da aplicação.
+let temaSincronizado = false
+
 const breadcrumbMap: Record<string, string> = {
   clientes: "Clientes",
   etiquetas: "Catalogo de Etiquetas",
@@ -63,8 +67,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       applyTheme(savedColor)
     }
 
-    // Sincroniza com o banco
+    // Sincroniza com o banco. Roda uma vez por sessão: a cor da sidebar quase
+    // nunca muda e essa chamada competia com a consulta da própria tela em toda
+    // navegação (server actions são enfileiradas, então ela atrasava a lista).
     const syncTheme = async () => {
+      if (temaSincronizado) return
+      temaSincronizado = true
       try {
         const empresa = await getEmpresa()
         if (empresa.corSidebar && empresa.corSidebar !== savedColor) {
@@ -72,6 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           localStorage.setItem('flexo_theme_sidebar', empresa.corSidebar)
         }
       } catch (e) {
+        temaSincronizado = false // permite tentar de novo se falhou
         console.error("Erro ao sincronizar tema:", e)
       }
     }
