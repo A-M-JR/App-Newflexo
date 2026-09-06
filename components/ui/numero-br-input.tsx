@@ -8,15 +8,18 @@ import {
   maskInteiro,
   normalizarNumeroColado,
   numeroParaMascaraBR,
+  parseDecimalBR,
 } from "@/lib/masks"
 
 interface NumeroBRInputProps
-  extends Omit<React.ComponentProps<"input">, "value" | "onChange" | "type"> {
+  extends Omit<React.ComponentProps<"input">, "value" | "onChange" | "type" | "max"> {
   value: string | number | null | undefined
   /** Recebe o texto já mascarado ("1.234,56"). Converta com parseDecimalBR. */
   onValueChange: (valor: string) => void
   /** Casas decimais aceitas. 0 transforma o campo em inteiro. */
   casas?: number
+  /** Teto do valor. Digitação/colagem acima disso é ignorada. */
+  max?: number
 }
 
 /**
@@ -68,6 +71,7 @@ export function NumeroBRInput({
   value,
   onValueChange,
   casas = 2,
+  max,
   inputMode = "decimal",
   ...props
 }: NumeroBRInputProps) {
@@ -116,6 +120,14 @@ export function NumeroBRInput({
     }
 
     const mascarado = mascarar(paraMascarar)
+
+    // Teto: se o valor resultante passa do limite, ignora a alteração — o campo
+    // volta ao valor anterior (input controlado) e o cursor fica onde estava.
+    if (max != null && parseDecimalBR(mascarado) > max) {
+      cursorRef.current = null
+      onValueChange(anterior)
+      return
+    }
 
     cursorRef.current = posicaoDoCursor(paraMascarar, posBruta, mascarado)
 

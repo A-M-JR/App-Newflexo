@@ -125,6 +125,7 @@ export async function getOrcamentos(params: {
         where,
         orderBy: { id: "desc" },
         take: limit,
+        relationLoadStrategy: "join",
         select: { id: true, clienteId: true, itens: true }
       })
     ])
@@ -139,6 +140,10 @@ export async function getOrcamentos(params: {
       orderBy: { id: "desc" },
       skip: (page - 1) * limit,
       take: limit,
+      // JOIN em vez de uma query por relação: cliente/vendedor/status/_count vinham
+      // como 4 idas-e-voltas sequenciais ao Neon (~300ms só nisso). Com o
+      // relationLoadStrategy "join" o Postgres devolve tudo numa consulta só (~25ms).
+      relationLoadStrategy: "join",
       // Só as colunas que a lista mostra. Evita trafegar observações e demais
       // campos longos que ninguém usa nessa tela.
       select: {
@@ -182,6 +187,7 @@ export async function getOrcamentos(params: {
 export async function getOrcamentoById(id: number, requesterId?: number) {
   const orcamento = await prisma.orcamento.findUnique({
     where: { id },
+    relationLoadStrategy: "join",
     include: {
       cliente: true,
       vendedor: true,
@@ -248,6 +254,7 @@ export async function updateOrcamentoStatus(id: number, statusIdent: string | nu
   const updated = await prisma.orcamento.update({
     where: { id },
     data: { statusId },
+    relationLoadStrategy: "join",
     include: {
       cliente: true,
       vendedor: true,
@@ -395,6 +402,7 @@ export async function saveOrcamento(data: any, requesterId?: number) {
             })
           }
         },
+        relationLoadStrategy: "join",
         include: {
           cliente: true,
           vendedor: true,
@@ -466,6 +474,7 @@ export async function saveOrcamento(data: any, requesterId?: number) {
           })
         }
       },
+      relationLoadStrategy: "join",
       include: {
         cliente: true,
         vendedor: true,

@@ -183,9 +183,9 @@ function NovoPedidoForm() {
                             <p className="text-xs text-muted-foreground mt-0.5">{[cliente.cnpj && `CNPJ: ${cliente.cnpj}`, vendedor?.nome && `Vendedor: ${vendedor.nome}`].filter(Boolean).join(" | ")}</p>
                         </div>
                     </div>
-                    <div className="text-left md:text-right border-t md:border-t-0 md:border-l border-primary/20 pt-4 md:pt-0 md:pl-6 w-full md:w-auto">
+                    <div className="text-left md:text-right border-t md:border-t-0 md:border-l border-primary/20 pt-4 md:pt-0 md:pl-6 w-full md:w-auto min-w-0">
                         <p className="text-sm text-muted-foreground">Valor Total Orçado</p>
-                        <p className="text-2xl font-bold text-foreground">{formatCurrency(orcamento.totalGeral)}</p>
+                        <p className="text-2xl font-bold text-foreground break-words tabular-nums">{formatCurrency(orcamento.totalGeral)}</p>
                         <p className="text-xs text-muted-foreground">{orcamento.itens.length} {orcamento.itens.length === 1 ? 'item' : 'itens'} na proposta</p>
                     </div>
                 </CardContent>

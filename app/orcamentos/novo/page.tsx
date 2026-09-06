@@ -314,6 +314,14 @@ function NovoOrcamentoContent() {
 
   const totalGeral = Math.max(0, totalGeralBruto - descontoCredito)
 
+  // Tamanho da fonte do "Total Líquido" acompanha o comprimento do valor: valores
+  // normais aparecem grandes, mas um total gigante encolhe em vez de estourar o card.
+  const totalGeralStr = formatCurrency(totalGeral)
+  const totalFontClass =
+    totalGeralStr.length <= 14 ? "text-4xl" :
+    totalGeralStr.length <= 18 ? "text-3xl" :
+    totalGeralStr.length <= 24 ? "text-2xl" : "text-xl"
+
   const totalEtiquetasNoCredito = Object.values(itensCreditoQtd).reduce((sum, q) => sum + q, 0)
 
   async function handleCriarFormaPagamento() {
@@ -443,8 +451,8 @@ function NovoOrcamentoContent() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6 space-y-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-              <div className="flex-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <div className="flex-1 min-w-0 sm:min-w-[200px]">
                 <Label>Selecionar Cliente *</Label>
                 <Popover open={openCliente} onOpenChange={setOpenCliente}>
                   <PopoverTrigger asChild>
@@ -454,9 +462,11 @@ function NovoOrcamentoContent() {
                       aria-expanded={openCliente}
                       className="w-full mt-1.5 h-10 bg-muted/30 justify-between font-normal"
                     >
-                      {clienteId
-                        ? clientes.find((c) => c.id === Number(clienteId))?.razaoSocial
-                        : "Busque ou selecione um cliente..."}
+                      <span className="truncate text-left">
+                        {clienteId
+                          ? clientes.find((c) => c.id === Number(clienteId))?.razaoSocial
+                          : "Busque ou selecione um cliente..."}
+                      </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -833,20 +843,25 @@ function NovoOrcamentoContent() {
                       <NumeroBRInput
                         aria-label="Valor unitário do item"
                         casas={4}
+                        max={1_000_000_000}
                         value={item.precoUnitario}
                         onValueChange={(v) => atualizarItem(item.id, "precoUnitario", v)}
                         className="bg-muted/20 font-mono"
                       />
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-3 min-w-0">
                       <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
-                      <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
-                        {formatCurrency(
-                          (parseDecimalBR(item.quantidade)) *
-                          (parseDecimalBR(item.precoUnitario))
-                        )}
-                      </div>
+                      {(() => {
+                        const subtotalStr = formatCurrency(
+                          (parseDecimalBR(item.quantidade)) * (parseDecimalBR(item.precoUnitario))
+                        )
+                        return (
+                          <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20 min-w-0">
+                            <span className="truncate tabular-nums min-w-0" title={subtotalStr}>{subtotalStr}</span>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     <div className="md:col-span-12">
@@ -1071,14 +1086,14 @@ function NovoOrcamentoContent() {
                   <span className="text-muted-foreground">Quantidade de Itens</span>
                   <span className="font-medium bg-muted/50 px-2 rounded">{itens.length}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal Base</span>
-                  <span className="font-medium">{formatCurrency(totalGeralBruto)}</span>
+                <div className="flex justify-between items-baseline gap-2 text-sm">
+                  <span className="text-muted-foreground shrink-0">Subtotal Base</span>
+                  <span className="font-medium truncate text-right tabular-nums" title={formatCurrency(totalGeralBruto)}>{formatCurrency(totalGeralBruto)}</span>
                 </div>
                 {descontoCredito > 0 && (
-                  <div className="flex justify-between text-sm text-emerald-600 font-bold animate-in zoom-in-95">
-                    <span className="flex items-center gap-1"><MinusCircle className="size-3" /> Crédito Aplicado</span>
-                    <span>- {formatCurrency(descontoCredito)}</span>
+                  <div className="flex justify-between items-baseline gap-2 text-sm text-emerald-600 font-bold animate-in zoom-in-95">
+                    <span className="flex items-center gap-1 shrink-0"><MinusCircle className="size-3" /> Crédito Aplicado</span>
+                    <span className="truncate text-right tabular-nums" title={formatCurrency(descontoCredito)}>- {formatCurrency(descontoCredito)}</span>
                   </div>
                 )}
                 {totalEtiquetasNoCredito > 0 && (
@@ -1090,15 +1105,15 @@ function NovoOrcamentoContent() {
               </div>
 
               <div className="pt-4 flex flex-col gap-2">
-                <div className="flex justify-between items-end">
-                  <div>
+                <div className="flex justify-between items-end gap-2">
+                  <div className="min-w-0 flex-1">
                     <p className="text-[11px] text-muted-foreground uppercase font-semibold mb-1">Total Líquido</p>
                     {totalGeral === 0 && (
                       <Badge className="bg-pink-100 text-pink-700 hover:bg-pink-100 border-none text-[10px] mb-1 animate-pulse">
                         ORÇAMENTO DE BONIFICAÇÃO
                       </Badge>
                     )}
-                    <p className="text-4xl font-black text-primary truncate">{formatCurrency(totalGeral)}</p>
+                    <p className={`${totalFontClass} font-black text-primary leading-tight tabular-nums break-words`}>{totalGeralStr}</p>
                   </div>
                   {descontoCredito > 0 && (
                     <Button variant="ghost" size="icon" onClick={() => setDescontoCredito(0)} className="text-muted-foreground size-8">

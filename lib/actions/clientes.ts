@@ -73,6 +73,9 @@ export async function getClientes(params: {
     countsPromise,
     prisma.cliente.findMany({
       where,
+      // JOIN: _count (orçamentos/pedidos) e etiquetas exclusivas numa consulta só,
+      // em vez de uma ida-e-volta separada por relação.
+      relationLoadStrategy: "join",
       include: {
         ...(comEtiquetas
           ? { etiquetasExclusivas: { include: { etiqueta: true } } }
@@ -120,12 +123,14 @@ export async function getClienteById(id: number) {
     prisma.$queryRaw`SELECT * FROM "Cliente" WHERE id = ${id}` as Promise<any[]>,
     prisma.orcamento.findMany({
       where: { clienteId: id },
+      relationLoadStrategy: "join",
       include: { statusObj: true },
       orderBy: { id: 'desc' },
       take: HISTORICO_LIMITE,
     }),
     prisma.pedido.findMany({
       where: { clienteId: id },
+      relationLoadStrategy: "join",
       include: { statusObj: true },
       orderBy: { id: 'desc' },
       take: HISTORICO_LIMITE,

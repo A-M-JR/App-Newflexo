@@ -7,6 +7,7 @@ import type { Etiqueta } from "@/lib/types"
 export async function getEtiquetas() {
   const dbEtiquetas = await prisma.etiqueta.findMany({
     orderBy: { id: "desc" }, // Most recent first
+    relationLoadStrategy: "join",
     include: {
       clientesAutorizados: {
         include: {

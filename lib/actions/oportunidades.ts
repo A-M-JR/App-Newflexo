@@ -32,6 +32,7 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
                 ativo: true,
                 vendedorId: searchVendedor ? searchVendedor : undefined
             },
+            relationLoadStrategy: "join",
             select: {
                 id: true,
                 numero: true,

@@ -162,6 +162,9 @@ export async function getPedidos(params: {
       orderBy: params.apenasSla ? { prazoEntrega: 'asc' } : { id: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
+      // JOIN: cliente/vendedor/status vinham como 3 idas-e-voltas sequenciais ao
+      // Neon; num JOIN só o Postgres devolve tudo numa consulta.
+      relationLoadStrategy: "join",
       // Só as colunas que a lista mostra. A tabela Pedido tem vários campos de
       // texto longo (observações, embalagem, faturamento) que essa tela não usa.
       select: {
@@ -214,6 +217,7 @@ export async function getPedidos(params: {
 export async function getPedidoById(id: number, requesterId?: number) {
   const pedido = await prisma.pedido.findUnique({
     where: { id },
+    relationLoadStrategy: "join",
     include: {
       cliente: true,
       statusObj: true,
@@ -264,7 +268,8 @@ export async function updatePedidoStatus(id: number, statusIdent: string | numbe
   const updated = await prisma.pedido.update({
     where: { id },
     data: { statusId },
-    include: { 
+    relationLoadStrategy: "join",
+    include: {
       statusObj: true,
       cliente: true,
       vendedor: true,
@@ -446,6 +451,7 @@ export async function savePedido(data: any, requesterId?: number) {
           })
         }
       },
+      relationLoadStrategy: "join",
       include: {
         cliente: true,
         vendedor: true,
@@ -501,6 +507,7 @@ export async function savePedido(data: any, requesterId?: number) {
           })
         }
       },
+      relationLoadStrategy: "join",
       include: {
         cliente: true,
         vendedor: true,

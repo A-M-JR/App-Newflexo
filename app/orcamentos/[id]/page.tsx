@@ -249,6 +249,13 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     return sum + qtd * preco
   }, 0)
 
+  // Fonte do total encolhe conforme o valor cresce, para não estourar o card.
+  const totalGeralStr = formatCurrency(totalGeral)
+  const totalFontClass =
+    totalGeralStr.length <= 14 ? "text-4xl" :
+    totalGeralStr.length <= 18 ? "text-3xl" :
+    totalGeralStr.length <= 24 ? "text-2xl" : "text-xl"
+
   function handleConverterPedido() {
     if (pedidoExistente) {
       toast.info("Ja existe um pedido para este orcamento.", {
@@ -934,20 +941,25 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                       <NumeroBRInput
                         aria-label="Valor unitário do item"
                         casas={4}
+                        max={1_000_000_000}
                         value={item.precoUnitario}
                         onValueChange={(v) => atualizarItem(item.id, "precoUnitario", v)}
                         className="bg-muted/20 font-mono"
                       />
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-3 min-w-0">
                       <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
-                      <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
-                        {formatCurrency(
-                          (parseDecimalBR(item.quantidade)) *
-                          (parseDecimalBR(item.precoUnitario))
-                        )}
-                      </div>
+                      {(() => {
+                        const subtotalStr = formatCurrency(
+                          (parseDecimalBR(item.quantidade)) * (parseDecimalBR(item.precoUnitario))
+                        )
+                        return (
+                          <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20 min-w-0">
+                            <span className="truncate tabular-nums min-w-0" title={subtotalStr}>{subtotalStr}</span>
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     <div className="md:col-span-12 mt-1">
@@ -1107,15 +1119,15 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                   <span className="text-muted-foreground">Quantidade de Itens</span>
                   <span className="font-medium bg-muted/50 px-2 rounded">{itens.length}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal Base</span>
-                  <span className="font-medium">{formatCurrency(totalGeral)}</span>
+                <div className="flex justify-between items-baseline gap-2 text-sm">
+                  <span className="text-muted-foreground shrink-0">Subtotal Base</span>
+                  <span className="font-medium truncate text-right tabular-nums" title={formatCurrency(totalGeral)}>{formatCurrency(totalGeral)}</span>
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 min-w-0">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold mb-1">Total Geral da Proposta</p>
-                <p className="text-4xl font-black text-primary truncate">{formatCurrency(totalGeral)}</p>
+                <p className={`${totalFontClass} font-black text-primary leading-tight tabular-nums break-words`}>{totalGeralStr}</p>
               </div>
             </div>
 

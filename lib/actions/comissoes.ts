@@ -39,6 +39,9 @@ export async function getComissoes(vendedorIdParam?: number, mes?: number, ano?:
   const pedidos = await prisma.pedido.findMany({
     where,
     orderBy: { criadoEm: "desc" },
+    // JOIN: vendedor/cliente/status/formaPagamento numa consulta só, em vez de
+    // 4 idas-e-voltas por relação sobre todos os pedidos do período.
+    relationLoadStrategy: "join",
     select: {
       id: true,
       numero: true,

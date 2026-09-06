@@ -848,13 +848,18 @@ export default function PedidoDetailPage({
                       </div>
                       <div className="md:col-span-3">
                         <Label className="text-xs font-semibold mb-1 block">Valor Unitário (R$)</Label>
-                        <NumeroBRInput aria-label="Valor unitário do item" casas={4} value={item.precoUnitario} onValueChange={(v) => atualizarItemEdit(item.id, "precoUnitario", v)} className="bg-muted/20 font-mono" />
+                        <NumeroBRInput aria-label="Valor unitário do item" casas={4} max={1_000_000_000} value={item.precoUnitario} onValueChange={(v) => atualizarItemEdit(item.id, "precoUnitario", v)} className="bg-muted/20 font-mono" />
                       </div>
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-3 min-w-0">
                         <Label className="text-xs font-semibold text-primary mb-1 block">Subtotal</Label>
-                        <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20">
-                          {formatCurrency(parseNum(item.quantidade) * parseNum(item.precoUnitario))}
-                        </div>
+                        {(() => {
+                          const subtotalStr = formatCurrency(parseNum(item.quantidade) * parseNum(item.precoUnitario))
+                          return (
+                            <div className="flex h-9 items-center justify-end rounded-md bg-primary/10 px-3 text-base font-bold text-primary border border-primary/20 min-w-0">
+                              <span className="truncate tabular-nums min-w-0" title={subtotalStr}>{subtotalStr}</span>
+                            </div>
+                          )
+                        })()}
                       </div>
                       <div className="md:col-span-12">
                         <Label className="text-[11px] font-semibold text-muted-foreground uppercase mb-1 block">Observação do Item</Label>
@@ -863,9 +868,9 @@ export default function PedidoDetailPage({
                     </div>
                   </div>
                 ))}
-                <div className="flex justify-end items-center gap-3 border-t border-border/50 pt-4">
-                  <span className="text-sm font-bold text-foreground">Total R$</span>
-                  <span className="text-lg font-bold text-primary">{formatCurrency(editTotalGeral)}</span>
+                <div className="flex justify-end items-baseline gap-3 border-t border-border/50 pt-4 min-w-0">
+                  <span className="text-sm font-bold text-foreground shrink-0">Total R$</span>
+                  <span className="text-lg font-bold text-primary truncate tabular-nums text-right" title={formatCurrency(editTotalGeral)}>{formatCurrency(editTotalGeral)}</span>
                 </div>
               </div>
             ) : (
