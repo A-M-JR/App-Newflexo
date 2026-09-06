@@ -22,63 +22,61 @@ export async function getDashboardMetrics(vendedorIdParam?: number, requesterId?
 
   const searchVendedor = vendedorId ? Number(vendedorId) : null
 
-  // 1. Otimização SQL Raw para métricas do Dashboard
-  // Buscamos receita e pedidos ativos em uma única query
-  const pedidoMetrics: any[] = await prisma.$queryRaw`
-    SELECT 
-      COALESCE(SUM("totalGeral"), 0)::float as total_receita,
-      COUNT(*) FILTER (WHERE "statusId" NOT IN (SELECT id FROM "Status" WHERE "modulo" = 'pedido' AND ("nome" ILIKE '%Entregue%' OR "nome" ILIKE '%Entrega%')))::int as ativos_count
-    FROM "Pedido"
-    WHERE (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
-      AND "ativo" = TRUE
-  `
-  const pedStats = pedidoMetrics[0] || { total_receita: 0, ativos_count: 0 }
-
-  // Buscamos orçamentos aguardando aprovação (statusId 4)
-  const orcamentoMetrics: any[] = await prisma.$queryRaw`
-    SELECT COUNT(*)::int as total_orcamentos
-    FROM "Orcamento"
-    WHERE "statusId" = 4
-      AND (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
-      AND "ativo" = TRUE
-  `
-  const orcStats = orcamentoMetrics[0] || { total_orcamentos: 0 }
-
-  // Buscamos clientes inativos (mais de 40 dias sem compra e que já compraram antes)
-  const clienteMetrics: any[] = await prisma.$queryRaw`
-    SELECT COUNT(*)::int as inativos_count
-    FROM "Cliente" c
-    WHERE "ultimaCompra" < ${quarentaDiasAtras}
-      AND "ultimaCompra" IS NOT NULL
-      AND (${searchVendedor}::int IS NULL OR EXISTS (SELECT 1 FROM "Pedido" p WHERE p."clienteId" = c.id AND p."vendedorId" = ${searchVendedor}))
-  `
-  const cliStats = clienteMetrics[0] || { inativos_count: 0 }
-
-  const clientesInativosList = await prisma.cliente.findMany({
-    where: {
-      ultimaCompra: { lt: quarentaDiasAtras, not: null },
-      pedidos: searchVendedor ? { some: { vendedorId: searchVendedor } } : undefined
-    },
-    take: 15,
-    orderBy: { ultimaCompra: 'asc' },
-    select: { id: true, razaoSocial: true, ultimaCompra: true }
-  })
-
-  // Obter Chart Data - Últimos 6 meses
+  // Datas do gráfico (últimos 6 meses) — calculadas antes para entrar no Promise.all.
   const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
   const chartData = []
-  
   const baseDate = new Date()
   baseDate.setDate(1)
-  baseDate.setHours(0,0,0,0)
-
-  // Buscar agregação mensal via SQL para o Gráfico (muito mais rápido que carregar tudo)
+  baseDate.setHours(0, 0, 0, 0)
   const sixMonthsAgo = new Date(baseDate)
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
 
-  const [orcStatsMes, pedStatsMes] = await Promise.all([
-    prisma.$queryRaw`
-      SELECT 
+  // Todas as consultas do dashboard são independentes entre si (só dependem do
+  // vendedor já resolvido). Antes rodavam em série — ~6 idas-e-voltas ao Neon
+  // enfileiradas. Agora vão todas juntas num Promise.all: o tempo total passa a
+  // ser o da consulta mais lenta, não a soma de todas.
+  const [
+    pedidoMetrics,
+    orcamentoMetrics,
+    clienteMetrics,
+    clientesInativosList,
+    orcStatsMes,
+    pedStatsMes,
+    recentes,
+  ] = await Promise.all([
+    prisma.$queryRaw<any[]>`
+      SELECT
+        COALESCE(SUM("totalGeral"), 0)::float as total_receita,
+        COUNT(*) FILTER (WHERE "statusId" NOT IN (SELECT id FROM "Status" WHERE "modulo" = 'pedido' AND ("nome" ILIKE '%Entregue%' OR "nome" ILIKE '%Entrega%')))::int as ativos_count
+      FROM "Pedido"
+      WHERE (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
+        AND "ativo" = TRUE
+    `,
+    prisma.$queryRaw<any[]>`
+      SELECT COUNT(*)::int as total_orcamentos
+      FROM "Orcamento"
+      WHERE "statusId" = 4
+        AND (${searchVendedor}::int IS NULL OR "vendedorId" = ${searchVendedor})
+        AND "ativo" = TRUE
+    `,
+    prisma.$queryRaw<any[]>`
+      SELECT COUNT(*)::int as inativos_count
+      FROM "Cliente" c
+      WHERE "ultimaCompra" < ${quarentaDiasAtras}
+        AND "ultimaCompra" IS NOT NULL
+        AND (${searchVendedor}::int IS NULL OR EXISTS (SELECT 1 FROM "Pedido" p WHERE p."clienteId" = c.id AND p."vendedorId" = ${searchVendedor}))
+    `,
+    prisma.cliente.findMany({
+      where: {
+        ultimaCompra: { lt: quarentaDiasAtras, not: null },
+        pedidos: searchVendedor ? { some: { vendedorId: searchVendedor } } : undefined
+      },
+      take: 15,
+      orderBy: { ultimaCompra: 'asc' },
+      select: { id: true, razaoSocial: true, ultimaCompra: true }
+    }),
+    prisma.$queryRaw<any[]>`
+      SELECT
         EXTRACT(MONTH FROM "criadoEm")::int as mes,
         EXTRACT(YEAR FROM "criadoEm")::int as ano,
         COUNT(*)::int as count
@@ -89,8 +87,8 @@ export async function getDashboardMetrics(vendedorIdParam?: number, requesterId?
       GROUP BY ano, mes
       ORDER BY ano, mes
     `,
-    prisma.$queryRaw`
-      SELECT 
+    prisma.$queryRaw<any[]>`
+      SELECT
         EXTRACT(MONTH FROM "criadoEm")::int as mes,
         EXTRACT(YEAR FROM "criadoEm")::int as ano,
         COUNT(*)::int as count
@@ -100,8 +98,14 @@ export async function getDashboardMetrics(vendedorIdParam?: number, requesterId?
         AND "ativo" = TRUE
       GROUP BY ano, mes
       ORDER BY ano, mes
-    `
+    `,
+    // Lista dos últimos pedidos da tela.
+    getPedidos({ page: 1, limit: 10, vendedorId }),
   ])
+
+  const pedStats = pedidoMetrics[0] || { total_receita: 0, ativos_count: 0 }
+  const orcStats = orcamentoMetrics[0] || { total_orcamentos: 0 }
+  const cliStats = clienteMetrics[0] || { inativos_count: 0 }
 
   for (let i = 5; i >= 0; i--) {
     const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
@@ -117,9 +121,6 @@ export async function getDashboardMetrics(vendedorIdParam?: number, requesterId?
       conversoes: pedsMes
     })
   }
-
-  // Para mostrar a pequena lista de últimos pedidos
-  const recentes = await getPedidos({ page: 1, limit: 10, vendedorId })
 
   return {
     kpis: {

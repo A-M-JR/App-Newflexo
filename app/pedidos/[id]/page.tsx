@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2, Edit, Save } from "lucide-react"
+import { ArrowLeft, ArrowRight, FileDown, AlertTriangle, CheckCircle2, Circle, Truck, Package, Settings, MessageSquare, Plus, CreditCard, Trash2, Edit, Save, X } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { formatDateBR } from "@/lib/utils"
 import { parseDecimalBR } from "@/lib/masks"
@@ -427,8 +427,14 @@ export default function PedidoDetailPage({
                   <Save className="size-4 mr-2" />
                   {isSaving ? "Salvando..." : "Salvar Alterações"}
                 </Button>
-                <Button variant="outline" onClick={() => setIsEditing(false)} disabled={isSaving}>
-                  Cancelar
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditing(false)}
+                  disabled={isSaving}
+                  className="border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
+                >
+                  <X className="size-4 mr-2" />
+                  Cancelar edição
                 </Button>
               </>
             ) : (

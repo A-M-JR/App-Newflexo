@@ -143,7 +143,8 @@ function NovoPedidoForm() {
             toast.success("Pedido criado com sucesso!", {
                 description: `Orçamento ${orcamento.numero} foi efetivado. Número: ${resp.numero}`
             })
-            router.push("/pedidos")
+            // Abre o pedido recém-criado, em vez de voltar para a listagem.
+            router.push(resp?.id ? `/pedidos/${resp.id}` : "/pedidos")
         } catch (error) {
             console.error(error)
             toast.error("Erro ao criar pedido no banco.")

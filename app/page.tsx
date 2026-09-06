@@ -20,6 +20,7 @@ import { StatusBadge } from "@/components/ui/status-badge"
 import { getDashboardMetrics } from "@/lib/actions/dashboard"
 import { useState, useMemo } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts"
 import { useDataQuery } from "@/hooks/use-data-query"
@@ -28,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 function DashboardContent() {
   const [search, setSearch] = useState("")
+  const router = useRouter()
   const { isVendedor, vendedor, currentUser } = useAuth()
   
   // Busca a métrica otimizada já contando e fatiada pelo backend
@@ -145,7 +147,7 @@ function DashboardContent() {
                   ) : filtered.map((ped: any) => {
                     const cliente = ped.cliente
                     return (
-                      <TableRow key={ped.id} className="group hover:bg-muted/30 transition-colors">
+                      <TableRow key={ped.id} onClick={() => router.push(`/pedidos/${ped.id}`)} className="group hover:bg-muted/30 transition-colors cursor-pointer">
                         <TableCell className="font-medium font-mono text-xs text-muted-foreground group-hover:text-foreground transition-colors">{ped.numero}</TableCell>
                         <TableCell className="text-foreground max-w-[200px] truncate font-medium">{cliente?.razaoSocial || "-"}</TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{ped.vendedor?.nome || '-'}</TableCell>
@@ -159,7 +161,7 @@ function DashboardContent() {
                         <TableCell className="text-center">
                           <StatusBadge statusObj={(ped as any).statusObj} fallback={ped.status} />
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <Link href={`/pedidos/${ped.id}`}>
                             <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
                               <Eye className="size-4" /><span className="sr-only">Ver detalhes</span>
@@ -184,9 +186,9 @@ function DashboardContent() {
                 <div className="p-2 bg-primary/10 rounded-full"><DollarSign className="size-4 text-primary" /></div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{loading && !dashData ? "..." : formatCurrency(totalReceita)}</div>
+                <div className="text-2xl font-bold truncate tabular-nums" title={loading && !dashData ? undefined : formatCurrency(totalReceita)}>{loading && !dashData ? "..." : formatCurrency(totalReceita)}</div>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <ArrowUpRight className="size-3 text-emerald-500" /><span className="text-emerald-500 font-medium">+14.2%</span> no período
+                  <ArrowUpRight className="size-3 text-emerald-500 shrink-0" /><span className="text-emerald-500 font-medium">+14.2%</span> no período
                 </p>
               </CardContent>
             </Card>

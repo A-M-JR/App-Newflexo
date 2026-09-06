@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles, Wallet, RotateCcw, Check } from "lucide-react"
+import { ArrowLeft, ArrowRight, Printer, MapPin, Building2, Tag, Edit, Save, Trash2, Calculator, CheckCircle2, Send, Plus, ChevronDown, CreditCard, Sparkles, Wallet, RotateCcw, Check, X } from "lucide-react"
 import { formatCurrency } from "@/lib/mock-data"
 import { formatDateBR } from "@/lib/utils"
 import { parseDecimalBR } from "@/lib/masks"
@@ -315,6 +315,20 @@ function OrcamentoDetailContent({ id }: { id: string }) {
     }
   }
 
+  // Cancela a edição: descarta o que foi mexido e volta ao estado da última
+  // versão salva (a tela lê dos estados locais, então precisamos revertê-los).
+  function handleCancelarEdicao() {
+    if (orcamento) {
+      setStatus(orcamento.status)
+      setObservacoes(orcamento.observacoes || "")
+      setFormaPagamentoId(orcamento.formaPagamentoId?.toString() || "")
+      setPrazoEntrega(orcamento.prazoEntrega ? new Date(orcamento.prazoEntrega).toISOString().split('T')[0] : "")
+      setOcCliente(orcamento.ocCliente || "")
+      setItens((orcamento.itens || []).map((i: any) => ({ ...i, observacao: i.observacao || "" })))
+    }
+    setIsEditing(false)
+  }
+
   function atualizarItem(id: number, field: keyof typeof itens[0], value: string | number) {
     setItens(itens.map(item => item.id === id ? { ...item, [field]: value } : item))
   }
@@ -453,10 +467,21 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                 Editar Proposta
               </Button>
             ) : (
-              <Button onClick={handleSalvarEdicao} disabled={isSaving} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
-                <Save className="size-4 mr-2" />
-                {isSaving ? "Salvando..." : "Salvar Alterações"}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleCancelarEdicao}
+                  disabled={isSaving}
+                  className="w-full sm:w-auto border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
+                >
+                  <X className="size-4 mr-2" />
+                  Cancelar edição
+                </Button>
+                <Button onClick={handleSalvarEdicao} disabled={isSaving} className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white">
+                  <Save className="size-4 mr-2" />
+                  {isSaving ? "Salvando..." : "Salvar Alterações"}
+                </Button>
+              </>
             )}
 
             {cliente && !isEditing && (
@@ -1133,9 +1158,20 @@ function OrcamentoDetailContent({ id }: { id: string }) {
 
             <div className="flex flex-col gap-2 mt-auto">
               {isEditing && (
-                <Button onClick={handleSalvarEdicao} disabled={isSaving} className="w-full h-12 text-base font-bold shadow-sm bg-green-600 hover:bg-green-700 text-white" size="lg">
-                  {isSaving ? "Salvando..." : "Salvar Alterações"}
-                </Button>
+                <>
+                  <Button onClick={handleSalvarEdicao} disabled={isSaving} className="w-full h-12 text-base font-bold shadow-sm bg-green-600 hover:bg-green-700 text-white" size="lg">
+                    {isSaving ? "Salvando..." : "Salvar Alterações"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleCancelarEdicao}
+                    disabled={isSaving}
+                    className="w-full border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:hover:bg-red-950"
+                  >
+                    <X className="size-4 mr-2" />
+                    Cancelar edição
+                  </Button>
+                </>
               )}
             </div>
           </CardContent>

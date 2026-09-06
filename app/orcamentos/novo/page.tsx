@@ -382,7 +382,7 @@ function NovoOrcamentoContent() {
 
     setIsSaving(true)
     try {
-      await saveOrcamento({
+      const salvo = await saveOrcamento({
         clienteId,
         vendedorId,
         observacoes,
@@ -412,7 +412,8 @@ function NovoOrcamentoContent() {
       toast.success("Orcamento salvo com sucesso!", {
         description: `Total: ${formatCurrency(totalGeral)}`,
       })
-      router.push("/orcamentos")
+      // Vai direto para o orçamento recém-criado, em vez de voltar para a listagem.
+      router.push(salvo?.id ? `/orcamentos/${salvo.id}` : "/orcamentos")
     } catch (error) {
       console.error(error)
       toast.error("Falha ao salvar orçamento no banco de dados.")
