@@ -25,6 +25,7 @@ import { formatCurrency, formatEtiquetaMedida } from "@/lib/utils"
 import { parseDecimalBR } from "@/lib/masks"
 import { NumeroBRInput } from "@/components/ui/numero-br-input"
 import { UnidadeSelect } from "@/components/ui/unidade-select"
+import { ClienteRapidoDialog } from "@/components/cliente-rapido-dialog"
 import { unidadeDaEtiqueta } from "@/lib/unidades"
 import { getClientes, getClienteById } from "@/lib/actions/clientes"
 import { getVendedores } from "@/lib/actions/vendedores"
@@ -84,6 +85,7 @@ function NovoOrcamentoContent() {
 
   // Cadastro rápido de forma de pagamento (sem sair do orçamento)
   const [openNovaForma, setOpenNovaForma] = useState(false)
+  const [openNovoCliente, setOpenNovoCliente] = useState(false)
   const [novaFormaNome, setNovaFormaNome] = useState("")
   const [novaFormaParcelas, setNovaFormaParcelas] = useState(1)
   const [savingForma, setSavingForma] = useState(false)
@@ -180,6 +182,18 @@ function NovoOrcamentoContent() {
   const itensAnteriores = historicoOrcamentos.flatMap((o) => o.itens || [])
 
   // Auto-expand repurchase section when customer with history is selected
+  // Depois do cadastro rapido: recarrega a lista e ja deixa o novo selecionado,
+  // sem perder os itens que ja estao montados na tela.
+  const handleClienteCriado = async (novoId: number) => {
+    try {
+      const cls: any = await getClientes({ limit: 100, mode: 'full' })
+      setClientes(cls.data || [])
+    } catch {
+      // se a recarga falhar, o handleClienteChange abaixo ainda busca o cliente
+    }
+    await handleClienteChange(String(novoId))
+  }
+
   const handleClienteChange = async (id: string) => {
     const numId = Number(id)
     setClienteId(numId)
@@ -450,7 +464,20 @@ function NovoOrcamentoContent() {
                     <Command>
                       <CommandInput placeholder="Digite o nome ou CNPJ do cliente..." />
                       <CommandList>
-                        <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                        <CommandEmpty>
+                          <div className="flex flex-col items-center gap-2 py-3">
+                            <span className="text-sm text-muted-foreground">Nenhum cliente encontrado.</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => { setOpenCliente(false); setOpenNovoCliente(true) }}
+                            >
+                              <Plus className="size-3.5 mr-1.5" />
+                              Cadastrar novo
+                            </Button>
+                          </div>
+                        </CommandEmpty>
                         <CommandGroup>
                           {clientes.map((c) => (
                             <CommandItem
@@ -479,6 +506,16 @@ function NovoOrcamentoContent() {
                   </PopoverContent>
                 </Popover>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpenNovoCliente(true)}
+                className="shrink-0 h-10"
+                title="Cadastrar um cliente sem sair do orçamento"
+              >
+                <Plus className="size-4 mr-2" />
+                Novo cliente
+              </Button>
               {clienteId && itensAnteriores.length > 0 && (
                 <Button
                   variant="outline"
@@ -497,7 +534,7 @@ function NovoOrcamentoContent() {
                   {clienteSelecionado.razaoSocial}
                 </p>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <p className="font-mono">CNPJ: {clienteSelecionado.cnpj}</p>
+                  {clienteSelecionado.cnpj && <p className="font-mono">CNPJ: {clienteSelecionado.cnpj}</p>}
                   <p className="flex items-center gap-1">
                     <MapPin className="size-3 text-primary" />
                     {clienteSelecionado.endereco}, {clienteSelecionado.cidade}/{clienteSelecionado.estado}
@@ -944,6 +981,12 @@ function NovoOrcamentoContent() {
                 </SelectContent>
               </Select>
             </div>
+
+            <ClienteRapidoDialog
+              open={openNovoCliente}
+              onOpenChange={setOpenNovoCliente}
+              onCriado={handleClienteCriado}
+            />
 
             <Dialog open={openNovaForma} onOpenChange={setOpenNovaForma}>
               <DialogContent className="sm:max-w-md">

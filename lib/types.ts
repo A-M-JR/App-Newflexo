@@ -27,12 +27,14 @@ export interface Cliente {
   id: number
   razaoSocial: string
   endereco: string
-  telefone: string
-  cnpj: string
+  // Opcionais: clientes do Paraguai nao tem CNPJ/CPF nem CEP/UF.
+  telefone?: string | null
+  cnpj?: string | null
   ie?: string | null
-  cep: string
-  cidade: string
-  estado: string
+  cep?: string | null
+  cidade?: string | null
+  estado?: string | null
+  pais?: string | null
   email?: string | null
   observacoes?: string | null
   criadoEm: string

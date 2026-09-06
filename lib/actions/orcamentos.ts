@@ -302,6 +302,13 @@ export async function saveOrcamento(data: any, requesterId?: number) {
     }
   }
 
+  // O cliente e obrigatorio e a tela ja barra, mas ate aqui nao havia guarda:
+  // sem ele o Number(undefined) virava NaN e o erro que chegava ao usuario era o
+  // da chave estrangeira, cru.
+  if (!rest.clienteId || Number.isNaN(Number(rest.clienteId))) {
+    throw new Error("Selecione o cliente do orcamento.")
+  }
+
   if (!itens || !Array.isArray(itens)) {
     console.error("saveOrcamento: itens is missing or not an array", data)
     throw new Error("Os itens do orçamento são obrigatórios.")

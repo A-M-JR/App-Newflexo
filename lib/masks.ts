@@ -75,6 +75,17 @@ export function maskCEP(valor: string): string {
   return `${d.slice(0, 5)}-${d.slice(5)}`
 }
 
+/**
+ * Diz se o endereço segue o padrão brasileiro. Usado para decidir se o campo de
+ * estado recebe a máscara de UF (duas letras) ou o nome do
+ * departamento/província por extenso, já que a base atende também o Paraguai.
+ * Sem país informado, assume Brasil.
+ */
+export function ehBrasil(pais?: string | null): boolean {
+  const p = String(pais ?? "").trim().toLowerCase()
+  return p === "" || p === "brasil" || p === "br" || p === "brazil"
+}
+
 /** Duas letras maiúsculas. */
 export function maskUF(valor: string): string {
   return String(valor ?? "").replace(/[^A-Za-z]/g, "").toUpperCase().slice(0, 2)

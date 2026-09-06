@@ -20,7 +20,8 @@ import { use, useState, useEffect } from "react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
-import { maskCNPJ, maskTelefone as maskPhone, maskCEP, maskUF } from "@/lib/masks"
+import { maskCNPJ, maskTelefone as maskPhone, maskCEP, maskUF, ehBrasil } from "@/lib/masks"
+import { Switch } from "@/components/ui/switch"
 
 export default function ClienteDetailPage({
   params,
@@ -47,6 +48,7 @@ export default function ClienteDetailPage({
     numero: "",
     cidade: "",
     estado: "",
+    pais: "Brasil",
     observacoes: "",
     itensExclusivos: [] as { nome: string; preco: string | number; descricao?: string }[]
   })
@@ -82,9 +84,12 @@ export default function ClienteDetailPage({
           numero: "",
           cidade: data.cidade || "",
           estado: data.estado || "",
+          pais: data.pais || "Brasil",
           observacoes: data.observacoes || "",
           itensExclusivos: data.itensExclusivos || []
         })
+        // A tag vem do pais gravado; daqui em diante ela e controlada pelo switch.
+        setEstrangeiro(!ehBrasil(data.pais))
       }
       setLoading(false)
     })
@@ -214,23 +219,44 @@ export default function ClienteDetailPage({
     }
   }
 
+  // A tag e estado do formulario, nao deducao do pais: ao ligar, o campo Pais
+  // fica em branco para o usuario informar qual e (Paraguai, Argentina, etc.),
+  // e um pais vazio nao pode fazer a tag se desligar sozinha. Ao carregar o
+  // cadastro a tag vem do pais que esta gravado.
+  const [estrangeiro, setEstrangeiro] = useState(false)
+
+  const alternarEstrangeiro = (ligado: boolean) => {
+    setEstrangeiro(ligado)
+    setFormData(prev => ({
+      ...prev,
+      pais: ligado ? "" : "Brasil",
+      // Fora do Brasil o CEP nao se aplica e ficaria com lixo de mascara.
+      ...(ligado ? { cep: "" } : {}),
+    }))
+    setErrors({})
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     let { name, value } = e.target
 
-    if (name === "cnpj") {
+    // Fora do Brasil o documento e RUC ou equivalente: a mascara de CNPJ
+    // destruiria o numero, entao o campo passa a ser texto livre.
+    if (name === "cnpj" && !estrangeiro) {
       value = maskCNPJ(value)
       if (value.length === 18) {
         fetchCNPJ(value)
       }
     }
     if (name === "telefone" || name === "compradorTelefone") value = maskPhone(value)
-    if (name === "cep") {
+    if (name === "cep" && !estrangeiro) {
       value = maskCEP(value)
       if (value.length === 9) {
         fetchCEP(value)
       }
     }
-    if (name === "estado") value = maskUF(value)
+    // A máscara de UF (duas letras) só faz sentido no Brasil. Fora dele o campo
+    // recebe o nome da província/departamento por extenso.
+    if (name === "estado" && !estrangeiro) value = maskUF(value)
 
     setFormData(prev => ({ ...prev, [name]: value }))
     if (errors[name]) {
@@ -244,10 +270,18 @@ export default function ClienteDetailPage({
     const newErrors: Record<string, string> = {}
 
     if (!formData.razaoSocial) newErrors.razaoSocial = "Razão Social é obrigatória"
-    if (!formData.cnpj) newErrors.cnpj = "CNPJ é obrigatório"
-    if (!formData.telefone) newErrors.telefone = "Telefone é obrigatório"
-    if (!formData.cidade) newErrors.cidade = "Cidade é obrigatória"
-    if (!formData.estado) newErrors.estado = "UF é obrigatório"
+
+    if (estrangeiro) {
+      // Cliente estrangeiro: sem CNPJ, CEP ou UF. So o pais precisa constar —
+      // e precisa ser mesmo outro pais, senao o cadastro fica contraditorio.
+      if (!formData.pais?.trim()) newErrors.pais = "Informe o país do cliente"
+      else if (ehBrasil(formData.pais)) newErrors.pais = "Para cliente estrangeiro, informe um país fora do Brasil"
+    } else {
+      if (!formData.cnpj) newErrors.cnpj = "CNPJ é obrigatório"
+      if (!formData.telefone) newErrors.telefone = "Telefone é obrigatório"
+      if (!formData.cidade) newErrors.cidade = "Cidade é obrigatória"
+      if (!formData.estado) newErrors.estado = "UF é obrigatório"
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
@@ -351,9 +385,27 @@ export default function ClienteDetailPage({
                         <Label htmlFor="nomeFantasia">Nome Fantasia</Label>
                         <Input id="nomeFantasia" name="nomeFantasia" value={formData.nomeFantasia} onChange={handleChange} className="bg-muted/30" />
                       </div>
+                      <div className="sm:col-span-2 flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                        <div className="min-w-0">
+                          <Label htmlFor="estrangeiro" className="text-sm font-medium">Cliente estrangeiro</Label>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Dispensa CNPJ, CEP e UF — para clientes fora do Brasil.
+                          </p>
+                        </div>
+                        <Switch id="estrangeiro" checked={estrangeiro} onCheckedChange={alternarEstrangeiro} />
+                      </div>
+
                       <div className="space-y-2">
-                        <Label htmlFor="cnpj">CNPJ *</Label>
-                        <Input id="cnpj" name="cnpj" value={formData.cnpj} onChange={handleChange} maxLength={18} className="bg-muted/30" />
+                        <Label htmlFor="cnpj">{estrangeiro ? "Documento / RUC" : "CNPJ *"}</Label>
+                        <Input
+                          id="cnpj"
+                          name="cnpj"
+                          value={formData.cnpj}
+                          onChange={handleChange}
+                          maxLength={estrangeiro ? 30 : 18}
+                          placeholder={estrangeiro ? "80012345-6" : "00.000.000/0000-00"}
+                          className="bg-muted/30"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="ie">Inscrição Estadual</Label>
@@ -371,11 +423,16 @@ export default function ClienteDetailPage({
                       </div>
                     </CardHeader>
                     <CardContent className="grid gap-4 sm:grid-cols-12">
-                      <div className="sm:col-span-4 space-y-2">
-                        <Label htmlFor="cep">CEP *</Label>
+                      <div className="sm:col-span-3 space-y-2">
+                        <Label htmlFor="pais" className={errors.pais ? "text-destructive" : ""}>País{estrangeiro ? " *" : ""}</Label>
+                        <Input id="pais" name="pais" value={formData.pais} onChange={handleChange} maxLength={40} placeholder={estrangeiro ? "Ex: Paraguai, Argentina, Uruguai..." : "Brasil"} className="bg-muted/30" />
+                        {errors.pais && <p className="text-xs text-destructive">{errors.pais}</p>}
+                      </div>
+                      <div className="sm:col-span-3 space-y-2">
+                        <Label htmlFor="cep">CEP</Label>
                         <Input id="cep" name="cep" value={formData.cep} onChange={handleChange} maxLength={9} className="bg-muted/30" />
                       </div>
-                      <div className="sm:col-span-8 space-y-2">
+                      <div className="sm:col-span-6 space-y-2">
                         <Label htmlFor="endereco">Logradouro</Label>
                         <Input id="endereco" name="endereco" value={formData.endereco} onChange={handleChange} className="bg-muted/30" />
                       </div>
@@ -388,8 +445,16 @@ export default function ClienteDetailPage({
                         <Input id="cidade" name="cidade" value={formData.cidade} onChange={handleChange} className="bg-muted/30" />
                       </div>
                       <div className="sm:col-span-3 space-y-2">
-                        <Label>UF</Label>
-                        <Input id="estado" name="estado" value={formData.estado} onChange={handleChange} maxLength={2} className="bg-muted/30 uppercase" />
+                        <Label>{estrangeiro ? "Estado / Departamento" : "UF *"}</Label>
+                        <Input
+                          id="estado"
+                          name="estado"
+                          value={formData.estado}
+                          onChange={handleChange}
+                          maxLength={estrangeiro ? 40 : 2}
+                          placeholder={estrangeiro ? "Central" : "SP"}
+                          className={`bg-muted/30 ${estrangeiro ? "" : "uppercase"}`}
+                        />
                       </div>
                     </CardContent>
                   </Card>

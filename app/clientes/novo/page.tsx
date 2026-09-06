@@ -13,7 +13,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { saveCliente, checkClienteDuplicado } from "@/lib/actions/clientes"
 
-import { maskCNPJ, maskTelefone as maskPhone, maskCEP, maskUF } from "@/lib/masks"
+import { maskCNPJ, maskTelefone as maskPhone, maskCEP, maskUF, ehBrasil } from "@/lib/masks"
+import { Switch } from "@/components/ui/switch"
 
 export default function NovoClientePage() {
     return (
@@ -42,6 +43,7 @@ function NovoClienteContent() {
         numero: "",
         cidade: "",
         estado: "",
+        pais: "Brasil",
         observacoes: "",
         itensExclusivos: [] as { nome: string; preco: string; descricao?: string }[]
     })
@@ -193,7 +195,9 @@ function NovoClienteContent() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         let { name, value } = e.target
 
-        if (name === "cnpj") {
+        // Fora do Brasil o documento e RUC ou equivalente: a mascara de CNPJ
+        // destruiria o numero, entao o campo passa a ser texto livre.
+        if (name === "cnpj" && !estrangeiro) {
             value = maskCNPJ(value)
             const clean = value.replace(/\D/g, "")
             if (clean.length === 14) {
@@ -207,14 +211,16 @@ function NovoClienteContent() {
             }
         }
         if (name === "telefone" || name === "compradorTelefone") value = maskPhone(value)
-        if (name === "cep") {
+        if (name === "cep" && !estrangeiro) {
             value = maskCEP(value)
             // Se CEP estiver completo (9 chars com o traço), busca automático
             if (value.length === 9) {
                 fetchCEP(value)
             }
         }
-        if (name === "estado") value = maskUF(value)
+        // A mascara de UF (duas letras) so faz sentido no Brasil. Fora dele o campo
+        // recebe o nome da provincia/departamento por extenso.
+        if (name === "estado" && !estrangeiro) value = maskUF(value)
 
         setFormData(prev => ({ ...prev, [name]: value }))
         // Clear error
@@ -223,17 +229,40 @@ function NovoClienteContent() {
         }
     }
 
+    // A tag e estado do formulario, nao deducao do pais: ao ligar, o campo Pais
+    // fica em branco para o usuario informar qual e (Paraguai, Argentina, etc.),
+    // e um pais vazio nao pode fazer a tag se desligar sozinha.
+    const [estrangeiro, setEstrangeiro] = useState(false)
+
+    const alternarEstrangeiro = (ligado: boolean) => {
+        setEstrangeiro(ligado)
+        setFormData(prev => ({
+            ...prev,
+            pais: ligado ? "" : "Brasil",
+            // Fora do Brasil o CEP nao se aplica e ficaria com lixo de mascara.
+            ...(ligado ? { cep: "" } : {}),
+        }))
+        setErrors({})
+    }
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (isSaving) return
         const newErrors: Record<string, string> = {}
 
-        // Validação mock
         if (!formData.razaoSocial) newErrors.razaoSocial = "Razão Social é obrigatória"
-        if (!formData.cnpj) newErrors.cnpj = "CNPJ é obrigatório"
-        if (!formData.telefone) newErrors.telefone = "Telefone é obrigatório"
-        if (!formData.cidade) newErrors.cidade = "Cidade é obrigatória"
-        if (!formData.estado) newErrors.estado = "UF é obrigatório"
+
+        if (estrangeiro) {
+            // Cliente estrangeiro: sem CNPJ, CEP ou UF. So o pais precisa constar —
+            // e precisa ser mesmo outro pais, senao o cadastro fica contraditorio.
+            if (!formData.pais?.trim()) newErrors.pais = "Informe o país do cliente"
+            else if (ehBrasil(formData.pais)) newErrors.pais = "Para cliente estrangeiro, informe um país fora do Brasil"
+        } else {
+            if (!formData.cnpj) newErrors.cnpj = "CNPJ é obrigatório"
+            if (!formData.telefone) newErrors.telefone = "Telefone é obrigatório"
+            if (!formData.cidade) newErrors.cidade = "Cidade é obrigatória"
+            if (!formData.estado) newErrors.estado = "UF é obrigatório"
+        }
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors)
@@ -340,16 +369,28 @@ function NovoClienteContent() {
                                     />
                                 </div>
 
+                                <div className="sm:col-span-2 flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                                    <div className="min-w-0">
+                                        <Label htmlFor="estrangeiro" className="text-sm font-medium">Cliente estrangeiro</Label>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            Dispensa CNPJ, CEP e UF — para clientes fora do Brasil.
+                                        </p>
+                                    </div>
+                                    <Switch id="estrangeiro" checked={estrangeiro} onCheckedChange={alternarEstrangeiro} />
+                                </div>
+
                                 <div className="space-y-2">
-                                    <Label htmlFor="cnpj" className={errors.cnpj ? "text-destructive" : ""}>CNPJ *</Label>
+                                    <Label htmlFor="cnpj" className={errors.cnpj ? "text-destructive" : ""}>
+                                        {estrangeiro ? "Documento / RUC" : "CNPJ *"}
+                                    </Label>
                                     <Input
                                         id="cnpj"
                                         name="cnpj"
                                         value={formData.cnpj}
                                         onChange={handleChange}
-                                        maxLength={18}
+                                        maxLength={estrangeiro ? 30 : 18}
                                         className={`bg-muted/30 focus-visible:bg-background ${errors.cnpj ? "border-destructive focus-visible:ring-destructive" : ""}`}
-                                        placeholder="00.000.000/0000-00"
+                                        placeholder={estrangeiro ? "80012345-6" : "00.000.000/0000-00"}
                                     />
                                     {errors.cnpj && <p className="text-xs text-destructive">{errors.cnpj}</p>}
                                 </div>
@@ -398,8 +439,22 @@ function NovoClienteContent() {
                             </CardHeader>
                             <CardContent className="grid gap-4 sm:grid-cols-12">
 
-                                <div className="sm:col-span-4 space-y-2">
-                                    <Label htmlFor="cep">CEP *</Label>
+                                <div className="sm:col-span-3 space-y-2">
+                                    <Label htmlFor="pais" className={errors.pais ? "text-destructive" : ""}>País{estrangeiro ? " *" : ""}</Label>
+                                    <Input
+                                        id="pais"
+                                        name="pais"
+                                        value={formData.pais}
+                                        onChange={handleChange}
+                                        maxLength={40}
+                                        className={`bg-muted/30 focus-visible:bg-background ${errors.pais ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                                        placeholder={estrangeiro ? "Ex: Paraguai, Argentina, Uruguai..." : "Brasil"}
+                                    />
+                                    {errors.pais && <p className="text-xs text-destructive">{errors.pais}</p>}
+                                </div>
+
+                                <div className="sm:col-span-3 space-y-2">
+                                    <Label htmlFor="cep">CEP</Label>
                                     <Input
                                         id="cep"
                                         name="cep"
@@ -411,7 +466,7 @@ function NovoClienteContent() {
                                     />
                                 </div>
 
-                                <div className="sm:col-span-8 space-y-2">
+                                <div className="sm:col-span-6 space-y-2">
                                     <Label htmlFor="endereco">Logradouro / Rua</Label>
                                     <Input
                                         id="endereco"
@@ -436,7 +491,7 @@ function NovoClienteContent() {
                                 </div>
 
                                 <div className="sm:col-span-6 space-y-2">
-                                    <Label htmlFor="cidade" className={errors.cidade ? "text-destructive" : ""}>Cidade *</Label>
+                                    <Label htmlFor="cidade" className={errors.cidade ? "text-destructive" : ""}>Cidade{estrangeiro ? "" : " *"}</Label>
                                     <Input
                                         id="cidade"
                                         name="cidade"
@@ -449,15 +504,17 @@ function NovoClienteContent() {
                                 </div>
 
                                 <div className="sm:col-span-3 space-y-2">
-                                    <Label htmlFor="estado" className={errors.estado ? "text-destructive" : ""}>UF *</Label>
+                                    <Label htmlFor="estado" className={errors.estado ? "text-destructive" : ""}>
+                                        {estrangeiro ? "Estado / Departamento" : "UF *"}
+                                    </Label>
                                     <Input
                                         id="estado"
                                         name="estado"
                                         value={formData.estado}
                                         onChange={handleChange}
-                                        maxLength={2}
-                                        className={`bg-muted/30 focus-visible:bg-background uppercase ${errors.estado ? "border-destructive focus-visible:ring-destructive" : ""}`}
-                                        placeholder="SP"
+                                        maxLength={estrangeiro ? 40 : 2}
+                                        className={`bg-muted/30 focus-visible:bg-background ${estrangeiro ? "" : "uppercase"} ${errors.estado ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                                        placeholder={estrangeiro ? "Central" : "SP"}
                                     />
                                     {errors.estado && <p className="text-xs text-destructive">{errors.estado}</p>}
                                 </div>
@@ -480,7 +537,7 @@ function NovoClienteContent() {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="telefone" className={errors.telefone ? "text-destructive" : ""}>Telefone Principal *</Label>
+                                    <Label htmlFor="telefone" className={errors.telefone ? "text-destructive" : ""}>Telefone Principal{estrangeiro ? "" : " *"}</Label>
                                     <Input
                                         id="telefone"
                                         name="telefone"

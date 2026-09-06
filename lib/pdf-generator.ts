@@ -135,13 +135,21 @@ export async function gerarPDFPedido(pedido: Pedido, cliente: Cliente, vendedor?
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...TEXT_MUTED);
-  doc.text(`CNPJ: ${cliente.cnpj} | IE: ${cliente.ie || "Isento"}`, margin, y);
+  const docLinha = [cliente.cnpj ? `CNPJ: ${cliente.cnpj}` : null, `IE: ${cliente.ie || "Isento"}`]
+    .filter(Boolean)
+    .join(" | ");
+  doc.text(docLinha, margin, y);
 
   y += 4;
-  doc.text(`${cliente.endereco}`, margin, y);
+  if (cliente.endereco) doc.text(`${cliente.endereco}`, margin, y);
 
   y += 4;
-  doc.text(`${cliente.cidade}/${cliente.estado} - CEP: ${cliente.cep}`, margin, y);
+  const localLinha = [
+    [cliente.cidade, cliente.estado].filter(Boolean).join("/"),
+    cliente.cep ? `CEP: ${cliente.cep}` : null,
+    (cliente as any).pais && (cliente as any).pais !== "Brasil" ? (cliente as any).pais : null,
+  ].filter(Boolean).join(" - ");
+  if (localLinha) doc.text(localLinha, margin, y);
 
   const compradorNome = (pedido as any).nomeComprador || (pedido as any).comprador;
   if (compradorNome) {

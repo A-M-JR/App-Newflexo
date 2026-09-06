@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table"
 import { Search, Plus, Eye, Users, Clock, AlertTriangle, Building2 } from "lucide-react"
 import { getClientes } from "@/lib/actions/clientes"
+import { ehBrasil } from "@/lib/masks"
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -170,10 +171,19 @@ export default function ClientesPage() {
                     const numPedidos = cliente._count?.pedidos || 0
                     return (
                       <TableRow key={cliente.id} onClick={() => router.push(`/clientes/${cliente.id}`)} className="group hover:bg-muted/30 transition-colors cursor-pointer">
-                        <TableCell className="font-medium text-foreground max-w-[200px] truncate">{cliente.razaoSocial}</TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-xs">{cliente.cnpj}</TableCell>
-                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{cliente.cidade} / <span className="text-foreground">{cliente.estado}</span></TableCell>
-                        <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">{cliente.telefone}</TableCell>
+                        <TableCell className="max-w-[240px]">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground truncate">{cliente.razaoSocial}</span>
+                            {!ehBrasil(cliente.pais) && (
+                              <Badge variant="outline" className="shrink-0 text-[9px] border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-400">
+                                {cliente.pais}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-xs">{cliente.cnpj || "—"}</TableCell>
+                        <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{[cliente.cidade, cliente.estado].filter(Boolean).join(" / ") || "—"}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">{cliente.telefone || "—"}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
                             <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-900 border shadow-none">{numOrcamentos} orç.</Badge>

@@ -19,13 +19,16 @@ import { toast } from "sonner"
 
 const clienteSchema = z.object({
   razaoSocial: z.string().min(3, "Razao social obrigatoria"),
-  cnpj: z.string().min(14, "CNPJ invalido"),
+  // Documento e endereco sao opcionais: a base atende tambem o Paraguai, onde
+  // nao existe CNPJ/CPF e o endereco nao segue CEP nem UF de duas letras.
+  cnpj: z.string().optional(),
   ie: z.string().optional(),
   endereco: z.string().min(3, "Endereco obrigatorio"),
-  telefone: z.string().min(8, "Telefone obrigatorio"),
-  cep: z.string().min(8, "CEP obrigatorio"),
-  cidade: z.string().min(2, "Cidade obrigatoria"),
-  estado: z.string().min(2, "Estado obrigatorio").max(2, "Use sigla do estado"),
+  telefone: z.string().optional(),
+  cep: z.string().optional(),
+  cidade: z.string().optional(),
+  estado: z.string().max(40).optional(),
+  pais: z.string().optional(),
   observacoes: z.string().optional(),
 })
 
@@ -73,7 +76,7 @@ export function ClienteFormDialog({ open, onOpenChange }: ClienteFormDialogProps
               )}
             </div>
             <div>
-              <Label htmlFor="cnpj">CNPJ *</Label>
+              <Label htmlFor="cnpj">CNPJ / CPF / RUC</Label>
               <Input id="cnpj" placeholder="00.000.000/0000-00" {...register("cnpj")} className="mt-1" />
               {errors.cnpj && (
                 <p className="text-xs text-destructive mt-1">{errors.cnpj.message}</p>

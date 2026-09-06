@@ -271,7 +271,7 @@ export default function PedidosPage() {
                     return (
                       <TableRow key={ped.id} onClick={() => router.push(`/pedidos/${ped.id}`)} className={`hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer ${sla.class}`}>
                         <TableCell><div className="flex flex-col"><span className="font-medium font-mono text-blue-500 text-[13px]">{ped.numero}</span><span className="text-[11px] font-medium text-muted-foreground">R$ {ped.totalGeral.toFixed(2)}</span></div></TableCell>
-                        <TableCell><div className="font-medium text-[13px] text-foreground truncate">{ped.cliente?.razaoSocial}</div><div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {ped.cliente?.cnpj}</div></TableCell>
+                        <TableCell><div className="font-medium text-[13px] text-foreground truncate">{ped.cliente?.razaoSocial}</div>{ped.cliente?.cnpj && <div className="text-[11px] text-muted-foreground truncate font-mono">CNPJ: {ped.cliente.cnpj}</div>}</TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-[12px]">{ped.vendedor?.nome || "N/A"}</TableCell>
                         <TableCell className="hidden md:table-cell">
                           <div className="flex flex-col gap-1">

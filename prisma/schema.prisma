@@ -46,14 +46,18 @@ model Vendedor {
 model Cliente {
   id                    Int                    @id @default(autoincrement())
   razaoSocial           String
-  cnpj                  String                 @unique
+  // Opcionais porque a base atende tambem o Paraguai, onde nao existe CNPJ/CPF
+  // e o endereco nao segue CEP/UF. O indice unico continua valendo: o Postgres
+  // permite varios NULL num unique.
+  cnpj                  String?                @unique
   ie                    String?
   email                 String?
-  telefone              String
+  telefone              String?
   endereco              String
-  cep                   String
-  cidade                String
-  estado                String
+  cep                   String?
+  cidade                String?
+  estado                String?
+  pais                  String?                @default("Brasil")
   observacoes           String?
   ativo                 Boolean                @default(true)
   ultimaCompra          DateTime?

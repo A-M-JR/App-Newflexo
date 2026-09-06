@@ -156,7 +156,8 @@ export async function checkClienteDuplicado(cnpj: string, excludeId?: number) {
 
   const rows = await prisma.$queryRaw<any[]>`
     SELECT id, "razaoSocial" FROM "Cliente"
-    WHERE regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
+    WHERE cnpj IS NOT NULL
+      AND regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
       ${excludeId ? Prisma.sql`AND id <> ${Number(excludeId)}` : Prisma.empty}
     LIMIT 1
   `
@@ -175,20 +176,29 @@ export async function saveCliente(data: any) {
     finalEndereco = `${finalEndereco}, ${numero}`
   }
 
+  // Campo em branco vira NULL, nao string vazia: "sem informacao" precisa de uma
+  // representacao unica. E o indice unico de cnpj aceita varios NULL, mas so um
+  // unico "" — com string vazia, o segundo cliente sem documento nao salvaria.
+  const ouNulo = (v: any) => {
+    const t = typeof v === "string" ? v.trim() : v
+    return t === "" || t === undefined ? null : t
+  }
+
   const prismaData: any = {
     razaoSocial: rest.razaoSocial,
-    nomeFantasia: rest.nomeFantasia || null,
-    cnpj: rest.cnpj,
-    ie: rest.ie || null,
-    email: rest.email || null,
-    telefone: rest.telefone || "",
-    compradorNome: rest.compradorNome || null,
-    compradorTelefone: rest.compradorTelefone || null,
+    nomeFantasia: ouNulo(rest.nomeFantasia),
+    cnpj: ouNulo(rest.cnpj),
+    ie: ouNulo(rest.ie),
+    email: ouNulo(rest.email),
+    telefone: ouNulo(rest.telefone),
+    compradorNome: ouNulo(rest.compradorNome),
+    compradorTelefone: ouNulo(rest.compradorTelefone),
     endereco: finalEndereco,
-    cep: rest.cep || "",
-    cidade: rest.cidade || "",
-    estado: rest.estado || "",
-    observacoes: rest.observacoes || null,
+    cep: ouNulo(rest.cep),
+    cidade: ouNulo(rest.cidade),
+    estado: ouNulo(rest.estado),
+    pais: ouNulo(rest.pais) || "Brasil",
+    observacoes: ouNulo(rest.observacoes),
     ativo: rest.ativo !== undefined ? rest.ativo : true,
   }
 
@@ -200,7 +210,8 @@ export async function saveCliente(data: any) {
   if (cnpjDigits) {
     const existentes = await prisma.$queryRaw<any[]>`
       SELECT id FROM "Cliente"
-      WHERE regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
+      WHERE cnpj IS NOT NULL
+        AND regexp_replace(cnpj, '[^0-9]', '', 'g') = ${cnpjDigits}
         ${id ? Prisma.sql`AND id <> ${Number(id)}` : Prisma.empty}
       LIMIT 1
     `
@@ -213,24 +224,27 @@ export async function saveCliente(data: any) {
     const created = await prisma.$transaction(async (tx) => {
       // Inserção manual do Cliente via raw SQL
       const now = new Date()
-      await tx.$executeRaw`
+      const inserido = await tx.$queryRaw<{ id: number }[]>`
         INSERT INTO "Cliente" (
           "razaoSocial", "nomeFantasia", cnpj, ie, email, telefone, 
-          "compradorNome", "compradorTelefone", endereco, cep, cidade, estado, 
+          "compradorNome", "compradorTelefone", endereco, cep, cidade, estado, pais,
           observacoes, ativo, "saldoCreditoValor", "saldoCreditoEtiquetas", "criadoEm", "updatedAt"
         )
         VALUES (
           ${prismaData.razaoSocial}, ${prismaData.nomeFantasia}, ${prismaData.cnpj}, ${prismaData.ie}, 
           ${prismaData.email}, ${prismaData.telefone}, ${prismaData.compradorNome}, ${prismaData.compradorTelefone}, 
-          ${prismaData.endereco}, ${prismaData.cep}, ${prismaData.cidade}, ${prismaData.estado}, 
+          ${prismaData.endereco}, ${prismaData.cep}, ${prismaData.cidade}, ${prismaData.estado}, ${prismaData.pais},
           ${prismaData.observacoes}, ${prismaData.ativo}, 
           ${rest.saldoCreditoValor || 0}, ${rest.saldoCreditoEtiquetas || 0}, ${now}, ${now}
         )
+        RETURNING id
       `
-      
-      // Busca o ID gerado (Postgres)
-      const lastInsert = await tx.$queryRaw`SELECT id FROM "Cliente" ORDER BY id DESC LIMIT 1` as any[]
-      const newId = lastInsert[0].id
+
+      // O id vem do proprio INSERT. Antes era um "SELECT id ORDER BY id DESC
+      // LIMIT 1" depois da insercao, que devolve o id errado se outro cadastro
+      // for gravado no mesmo instante — e os itens exclusivos iriam para o
+      // cliente errado.
+      const newId = inserido[0].id
 
       for (const it of itensExclusivos) {
         await tx.$executeRaw`
@@ -268,6 +282,7 @@ export async function saveCliente(data: any) {
           "cep" = ${prismaData.cep},
           "cidade" = ${prismaData.cidade},
           "estado" = ${prismaData.estado},
+          "pais" = ${prismaData.pais},
           "observacoes" = ${prismaData.observacoes},
           "ativo" = ${prismaData.ativo},
           "saldoCreditoValor" = ${rest.saldoCreditoValor !== undefined ? rest.saldoCreditoValor : 0},

@@ -197,7 +197,7 @@ export default function OrcamentosPage() {
                   ) : orcamentosList.map((orc: any) => (
                     <TableRow key={orc.id} onClick={() => router.push(`/orcamentos/${orc.id}`)} className="hover:bg-muted/30 transition-colors border-border/30 bg-card cursor-pointer">
                       <TableCell><div className="flex flex-col"><span className="font-medium font-mono text-blue-500 text-[13px]">{orc.numero}</span><span className="text-[11px] text-muted-foreground">{new Date(orc.criadoEm).toLocaleDateString()}</span></div></TableCell>
-                      <TableCell className="max-w-[200px]"><div className="font-medium text-[13px] text-foreground truncate">{orc.cliente?.razaoSocial}</div><div className="text-[11px] text-muted-foreground truncate font-mono font-normal">CNPJ: {orc.cliente?.cnpj}</div></TableCell>
+                      <TableCell className="max-w-[200px]"><div className="font-medium text-[13px] text-foreground truncate">{orc.cliente?.razaoSocial}</div>{orc.cliente?.cnpj && <div className="text-[11px] text-muted-foreground truncate font-mono font-normal">CNPJ: {orc.cliente.cnpj}</div>}</TableCell>
                       <TableCell className="hidden sm:table-cell text-center"><Badge variant="outline" className="font-mono text-[10px]">{orc._count?.itens || 0}</Badge></TableCell>
                       <TableCell className="text-center"><StatusBadge statusObj={orc.statusObj} fallback={orc.status} /></TableCell>
                       <TableCell className="text-right font-bold text-foreground text-[13px]">{formatCurrency(orc.totalGeral)}</TableCell>

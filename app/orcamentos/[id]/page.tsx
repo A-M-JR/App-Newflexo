@@ -644,7 +644,7 @@ function OrcamentoDetailContent({ id }: { id: string }) {
                   {cliente.razaoSocial}
                 </p>
                 <p className="text-sm font-mono text-muted-foreground flex items-center gap-2">
-                  CNPJ: {cliente.cnpj} | Tel: {cliente.telefone}
+                  {[cliente.cnpj && `CNPJ: ${cliente.cnpj}`, cliente.telefone && `Tel: ${cliente.telefone}`].filter(Boolean).join(" | ")}
                 </p>
               </div>
               <div className="space-y-1 text-right md:max-w-[50%]">
