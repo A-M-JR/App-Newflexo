@@ -159,6 +159,14 @@ export function PDFDownloadQuotationButton({
       doc.setTextColor(...TEXT_MAIN)
       doc.text(cliente.razaoSocial, margin, y)
 
+      if (cliente.nomeFantasia) {
+        y += 4
+        doc.setFontSize(8)
+        doc.setFont('helvetica', 'italic')
+        doc.setTextColor(...TEXT_MUTED)
+        doc.text(cliente.nomeFantasia, margin, y)
+      }
+
       y += 4
       doc.setFontSize(8)
       doc.setFont('helvetica', 'normal')

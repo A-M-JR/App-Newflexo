@@ -26,6 +26,7 @@ export interface Vendedor {
 export interface Cliente {
   id: number
   razaoSocial: string
+  nomeFantasia?: string | null
   endereco: string
   // Opcionais: clientes do Paraguai nao tem CNPJ/CPF nem CEP/UF.
   telefone?: string | null
@@ -48,6 +49,7 @@ export interface Cliente {
 export interface ClienteVinculado {
   id: number
   razaoSocial: string
+  nomeFantasia?: string | null
   preco?: number | null
 }
 

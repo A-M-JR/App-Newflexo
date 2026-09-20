@@ -89,6 +89,7 @@ export async function getPedidos(params: {
     where.OR = [
       { numero: { contains: params.search, mode: "insensitive" } },
       { cliente: { razaoSocial: { contains: params.search, mode: "insensitive" } } },
+      { cliente: { nomeFantasia: { contains: params.search, mode: "insensitive" } } },
     ]
   }
   if (params.apenasSla) {
@@ -130,7 +131,7 @@ export async function getPedidos(params: {
       p."numero" ILIKE ${searchPattern}
       OR EXISTS (
         SELECT 1 FROM "Cliente" c
-        WHERE c.id = p."clienteId" AND c."razaoSocial" ILIKE ${searchPattern}
+        WHERE c.id = p."clienteId" AND (c."razaoSocial" ILIKE ${searchPattern} OR c."nomeFantasia" ILIKE ${searchPattern})
       )
     )`)
   }
@@ -178,7 +179,7 @@ export async function getPedidos(params: {
         clienteId: true,
         vendedorId: true,
         statusId: true,
-        cliente: { select: { razaoSocial: true, cnpj: true } },
+        cliente: { select: { razaoSocial: true, nomeFantasia: true, cnpj: true } },
         vendedor: { select: { nome: true } },
         statusObj: true,
       }

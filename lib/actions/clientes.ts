@@ -38,13 +38,14 @@ export async function getClientes(params: {
       COUNT(*) FILTER (WHERE "ultimaCompra" < ${sessentaDiasAtras} OR ("ultimaCompra" IS NULL AND "criadoEm" < ${sessentaDiasAtras}))::int as sem_compra_60,
       COUNT(*) FILTER (WHERE ${filterSql})::int as total_filtrado
     FROM "Cliente"
-    WHERE ("razaoSocial" ILIKE ${searchPattern} OR "cnpj" ILIKE ${searchPattern} OR "cidade" ILIKE ${searchPattern})
+    WHERE ("razaoSocial" ILIKE ${searchPattern} OR "nomeFantasia" ILIKE ${searchPattern} OR "cnpj" ILIKE ${searchPattern} OR "cidade" ILIKE ${searchPattern})
   `
 
   // 2. Busca dos dados via Prisma para garantir integridade das relações
   const where: Prisma.ClienteWhereInput = {
     OR: [
       { razaoSocial: { contains: search, mode: 'insensitive' } },
+      { nomeFantasia: { contains: search, mode: 'insensitive' } },
       { cnpj: { contains: search, mode: 'insensitive' } },
       { cidade: { contains: search, mode: 'insensitive' } },
     ],

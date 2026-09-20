@@ -190,6 +190,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="razaoSocial">Razão Social</Label>
                                 <Input
                                     id="razaoSocial"
+                                    autoComplete="off"
                                     value={empresa.razaoSocial}
                                     onChange={(e) => setEmpresa({ ...empresa, razaoSocial: e.target.value })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -199,6 +200,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="nomeFantasia">Nome Fantasia</Label>
                                 <Input
                                     id="nomeFantasia"
+                                    autoComplete="off"
                                     value={empresa.nomeFantasia}
                                     onChange={(e) => setEmpresa({ ...empresa, nomeFantasia: e.target.value })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -209,6 +211,7 @@ function ConfiguracoesForm() {
                                 <div className="flex gap-2">
                                     <Input
                                         id="cnpj"
+                                        autoComplete="off"
                                         value={empresa.cnpj}
                                         onChange={(e) => {
                                             const formatted = formatCNPJ(e.target.value)
@@ -235,6 +238,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="inscricaoEstadual">Inscrição Estadual (Opcional)</Label>
                                 <Input
                                     id="inscricaoEstadual"
+                                    autoComplete="off"
                                     value={empresa.inscricaoEstadual || ""}
                                     onChange={(e) => {
                                         // Remove letras para deixar só números, pontos e traços, que são comuns em I.E.
@@ -249,6 +253,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="telefone">Telefone Comercial</Label>
                                 <Input
                                     id="telefone"
+                                    autoComplete="off"
                                     value={empresa.telefone}
                                     onChange={(e) => setEmpresa({ ...empresa, telefone: formatPhone(e.target.value) })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -260,6 +265,7 @@ function ConfiguracoesForm() {
                                 <Input
                                     id="email"
                                     type="email"
+                                    autoComplete="off"
                                     value={empresa.email}
                                     onChange={(e) => setEmpresa({ ...empresa, email: e.target.value })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -281,6 +287,7 @@ function ConfiguracoesForm() {
                                 <div className="flex gap-2">
                                     <Input
                                         id="cep"
+                                        autoComplete="off"
                                         value={empresa.endereco.cep}
                                         onChange={(e) => {
                                             const formatted = formatCEP(e.target.value)
@@ -307,6 +314,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="logradouro">Rua/Avenida</Label>
                                 <Input
                                     id="logradouro"
+                                    autoComplete="off"
                                     value={empresa.endereco.logradouro}
                                     onChange={(e) => setEmpresa({ ...empresa, endereco: { ...empresa.endereco, logradouro: e.target.value } })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -316,6 +324,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="numero">Número</Label>
                                 <Input
                                     id="numero"
+                                    autoComplete="off"
                                     value={empresa.endereco.numero}
                                     onChange={(e) => setEmpresa({ ...empresa, endereco: { ...empresa.endereco, numero: e.target.value } })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -325,6 +334,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="complemento">Complemento</Label>
                                 <Input
                                     id="complemento"
+                                    autoComplete="off"
                                     value={empresa.endereco.complemento || ""}
                                     onChange={(e) => setEmpresa({ ...empresa, endereco: { ...empresa.endereco, complemento: e.target.value } })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -334,6 +344,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="bairro">Bairro</Label>
                                 <Input
                                     id="bairro"
+                                    autoComplete="off"
                                     value={empresa.endereco.bairro}
                                     onChange={(e) => setEmpresa({ ...empresa, endereco: { ...empresa.endereco, bairro: e.target.value } })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -343,6 +354,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="cidade">Cidade</Label>
                                 <Input
                                     id="cidade"
+                                    autoComplete="off"
                                     value={empresa.endereco.cidade}
                                     onChange={(e) => setEmpresa({ ...empresa, endereco: { ...empresa.endereco, cidade: e.target.value } })}
                                     className="bg-muted/50 focus-visible:bg-background"
@@ -352,6 +364,7 @@ function ConfiguracoesForm() {
                                 <Label htmlFor="estado">Estado (UF)</Label>
                                 <Input
                                     id="estado"
+                                    autoComplete="off"
                                     value={empresa.endereco.estado}
                                     maxLength={2}
                                     onChange={(e) => setEmpresa({ ...empresa, endereco: { ...empresa.endereco, estado: e.target.value.toUpperCase() } })}

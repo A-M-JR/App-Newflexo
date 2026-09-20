@@ -124,12 +124,23 @@ export async function gerarPDFPedido(pedido: Pedido, cliente: Cliente, vendedor?
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...TEXT_MUTED);
   doc.text("FATURAR PARA / DESTINATÁRIO:", margin, y);
+  // Guarda a posição da label para alinhar o bloco comercial da direita,
+  // independente de quantas linhas o bloco do cliente tiver (nome fantasia, A/C, etc).
+  const yClienteLabel = y;
 
   y += 5;
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...TEXT_MAIN);
   doc.text(cliente.razaoSocial, margin, y);
+
+  if ((cliente as any).nomeFantasia) {
+    y += 4;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...TEXT_MUTED);
+    doc.text((cliente as any).nomeFantasia, margin, y);
+  }
 
   y += 4;
   doc.setFontSize(8);
@@ -159,7 +170,7 @@ export async function gerarPDFPedido(pedido: Pedido, cliente: Cliente, vendedor?
   }
 
   // Bloco Comercial (Direita)
-  let yRight = y - 21; // Rewind back up to align with Faturar Para
+  let yRight = yClienteLabel; // Alinha com o topo do bloco "Faturar Para"
   doc.setFontSize(7);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...TEXT_MUTED);

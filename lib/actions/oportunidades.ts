@@ -41,7 +41,7 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
                 prazoEntrega: true,
                 totalGeral: true,
                 statusObj: { select: { nome: true } },
-                cliente: { select: { razaoSocial: true } },
+                cliente: { select: { razaoSocial: true, nomeFantasia: true } },
             }
         }),
 
@@ -65,6 +65,7 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
             select: {
                 id: true,
                 razaoSocial: true,
+                nomeFantasia: true,
                 telefone: true,
                 ultimaCompra: true,
                 criadoEm: true,
@@ -123,6 +124,7 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
         return {
             id: c.id,
             razaoSocial: c.razaoSocial,
+            nomeFantasia: c.nomeFantasia,
             telefone: c.telefone,
             ultimaCompra: c.ultimaCompra,
             ultimoOrcamento: ultimoOrcamento,
@@ -138,6 +140,7 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
     }).map(c => ({
         id: c.id,
         razaoSocial: c.razaoSocial,
+        nomeFantasia: c.nomeFantasia,
         criadoEm: c.criadoEm
     }))
 
@@ -152,6 +155,7 @@ export async function getOportunidadesData(vendedorIdParam?: number, requesterId
             id: p.id,
             numero: p.numero,
             cliente: p.cliente?.razaoSocial,
+            clienteNomeFantasia: p.cliente?.nomeFantasia || null,
             prazo: p.prazoEntrega,
             total: p.totalGeral,
             status: p.statusObj?.nome,

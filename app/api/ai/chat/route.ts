@@ -126,11 +126,11 @@ const AI_TOOLS = [
         type: "function",
         function: {
             name: "consultar_clientes",
-            description: "Busca a base oficial de clientes no banco de dados. Pode ser por nome ou buscar todos.",
+            description: "Busca a base oficial de clientes no banco de dados. Pode ser por razão social, nome fantasia, CNPJ ou buscar todos.",
             parameters: {
                 type: "object",
                 properties: {
-                    termo: { type: "string", description: "Opcional: Nome ou razão social para filtrar" }
+                    termo: { type: "string", description: "Opcional: Razão social, nome fantasia ou CNPJ para filtrar" }
                 }
             }
         }

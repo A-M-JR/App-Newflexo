@@ -240,9 +240,12 @@ export default function EtiquetasPage() {
                           <span className="text-[11px] text-muted-foreground/60 italic">Catálogo geral</span>
                         ) : (
                           <div className="flex flex-col">
-                            <span className="text-[12px] text-foreground truncate" title={(etiqueta.clientesVinculados || []).map(cv => cv.razaoSocial).join(", ")}>
+                            <span className="text-[12px] text-foreground truncate" title={(etiqueta.clientesVinculados || []).map(cv => cv.nomeFantasia ? `${cv.razaoSocial} (${cv.nomeFantasia})` : cv.razaoSocial).join(", ")}>
                               {etiqueta.clientesVinculados![0].razaoSocial}
                             </span>
+                            {etiqueta.clientesVinculados![0].nomeFantasia && (
+                              <span className="text-[10px] text-muted-foreground truncate">{etiqueta.clientesVinculados![0].nomeFantasia}</span>
+                            )}
                             {etiqueta.clientesVinculados!.length > 1 && (
                               <span className="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
                                 +{etiqueta.clientesVinculados!.length - 1} outra(s)

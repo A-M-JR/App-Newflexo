@@ -138,7 +138,8 @@ function NovoOrcamentoContent() {
       const match = clientes.find(c => {
         const cnpjMatch = c.cnpj && c.cnpj.replace(/\D/g, '').includes(searchNormalized) && searchNormalized.length > 5
         const nameMatch = c.razaoSocial.toLowerCase().includes(searchName)
-        return cnpjMatch || nameMatch
+        const fantasiaMatch = c.nomeFantasia && c.nomeFantasia.toLowerCase().includes(searchName)
+        return cnpjMatch || nameMatch || fantasiaMatch
       })
 
       if (match && clienteId !== match.id) {
@@ -473,7 +474,7 @@ function NovoOrcamentoContent() {
                   </PopoverTrigger>
                   <PopoverContent className="w-[400px] p-0" align="start">
                     <Command>
-                      <CommandInput placeholder="Digite o nome ou CNPJ do cliente..." />
+                      <CommandInput placeholder="Digite o nome, nome fantasia ou CNPJ do cliente..." />
                       <CommandList>
                         <CommandEmpty>
                           <div className="flex flex-col items-center gap-2 py-3">
@@ -493,7 +494,7 @@ function NovoOrcamentoContent() {
                           {clientes.map((c) => (
                             <CommandItem
                               key={c.id}
-                              value={`${c.razaoSocial} ${c.cnpj}`}
+                              value={`${c.razaoSocial} ${c.nomeFantasia || ""} ${c.cnpj}`}
                               onSelect={() => {
                                 handleClienteChange(c.id.toString())
                                 setOpenCliente(false)
@@ -507,6 +508,9 @@ function NovoOrcamentoContent() {
                               />
                               <div className="flex flex-col">
                                 <span>{c.razaoSocial}</span>
+                                {c.nomeFantasia && (
+                                  <span className="text-[11px] text-muted-foreground">{c.nomeFantasia}</span>
+                                )}
                                 <span className="text-[10px] text-muted-foreground">{c.cnpj}</span>
                               </div>
                             </CommandItem>
@@ -544,6 +548,9 @@ function NovoOrcamentoContent() {
                 <p className="text-base font-semibold text-foreground leading-tight">
                   {clienteSelecionado.razaoSocial}
                 </p>
+                {clienteSelecionado.nomeFantasia && (
+                  <p className="text-sm text-muted-foreground leading-tight -mt-1">{clienteSelecionado.nomeFantasia}</p>
+                )}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   {clienteSelecionado.cnpj && <p className="font-mono">CNPJ: {clienteSelecionado.cnpj}</p>}
                   <p className="flex items-center gap-1">

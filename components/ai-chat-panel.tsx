@@ -171,7 +171,7 @@ export function AIChatPanel() {
             else if (name === 'consultar_clientes') {
                 const res = await getClientes({ limit: 100, mode: 'full' })
                 const clientes = res.data
-                const filtrados = args.termo ? clientes.filter((c: any) => c.razaoSocial.toLowerCase().includes(args.termo.toLowerCase()) || (c.cnpj && c.cnpj.includes(args.termo))) : clientes.slice(0, 5)
+                const filtrados = args.termo ? clientes.filter((c: any) => c.razaoSocial.toLowerCase().includes(args.termo.toLowerCase()) || (c.nomeFantasia && c.nomeFantasia.toLowerCase().includes(args.termo.toLowerCase())) || (c.cnpj && c.cnpj.includes(args.termo))) : clientes.slice(0, 5)
                 
                 let resposta = `Busca de clientes por "${args.termo || 'Recentes'}":\n\n`
                 if (filtrados.length === 0) {

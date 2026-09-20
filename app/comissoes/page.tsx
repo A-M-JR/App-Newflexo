@@ -296,8 +296,9 @@ export default function ComissoesPage() {
                                         <ChevronRight className="size-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                                       </Link>
                                     </TableCell>
-                                    <TableCell className="text-foreground max-w-[180px] truncate">
-                                      {c.clienteNome}
+                                    <TableCell className="text-foreground max-w-[180px]">
+                                      <div className="truncate">{c.clienteNome}</div>
+                                      {c.clienteNomeFantasia && <div className="text-[11px] text-muted-foreground truncate">{c.clienteNomeFantasia}</div>}
                                     </TableCell>
                                     <TableCell>
                                       <div className="flex flex-col">

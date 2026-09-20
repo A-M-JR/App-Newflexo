@@ -280,7 +280,10 @@ export function EtiquetaDetailDialog({
                             i < etiqueta.clientesVinculados!.length - 1 ? "border-b border-border/40" : ""
                           }`}
                         >
-                          <span className="min-w-0 break-words font-medium text-foreground">{cv.razaoSocial}</span>
+                          <span className="min-w-0 break-words font-medium text-foreground">
+                            {cv.razaoSocial}
+                            {cv.nomeFantasia && <span className="block text-[11px] font-normal text-muted-foreground">{cv.nomeFantasia}</span>}
+                          </span>
                           <span className="whitespace-nowrap text-right font-bold tabular-nums text-primary">
                             R$ {formatPreco(cv.preco ?? etiqueta.preco)}
                           </span>

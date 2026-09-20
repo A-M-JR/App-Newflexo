@@ -73,7 +73,7 @@ export async function getDashboardMetrics(vendedorIdParam?: number, requesterId?
       },
       take: 15,
       orderBy: { ultimaCompra: 'asc' },
-      select: { id: true, razaoSocial: true, ultimaCompra: true }
+      select: { id: true, razaoSocial: true, nomeFantasia: true, ultimaCompra: true }
     }),
     prisma.$queryRaw<any[]>`
       SELECT

@@ -12,7 +12,7 @@ export async function getEtiquetas() {
       clientesAutorizados: {
         include: {
           cliente: {
-            select: { id: true, razaoSocial: true }
+            select: { id: true, razaoSocial: true, nomeFantasia: true }
           }
         }
       }
@@ -29,6 +29,7 @@ export async function getEtiquetas() {
     clientesVinculados: e.clientesAutorizados.map(ca => ({
       id: ca.clienteId,
       razaoSocial: ca.cliente.razaoSocial,
+      nomeFantasia: ca.cliente.nomeFantasia,
       preco: (ca as any).preco
     }))
   }))

@@ -234,6 +234,7 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
     if (!dbClientes) return []
     return dbClientes.filter(c =>
       c.razaoSocial.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.nomeFantasia && c.nomeFantasia.toLowerCase().includes(searchTerm.toLowerCase())) ||
       c.cnpj.includes(searchTerm)
     )
   }, [dbClientes, searchTerm])
@@ -495,8 +496,11 @@ export function EtiquetaFormDialog({ open, onOpenChange, etiquetaToEdit, onSucce
                         <div className="border border-border/50 rounded-md max-h-32 overflow-y-auto bg-background/80 shadow-md">
                           {filteredClientes.map(cliente => (
                             <button key={cliente.id} type="button" onClick={() => toggleCliente(cliente.id)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-primary/10">
-                              <span className="truncate">{cliente.razaoSocial}</span>
-                              {selectedClientes.some(c => c.id === cliente.id) && <Check className="size-3 text-primary" />}
+                              <span className="truncate text-left">
+                                {cliente.razaoSocial}
+                                {cliente.nomeFantasia && <span className="block text-[10px] text-muted-foreground">{cliente.nomeFantasia}</span>}
+                              </span>
+                              {selectedClientes.some(c => c.id === cliente.id) && <Check className="size-3 text-primary shrink-0" />}
                             </button>
                           ))}
                           {filteredClientes.length === 0 && (

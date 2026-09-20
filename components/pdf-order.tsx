@@ -56,6 +56,12 @@ export function PDFOrder({ pedido, cliente, vendedor }: PDFOrderProps) {
             <span className="font-semibold text-gray-600">Empresa:</span>
             <span className="ml-2 text-gray-900">{cliente.razaoSocial}</span>
           </p>
+          {cliente.nomeFantasia && (
+            <p className="text-sm mb-1">
+              <span className="font-semibold text-gray-600">Nome Fantasia:</span>
+              <span className="ml-2 text-gray-900">{cliente.nomeFantasia}</span>
+            </p>
+          )}
           <p className="text-sm mb-1">
             <span className="font-semibold text-gray-600">Contato:</span>
             <span className="ml-2 text-gray-900">-</span>

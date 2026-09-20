@@ -181,6 +181,7 @@ function NovoPedidoForm() {
                         <div>
                             <p className="text-sm font-semibold text-foreground uppercase tracking-wider mb-1">Cliente Vinculado</p>
                             <p className="text-base font-bold text-primary">{cliente.razaoSocial}</p>
+                            {cliente.nomeFantasia && <p className="text-xs text-muted-foreground mt-0.5">{cliente.nomeFantasia}</p>}
                             <p className="text-xs text-muted-foreground mt-0.5">{[cliente.cnpj && `CNPJ: ${cliente.cnpj}`, vendedor?.nome && `Vendedor: ${vendedor.nome}`].filter(Boolean).join(" | ")}</p>
                         </div>
                     </div>

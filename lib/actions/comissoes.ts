@@ -50,7 +50,7 @@ export async function getComissoes(vendedorIdParam?: number, mes?: number, ano?:
       vendedorId: true,
       formaPagamento: true,
       vendedor: { select: { id: true, nome: true, comissao: true } },
-      cliente: { select: { id: true, razaoSocial: true } },
+      cliente: { select: { id: true, razaoSocial: true, nomeFantasia: true } },
       statusObj: true,
       formaPagamentoObj: true,
       // 'itens' não entra aqui: a comissão é calculada sobre ped.totalGeral, então
@@ -94,6 +94,7 @@ export async function getComissoes(vendedorIdParam?: number, mes?: number, ano?:
         numero: ped.numero,
         criadoEm: ped.criadoEm.toISOString(),
         clienteNome: ped.cliente?.razaoSocial || "Desconhecido",
+        clienteNomeFantasia: ped.cliente?.nomeFantasia || null,
         vendedorNome: ped.vendedor?.nome || "Sem Vendedor",
         vendedorId: ped.vendedorId,
         status: ped.statusObj?.nome || "Desconhecido",

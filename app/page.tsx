@@ -149,7 +149,7 @@ function DashboardContent() {
                     return (
                       <TableRow key={ped.id} onClick={() => router.push(`/pedidos/${ped.id}`)} className="group hover:bg-muted/30 transition-colors cursor-pointer">
                         <TableCell className="font-medium font-mono text-xs text-muted-foreground group-hover:text-foreground transition-colors">{ped.numero}</TableCell>
-                        <TableCell className="text-foreground max-w-[200px] truncate font-medium">{cliente?.razaoSocial || "-"}</TableCell>
+                        <TableCell className="text-foreground max-w-[200px] font-medium"><div className="truncate">{cliente?.razaoSocial || "-"}</div>{cliente?.nomeFantasia && <div className="text-[12px] text-muted-foreground font-normal truncate">{cliente.nomeFantasia}</div>}</TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{ped.vendedor?.nome || '-'}</TableCell>
                         <TableCell className="hidden lg:table-cell">
                           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -252,6 +252,7 @@ function DashboardContent() {
                       <div key={cliente.id} className="flex items-center justify-between gap-4 py-2 border-b border-border/50 last:border-0 hover:bg-muted/30 p-2 rounded-md transition-colors">
                         <div className="flex flex-col flex-1 min-w-0">
                           <span className="text-sm font-medium tracking-tight truncate">{cliente.razaoSocial}</span>
+                          {cliente.nomeFantasia && <span className="text-[12px] text-muted-foreground truncate">{cliente.nomeFantasia}</span>}
                           <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-1"><Clock className="size-3" /><span>Última Compra: {dataCompra.toLocaleDateString('pt-BR')}</span></div>
                         </div>
                         <Badge variant="outline" className="text-orange-600 border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950 text-[10px] whitespace-nowrap">{diasInt} dias</Badge>

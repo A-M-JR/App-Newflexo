@@ -137,7 +137,7 @@ export default function ClientesPage() {
               <div className="relative flex-1 min-w-0 max-w-full sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar por razão social, CNPJ ou cidade..."
+                  placeholder="Buscar por razão social, nome fantasia, CNPJ ou cidade..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9 bg-muted/50 focus-visible:bg-background border-border"
@@ -180,6 +180,7 @@ export default function ClientesPage() {
                               </Badge>
                             )}
                           </div>
+                          {cliente.nomeFantasia && <div className="text-[12px] text-muted-foreground truncate">{cliente.nomeFantasia}</div>}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-muted-foreground font-mono text-xs">{cliente.cnpj || "—"}</TableCell>
                         <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">{[cliente.cidade, cliente.estado].filter(Boolean).join(" / ") || "—"}</TableCell>

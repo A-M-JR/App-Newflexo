@@ -412,6 +412,7 @@ export default function OportunidadesPage() {
                                                 <TableCell className="text-sm font-medium">
                                                     <div className="flex flex-col">
                                                         <span>{c.razaoSocial}</span>
+                                                        {c.nomeFantasia && <span className="text-[11px] text-muted-foreground">{c.nomeFantasia}</span>}
                                                         <span className="text-[10px] text-muted-foreground">{c.telefone}</span>
                                                     </div>
                                                 </TableCell>
@@ -471,6 +472,7 @@ export default function OportunidadesPage() {
                                 <div key={c.id} className="p-3 rounded-xl border border-border bg-card/30 flex items-center justify-between group hover:border-primary/30 transition-all">
                                     <div className="flex flex-col min-w-0">
                                         <span className="text-xs font-bold truncate">{c.razaoSocial}</span>
+                                        {c.nomeFantasia && <span className="text-[10px] text-muted-foreground truncate">{c.nomeFantasia}</span>}
                                         <span className="text-[10px] text-muted-foreground">Cadastrado em {new Date(c.criadoEm).toLocaleDateString('pt-BR')}</span>
                                     </div>
                                     <Link href={`/clientes/${c.id}`}>
@@ -509,8 +511,9 @@ export default function OportunidadesPage() {
                                             {p.atrasado ? 'ATRASADO' : 'NO PRAZO'}
                                         </Badge>
                                     </div>
-                                    <p className="text-sm font-bold truncate mb-1">{p.cliente}</p>
-                                    <div className="flex items-center gap-2 mb-3">
+                                    <p className="text-sm font-bold truncate">{p.cliente}</p>
+                                    {p.clienteNomeFantasia && <p className="text-[11px] text-muted-foreground truncate mb-1">{p.clienteNomeFantasia}</p>}
+                                    <div className="flex items-center gap-2 mb-3 mt-1">
                                         <Badge variant="secondary" className="text-[9px] px-1.5 h-4 bg-muted/50 border-0">{p.status}</Badge>
                                     </div>
                                     <div className="flex justify-between items-center mt-auto pt-2 border-t border-border/50">

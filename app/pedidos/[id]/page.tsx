@@ -582,6 +582,7 @@ export default function PedidoDetailPage({
                     <div>
                       <h4 className="text-xs text-muted-foreground uppercase font-semibold tracking-wider mb-1">Empresa Destinatária</h4>
                       <p className="text-base font-semibold text-foreground">{cliente.razaoSocial}</p>
+                      {cliente.nomeFantasia && <p className="text-sm text-muted-foreground">{cliente.nomeFantasia}</p>}
                       <p className="text-sm font-mono text-muted-foreground mt-0.5">{[cliente.cnpj && `CNPJ: ${cliente.cnpj}`, cliente.ie && `IE: ${cliente.ie}`].filter(Boolean).join(" | ")}</p>
                     </div>
                     <div className="flex gap-4">
