@@ -55,7 +55,14 @@ export default function ClienteDetailPage({
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
-  
+
+  // A tag e estado do formulario, nao deducao do pais: ao ligar, o campo Pais
+  // fica em branco para o usuario informar qual e (Paraguai, Argentina, etc.),
+  // e um pais vazio nao pode fazer a tag se desligar sozinha. Ao carregar o
+  // cadastro a tag vem do pais que esta gravado.
+  // Precisa ficar antes dos returns de loading: o useEffect chama setEstrangeiro.
+  const [estrangeiro, setEstrangeiro] = useState(false)
+
   // Controle de Créditos
   const [movimentacoes, setMovimentacoes] = useState<any[]>([])
   const [isLançandoCredito, setIsLançandoCredito] = useState(false)
@@ -218,12 +225,6 @@ export default function ClienteDetailPage({
       toast.error("Falha ao buscar CEP. Verifique sua conexão.")
     }
   }
-
-  // A tag e estado do formulario, nao deducao do pais: ao ligar, o campo Pais
-  // fica em branco para o usuario informar qual e (Paraguai, Argentina, etc.),
-  // e um pais vazio nao pode fazer a tag se desligar sozinha. Ao carregar o
-  // cadastro a tag vem do pais que esta gravado.
-  const [estrangeiro, setEstrangeiro] = useState(false)
 
   const alternarEstrangeiro = (ligado: boolean) => {
     setEstrangeiro(ligado)
