@@ -50,11 +50,13 @@ export default function ClienteDetailPage({
     estado: "",
     pais: "Brasil",
     observacoes: "",
+    formaPagamentoPadraoId: "",
     itensExclusivos: [] as { nome: string; preco: string | number; descricao?: string }[]
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
+  const [formasPagamento, setFormasPagamento] = useState<any[]>([])
 
   // A tag e estado do formulario, nao deducao do pais: ao ligar, o campo Pais
   // fica em branco para o usuario informar qual e (Paraguai, Argentina, etc.),
@@ -93,6 +95,7 @@ export default function ClienteDetailPage({
           estado: data.estado || "",
           pais: data.pais || "Brasil",
           observacoes: data.observacoes || "",
+          formaPagamentoPadraoId: data.formaPagamentoPadraoId ? String(data.formaPagamentoPadraoId) : "",
           itensExclusivos: data.itensExclusivos || []
         })
         // A tag vem do pais gravado; daqui em diante ela e controlada pelo switch.
@@ -103,6 +106,11 @@ export default function ClienteDetailPage({
 
     // Carregar movimentações
     getMovimentacoesByCliente(Number(id)).then(setMovimentacoes)
+
+    fetch("/api/formas-pagamento")
+      .then(res => res.json())
+      .then(formas => setFormasPagamento(Array.isArray(formas) ? formas : []))
+      .catch(() => setFormasPagamento([]))
   }, [id])
 
   const handleLancamento = async () => {
@@ -411,6 +419,28 @@ export default function ClienteDetailPage({
                       <div className="space-y-2">
                         <Label htmlFor="ie">Inscrição Estadual</Label>
                         <Input id="ie" name="ie" value={formData.ie} onChange={handleChange} className="bg-muted/30" />
+                      </div>
+                      <div className="sm:col-span-2 space-y-2">
+                        <Label htmlFor="formaPagamentoPadrao">Condição de pagamento padrão</Label>
+                        <Select
+                          value={formData.formaPagamentoPadraoId || "nenhuma"}
+                          onValueChange={(v) => setFormData(prev => ({ ...prev, formaPagamentoPadraoId: v === "nenhuma" ? "" : v }))}
+                        >
+                          <SelectTrigger id="formaPagamentoPadrao" className="bg-muted/30">
+                            <SelectValue placeholder="Nenhuma" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                            {formasPagamento
+                              .filter((f: any) => f.ativo || String(f.id) === formData.formaPagamentoPadraoId)
+                              .map((f: any) => (
+                                <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Já vem selecionada nos orçamentos deste cliente. As outras formas continuam disponíveis.
+                        </p>
                       </div>
                     </CardContent>
                   </Card>

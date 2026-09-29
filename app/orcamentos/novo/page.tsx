@@ -203,6 +203,11 @@ function NovoOrcamentoContent() {
     const fullCliente = await getClienteById(numId)
     if (fullCliente) {
       setClientes(prev => prev.map(c => c.id === numId ? fullCliente : c))
+      // Cliente com condicao propria (ex: 15/30/45) ja abre com ela; o vendedor
+      // ainda pode trocar por qualquer outra da lista.
+      if (fullCliente.formaPagamentoPadraoId) {
+        setFormaPagamentoId(String(fullCliente.formaPagamentoPadraoId))
+      }
     }
 
     const hasHistory = todosOrcamentos.filter(o => o.clienteId === numId).length > 0
@@ -998,9 +1003,14 @@ function NovoOrcamentoContent() {
                   <SelectValue placeholder="Selecione uma forma de pagamento..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {formasPagamento.filter((f: any) => f.ativo).map((f: any) => (
-                    <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>
-                  ))}
+                  {formasPagamento
+                    .filter((f: any) => f.ativo || f.id === clienteSelecionado?.formaPagamentoPadraoId)
+                    .map((f: any) => (
+                      <SelectItem key={f.id} value={f.id.toString()}>
+                        {f.nome}
+                        {f.id === clienteSelecionado?.formaPagamentoPadraoId ? " (padrão do cliente)" : ""}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

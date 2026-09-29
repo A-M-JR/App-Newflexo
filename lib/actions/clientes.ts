@@ -206,6 +206,7 @@ export async function saveCliente(data: any) {
     pais: ouNulo(rest.pais) || "Brasil",
     observacoes: ouNulo(rest.observacoes),
     ativo: rest.ativo !== undefined ? rest.ativo : true,
+    formaPagamentoPadraoId: rest.formaPagamentoPadraoId ? Number(rest.formaPagamentoPadraoId) : null,
   }
 
   const itensExclusivos = rest.itensExclusivos || []
@@ -234,13 +235,13 @@ export async function saveCliente(data: any) {
         INSERT INTO "Cliente" (
           "razaoSocial", "nomeFantasia", cnpj, ie, email, telefone, 
           "compradorNome", "compradorTelefone", endereco, cep, cidade, estado, pais,
-          observacoes, ativo, "saldoCreditoValor", "saldoCreditoEtiquetas", "criadoEm", "updatedAt"
+          observacoes, ativo, "formaPagamentoPadraoId", "saldoCreditoValor", "saldoCreditoEtiquetas", "criadoEm", "updatedAt"
         )
         VALUES (
           ${prismaData.razaoSocial}, ${prismaData.nomeFantasia}, ${prismaData.cnpj}, ${prismaData.ie}, 
           ${prismaData.email}, ${prismaData.telefone}, ${prismaData.compradorNome}, ${prismaData.compradorTelefone}, 
           ${prismaData.endereco}, ${prismaData.cep}, ${prismaData.cidade}, ${prismaData.estado}, ${prismaData.pais},
-          ${prismaData.observacoes}, ${prismaData.ativo}, 
+          ${prismaData.observacoes}, ${prismaData.ativo}, ${prismaData.formaPagamentoPadraoId},
           ${rest.saldoCreditoValor || 0}, ${rest.saldoCreditoEtiquetas || 0}, ${now}, ${now}
         )
         RETURNING id
@@ -291,8 +292,12 @@ export async function saveCliente(data: any) {
           "pais" = ${prismaData.pais},
           "observacoes" = ${prismaData.observacoes},
           "ativo" = ${prismaData.ativo},
-          "saldoCreditoValor" = ${rest.saldoCreditoValor !== undefined ? rest.saldoCreditoValor : 0},
-          "saldoCreditoEtiquetas" = ${rest.saldoCreditoEtiquetas !== undefined ? rest.saldoCreditoEtiquetas : 0},
+          "formaPagamentoPadraoId" = ${prismaData.formaPagamentoPadraoId},
+          -- Saldo so muda quando vier explicito. A tela de edicao nao manda o
+          -- saldo (ele e movido pelos lancamentos de credito), e antes o
+          -- fallback 0 zerava o credito do cliente a cada salvamento.
+          "saldoCreditoValor" = COALESCE(${rest.saldoCreditoValor ?? null}::float, "saldoCreditoValor"),
+          "saldoCreditoEtiquetas" = COALESCE(${rest.saldoCreditoEtiquetas ?? null}::int, "saldoCreditoEtiquetas"),
           "updatedAt" = ${now}
         WHERE id = ${Number(id)}
       `

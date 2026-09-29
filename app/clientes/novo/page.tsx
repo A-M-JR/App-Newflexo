@@ -15,6 +15,7 @@ import { saveCliente, checkClienteDuplicado } from "@/lib/actions/clientes"
 
 import { maskCNPJ, maskTelefone as maskPhone, maskCEP, maskUF, ehBrasil } from "@/lib/masks"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function NovoClientePage() {
     return (
@@ -45,6 +46,7 @@ function NovoClienteContent() {
         estado: "",
         pais: "Brasil",
         observacoes: "",
+        formaPagamentoPadraoId: "",
         itensExclusivos: [] as { nome: string; preco: string; descricao?: string }[]
     })
 
@@ -93,6 +95,14 @@ function NovoClienteContent() {
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [isSaving, setIsSaving] = useState(false)
     const [duplicado, setDuplicado] = useState<{ id: number; razaoSocial: string } | null>(null)
+    const [formasPagamento, setFormasPagamento] = useState<any[]>([])
+
+    useEffect(() => {
+        fetch("/api/formas-pagamento")
+            .then(res => res.json())
+            .then(formas => setFormasPagamento(Array.isArray(formas) ? formas : []))
+            .catch(() => setFormasPagamento([]))
+    }, [])
 
     // Verifica se o CNPJ/CPF já existe assim que estiver completo, para não perder
     // tempo preenchendo o resto do cadastro. Retorna true se for duplicado.
@@ -421,6 +431,26 @@ function NovoClienteContent() {
                                         className="bg-muted/30 focus-visible:bg-background"
                                         placeholder="Isento ou Nº da Inscrição"
                                     />
+                                </div>
+                                <div className="sm:col-span-2 space-y-2">
+                                    <Label htmlFor="formaPagamentoPadrao">Condição de pagamento padrão</Label>
+                                    <Select
+                                        value={formData.formaPagamentoPadraoId || "nenhuma"}
+                                        onValueChange={(v) => setFormData(prev => ({ ...prev, formaPagamentoPadraoId: v === "nenhuma" ? "" : v }))}
+                                    >
+                                        <SelectTrigger id="formaPagamentoPadrao" className="bg-muted/30">
+                                            <SelectValue placeholder="Nenhuma" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                                            {formasPagamento.filter((f: any) => f.ativo).map((f: any) => (
+                                                <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Já vem selecionada nos orçamentos deste cliente. As outras formas continuam disponíveis.
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>

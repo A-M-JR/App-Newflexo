@@ -68,6 +68,10 @@ model Cliente {
   nomeFantasia          String?
   saldoCreditoEtiquetas Int                    @default(0)
   saldoCreditoValor     Float                  @default(0)
+  // Condicao de pagamento que o cliente costuma usar (ex: 15/30/45). O
+  // orcamento ja abre com ela selecionada, mas as outras seguem disponiveis.
+  formaPagamentoPadraoId Int?
+  formaPagamentoPadrao  FormaPagamento?        @relation(fields: [formaPagamentoPadraoId], references: [id], onDelete: SetNull)
   AISugestao            AISugestao[]
   etiquetasExclusivas   ClienteEtiqueta[]
   itensExclusivos       ItemExclusivoCliente[]
@@ -302,6 +306,7 @@ model FormaPagamento {
   criadoEm           DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
   quantidadeParcelas Int         @default(1)
+  clientesPadrao     Cliente[]
   orcamentos         Orcamento[]
   pedidos            Pedido[]
 
