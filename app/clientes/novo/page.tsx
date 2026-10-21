@@ -268,7 +268,6 @@ function NovoClienteContent() {
             if (!formData.pais?.trim()) newErrors.pais = "Informe o país do cliente"
             else if (ehBrasil(formData.pais)) newErrors.pais = "Para cliente estrangeiro, informe um país fora do Brasil"
         } else {
-            if (!formData.cnpj) newErrors.cnpj = "CNPJ é obrigatório"
             if (!formData.telefone) newErrors.telefone = "Telefone é obrigatório"
             if (!formData.cidade) newErrors.cidade = "Cidade é obrigatória"
             if (!formData.estado) newErrors.estado = "UF é obrigatório"
@@ -383,7 +382,7 @@ function NovoClienteContent() {
                                     <div className="min-w-0">
                                         <Label htmlFor="estrangeiro" className="text-sm font-medium">Cliente estrangeiro</Label>
                                         <p className="text-xs text-muted-foreground mt-0.5">
-                                            Dispensa CNPJ, CEP e UF — para clientes fora do Brasil.
+                                            Dispensa CEP e UF — para clientes fora do Brasil.
                                         </p>
                                     </div>
                                     <Switch id="estrangeiro" checked={estrangeiro} onCheckedChange={alternarEstrangeiro} />
@@ -391,7 +390,7 @@ function NovoClienteContent() {
 
                                 <div className="space-y-2">
                                     <Label htmlFor="cnpj" className={errors.cnpj ? "text-destructive" : ""}>
-                                        {estrangeiro ? "Documento / RUC" : "CNPJ *"}
+                                        {estrangeiro ? "Documento / RUC" : "CNPJ"}
                                     </Label>
                                     <Input
                                         id="cnpj"

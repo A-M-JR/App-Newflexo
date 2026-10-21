@@ -44,8 +44,8 @@ const VAZIO = {
  * tela de clientes.
  *
  * As regras de obrigatoriedade são as mesmas do cadastro completo: cliente
- * brasileiro exige CNPJ, telefone, cidade e UF; cliente estrangeiro exige só o
- * país.
+ * brasileiro exige telefone, cidade e UF (CNPJ é opcional); cliente estrangeiro
+ * exige só o país.
  */
 export function ClienteRapidoDialog({ open, onOpenChange, onCriado }: ClienteRapidoDialogProps) {
   const [form, setForm] = useState({ ...VAZIO })
@@ -120,7 +120,6 @@ export function ClienteRapidoDialog({ open, onOpenChange, onCriado }: ClienteRap
       if (!form.pais.trim()) novos.pais = "Informe o país do cliente"
       else if (ehBrasil(form.pais)) novos.pais = "Informe um país fora do Brasil"
     } else {
-      if (!form.cnpj.trim()) novos.cnpj = "CNPJ é obrigatório"
       if (!form.telefone.trim()) novos.telefone = "Telefone é obrigatório"
       if (!form.cidade.trim()) novos.cidade = "Cidade é obrigatória"
       if (!form.estado.trim()) novos.estado = "UF é obrigatório"
@@ -169,13 +168,13 @@ export function ClienteRapidoDialog({ open, onOpenChange, onCriado }: ClienteRap
           <div className="sm:col-span-12 flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
             <div className="min-w-0">
               <Label htmlFor="rapido-estrangeiro" className="text-sm font-medium">Cliente estrangeiro</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">Dispensa CNPJ, CEP e UF.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Dispensa CEP e UF.</p>
             </div>
             <Switch id="rapido-estrangeiro" checked={estrangeiro} onCheckedChange={alternarEstrangeiro} />
           </div>
 
           <div className="sm:col-span-7 space-y-2">
-            <Label htmlFor="rapido-doc">{estrangeiro ? "Documento / RUC" : "CNPJ *"}</Label>
+            <Label htmlFor="rapido-doc">{estrangeiro ? "Documento / RUC" : "CNPJ"}</Label>
             <div className="flex gap-2">
               <Input
                 id="rapido-doc"
