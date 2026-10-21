@@ -477,7 +477,7 @@ function NovoOrcamentoContent() {
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
+                  <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0" align="start">
                     <Command>
                       <CommandInput placeholder="Digite o nome, nome fantasia ou CNPJ do cliente..." />
                       <CommandList>
@@ -639,14 +639,14 @@ function NovoOrcamentoContent() {
           {/* Abas de Sugestões */}
           {(etiquetasSugeridas.length > 0 || itensExclusivosSugeridos.length > 0 || (showRecompra && itensAnteriores.length > 0)) && (
             <Tabs defaultValue={etiquetasSugeridas.length > 0 ? "matrizes" : itensExclusivosSugeridos.length > 0 ? "insumos" : "recompra"} className="w-full">
-              <TabsList className="grid w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
-                <TabsTrigger value="matrizes" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={etiquetasSugeridas.length === 0}>
+              <TabsList className="grid w-full sm:w-fit grid-cols-3 mb-2 bg-muted/40 p-1">
+                <TabsTrigger value="matrizes" className="text-[11px] h-7 px-2 sm:px-4 disabled:opacity-30" disabled={etiquetasSugeridas.length === 0}>
                   <Sparkles className="size-3 mr-1.5" /> Etiquetas
                 </TabsTrigger>
-                <TabsTrigger value="insumos" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensExclusivosSugeridos.length === 0}>
+                <TabsTrigger value="insumos" className="text-[11px] h-7 px-2 sm:px-4 disabled:opacity-30" disabled={itensExclusivosSugeridos.length === 0}>
                   <Plus className="size-3 mr-1.5" /> Insumos
                 </TabsTrigger>
-                <TabsTrigger value="recompra" className="text-[11px] h-7 px-4 disabled:opacity-30" disabled={itensAnteriores.length === 0}>
+                <TabsTrigger value="recompra" className="text-[11px] h-7 px-2 sm:px-4 disabled:opacity-30" disabled={itensAnteriores.length === 0}>
                   <RotateCcw className="size-3 mr-1.5" /> Histórico
                 </TabsTrigger>
               </TabsList>
@@ -753,13 +753,13 @@ function NovoOrcamentoContent() {
                     variant="outline"
                     role="combobox"
                     aria-expanded={openCatalogo}
-                    className="w-full sm:w-[250px] h-9 text-xs justify-between bg-background font-normal"
+                    className="min-w-0 flex-1 sm:flex-none sm:w-[250px] h-9 text-xs justify-between bg-background font-normal"
                   >
-                    Pesquisar catálogo geral...
+                    <span className="truncate">Pesquisar catálogo geral...</span>
                     <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="end">
+                <PopoverContent className="w-[min(300px,calc(100vw-2rem))] p-0" align="end">
                   <Command filter={(value, search) => {
                     if (value.toLowerCase().includes(search.toLowerCase())) return 1
                     return 0
